@@ -11,6 +11,7 @@ make a quick website for "TechoBattle" and make a quick animation of the fighter
 
 #list_lang
 a=4,print(4),func(){return 6},lemon=3,print(lemon)
+hulahoop, a function that returns a copy of itself, usually has a loop
 
 sample_rap_x.m4a is a PARODY perplexing, right?
 
