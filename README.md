@@ -29,6 +29,7 @@ TOG uses a small set of symbols instead of long keywords:
 - `!` = toggle the state of a variable
 Example Program
 Here is a short program written in TOG:
+#engine = ON
 engine = OFF
 ? engine -> print("running") <> print("stopped")
 engine!
