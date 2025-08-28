@@ -84,9 +84,130 @@ for i in range(1, 6):
 Both loops print numbers from 1 to 5.
 Wrap-up 🎉
 
-Swift is great for Apple ecosystems, while Python is perfect for quick scripts and data analysis.
-Both have print statements, simple variables, and easy-to-read syntax.
-Swift has types (let/var) and works great for app development.
-Python is dynamic and beginner-friendly for general-purpose coding.
-And there you go! Whether you're building apps or analyzing data, both languages are awesome to learn.
+//experimental tog implementation for html
+//see below
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TOG Ethos Toggle Page</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0d0d0f;
+      color: #eee;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+
+    h1 { margin-bottom: 1rem; }
+
+    .toggle {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      border: 3px solid #555;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 1rem;
+      cursor: pointer;
+      transition: all 0.25s ease-in-out;
+      box-shadow: 0 0 6px #444;
+    }
+
+    .toggle.glow {
+      border-color: #5df2ff;
+      box-shadow: 0 0 12px #5df2ff, 0 0 24px #5df2ff inset;
+    }
+
+    .cat {
+      font-size: 1.8rem;
+      user-select: none;
+    }
+
+    .status {
+      margin-top: 1rem;
+      font-size: 1rem;
+    }
+
+    .input-box {
+      margin-top: 1rem;
+    }
+
+    input {
+      padding: 0.5rem;
+      border-radius: 6px;
+      border: 1px solid #444;
+      background: #111;
+      color: #fff;
+      width: 200px;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #5df2ff;
+      box-shadow: 0 0 8px #5df2ff;
+    }
+
+    .toggles {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <h1>TOG Toggle Page</h1>
+  <div class="toggles">
+    <div id="ringToggle" class="toggle" role="switch" aria-checked="false"></div>
+    <div id="catToggle" class="toggle cat" role="switch" aria-checked="false">🐱</div>
+  </div>
+  <div class="status" id="status">No toggles yet.</div>
+  <div class="input-box">
+    <input id="inputBox" placeholder="Type something..." />
+  </div>
+
+  <script>
+    // Minimal TOG ethos API
+    const TOG = {
+      flip: el => el.classList.toggle("glow"),
+      if: (cond, then, alt) => cond ? then() : alt && alt()
+    };
+
+    const status = document.getElementById("status");
+    const ring = document.getElementById("ringToggle");
+    const cat = document.getElementById("catToggle");
+
+    function bindToggle(el, name) {
+      el.addEventListener("click", () => {
+        TOG.flip(el);
+        const on = el.classList.contains("glow");
+        el.setAttribute("aria-checked", on);
+        status.textContent = `${name} is ${on ? "ON" : "OFF"}`;
+      });
+    }
+
+    bindToggle(ring, "Ring toggle");
+    bindToggle(cat, "Cat toggle");
+
+    // Keyboard support (Space/Enter)
+    [ring, cat].forEach(el => {
+      el.tabIndex = 0;
+      el.addEventListener("keydown", e => {
+        if (e.key === " " || e.key === "Enter") {
+          e.preventDefault();
+          el.click();
+        }
+      });
+    });
+  </script>
+</body>
+</html>
 
