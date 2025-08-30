@@ -8,3 +8,12 @@ x = nu fox(return 1);
 
 !txt command, returns input as txt string!
 y = txt(hello);
+
+//all nouns are objects
+dog.bark();
+
+//returns "class-dog"
+dog.is();
+
+//returns dOg
+dog.tog()
