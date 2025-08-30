@@ -5,3 +5,6 @@ changes
 //nu keyword
 
 x = nu fox(return 1);
+
+!txt command, returns input as txt string!
+y = txt(hello);
