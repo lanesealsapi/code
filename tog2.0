@@ -1,6 +1,6 @@
 tog2.0
 
-----updates------
+----updates-specs------
 
 //nu keyword
 
@@ -17,6 +17,13 @@ dog.is();
 
 //returns dOg
 dog.tog()
+
+#list loop with defined range
+2..4[0,1,2,3,4,5]
+
+//loop keyword 
+loop(dosomething)
+~(dosomething)
 
 
 MIT modified(x) - License
