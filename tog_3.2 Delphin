@@ -1,0 +1,14 @@
+tog 3.0 - DeLpHiN 
+
+#empty function
+a = ()
+
+#unknown
+b = [[]]
+
+#draws an ascii dolphin continuosly
+~tog.dolphin()
+
+#animation object
+c = funkt()
+
