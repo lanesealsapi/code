@@ -13,3 +13,7 @@ The Yeti would be proud, lol. OR not.
 Sincerely,
 
 - L.A.x. tog? or ?tOg OR t?og
+
+toggle.max([1,2,3,4,5])
+returns max length
+min returns min length, sort of
