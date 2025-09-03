@@ -21,3 +21,6 @@ min returns min length, sort of
 #zip function
 toggle.bottle();
 tog.exp();
+
+#fuzzy functions are lit;
+tog.fuzzy(func);
