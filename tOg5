@@ -9,3 +9,5 @@ do ();
 #alias for do : D
 dof ();
 
+tog.bot();
+
