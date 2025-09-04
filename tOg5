@@ -3,5 +3,6 @@ tOg 5 - Fire and LightNiNg pre-release details
 #then statement example
 if OR ?dog thc cat
 
+#do or don't do, should do, alias for func
 do ();
 
