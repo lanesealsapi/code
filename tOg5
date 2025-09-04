@@ -12,5 +12,5 @@ dof ();
 tog.bot();
 
 #reverses the input object
-tog.flip(input);
+tog5.flip(input);
 
