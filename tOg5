@@ -1,4 +1,4 @@
-tOg 5 - Fire and LightNiNg pre-release details
+tOg 5 - Fire , LightNiNg, and Plazma (FLiP) for short | pre-release details
 
 #then statement example
 if OR ?dog thc cat
@@ -10,4 +10,7 @@ do ();
 dof ();
 
 tog.bot();
+
+#reverses the input object
+tog.flip(input);
 
