@@ -6,3 +6,6 @@ if OR ?dog thc cat
 #do or don't do, should do, alias for func
 do ();
 
+#alias for do : D
+dof ();
+
