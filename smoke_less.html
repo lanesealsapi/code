@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmOke-Less</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f0f4f8;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            text-align: center;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #4CAF50;
+        }
+
+        .counter, .timer {
+            margin: 20px 0;
+        }
+
+        button {
+            background-color: green;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        #countdown {
+            font-size: 24px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>SmOke-Less</h1>
+        <div class="counter">
+            <h2>Cigarettes Smoked: <span id="cigaretteCount">0</span></h2>
+            <button id="incrementButton">Increment Cigarette Count</button>
+        </div>
+        <div class="timer">
+            <h2>Next Cigarette Countdown</h2>
+            <div id="countdown">00:00</div>
+            <button id="startTimerButton">Start Timer</button>
+        </div>
+    </div>
+    <script>
+        let cigaretteCount = 0;
+        let countdownTimer;
+        let countdownValue = 60*60; // Countdown in seconds
+
+        const cigaretteCountDisplay = document.getElementById('cigaretteCount');
+        const countdownDisplay = document.getElementById('countdown');
+        const incrementButton = document.getElementById('incrementButton');
+        const startTimerButton = document.getElementById('startTimerButton');
+
+        incrementButton.addEventListener('click', () => {
+            cigaretteCount++;
+            cigaretteCountDisplay.textContent = cigaretteCount;
+        });
+
+        startTimerButton.addEventListener('click', () => {
+            clearInterval(countdownTimer);
+            countdownValue = 60*60; // Reset to 60 seconds
+            countdownDisplay.textContent = formatTime(countdownValue);
+            
+            countdownTimer = setInterval(() => {
+                if (countdownValue > 0) {
+                    countdownValue--;
+                    countdownDisplay.textContent = formatTime(countdownValue);
+                } else {
+                    clearInterval(countdownTimer);
+                    alert("Time to smoke a cigarette!");
+                }
+            }, 1000);
+        });
+
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+    </script>
+</body>
+</html>
