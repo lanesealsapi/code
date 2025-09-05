@@ -1,7 +1,5 @@
 TOG_Ethos
 
-An error a day keeps the doctor at bay!. lol.
-
 In it's purest form TOG is about ON and OFF switches.
 Most languages work in terms of True and False evaluation and ask too many questions.
 In TOG you may ask a question, but if the quest is bad you will fail(probably).
@@ -26,3 +24,5 @@ tog.exp();
 
 #fuzzy functions are lit;
 tog.fuzzy(func);
+
+#UI always has a bug or two...
