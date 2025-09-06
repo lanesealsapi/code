@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>[Code Converter]</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            color: green;
+            background: white;
+        }
+        textarea {
+            width: 100%;
+            height: 150px;
+        }
+        button {
+            margin-top: 10px;
+            background: white;
+            color: green;
+        }
+        #output {
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+
+<h1>[Code Converter]</h1>
+<button id="toggleButton" onclick="toggleLanguage()">Switch to Swift</button>
+<textarea id="codeInput" placeholder="Enter Python or Swift code here...experimental"></textarea>
+<br>
+<button onclick="convertCode()">Convert to {JavaScript}</button>
+
+<div id="output"></div>
+
+<script>
+    let isSwift = false; // Track the current language mode
+
+    function toggleLanguage() {
+        isSwift = !isSwift;
+        document.getElementById('toggleButton').innerText = isSwift ? 'Switch to Python' : 'Switch to Swift';
+        document.getElementById('codeInput').placeholder = isSwift ? 'Enter Swift code here...' : 'Enter Python code here...';
+        document.getElementById('output').innerText = ''; // Clear output on toggle
+    }
+
+    function convertCode() {
+        const codeInput = document.getElementById('codeInput').value;
+        let jsCode = '';
+
+        if (isSwift) {
+            // Simple conversion logic for Swift to JavaScript
+            jsCode = codeInput
+                .replace(/print$(.*)$/g, 'console.log($1);') // Convert print statements
+                .replace(/let/g, 'let') // let remains the same
+                .replace(/var/g, 'let') // var in Swift to let in JS
+                .replace(/func/g, 'function') // Convert function definitions
+                .replace(/if\s*$(.*)$/g, 'if ($1)') // Convert if statements
+                .replace(/else/g, 'else') // else remains the same
+                .replace(/true/g, 'true') // true remains the same
+                .replace(/false/g, 'false') // false remains the same
+                .replace(/nil/g, 'null'); // Convert nil to null
+        } else {
+            // Simple conversion logic for Python to JavaScript
+            jsCode = codeInput
+                .replace(/print$(.*)$/g, 'console.log($1);') // Convert print statements
+                .replace(/True/g, 'true') // Convert True to true
+                .replace(/False/g, 'false') // Convert False to false
+                .replace(/None/g, 'null') // Convert None to null
+                .replace(/def\s+(\w+)\s*$(.*)$:/g, 'function $1($2) {') // Convert function definitions
+                .replace(/$/g, '}'); // Close function definitions
+        }
+
+        // Display the converted JavaScript code
+        document.getElementById('output').innerText = jsCode;
+    }
+</script>
+
+</body>
+</html>
