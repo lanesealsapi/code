@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BlueSaxophone Systems</title>
+  <style>
+    :root {
+      --bg: #120012;
+      --text: #eee;
+      --panel: #1c0f1c;
+      --input-bg: #2a142a;
+      --button-bg: #6b21a8;
+      --button-hover: #9333ea;
+      --accent: #a855f7;
+    }
+
+    body.light {
+      --bg: #2a2a3a;
+      --text: #f5f5f5;
+      --panel: #3b2c4a;
+      --input-bg: #4c3561;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+      transition: background 0.4s ease, color 0.4s ease;
+    }
+
+    .circle-container {
+      position: relative;
+      width: 320px;
+      height: 320px;
+      border-radius: 50%;
+      background: var(--panel);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 30px rgba(0,0,0,0.6);
+      overflow: hidden;
+    }
+
+    form {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    input[type="text"] {
+      padding: 10px;
+      border: none;
+      border-radius: 20px;
+      background: var(--input-bg);
+      color: var(--text);
+      outline: none;
+    }
+
+    button {
+      padding: 10px 15px;
+      border: none;
+      border-radius: 20px;
+      background: var(--button-bg);
+      color: white;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    button:hover {
+      background: var(--button-hover);
+    }
+
+    .toggle {
+      width: 40px;
+      height: 20px;
+      background: #555;
+      border-radius: 20px;
+      position: relative;
+      cursor: pointer;
+    }
+
+    .toggle input {
+      display: none;
+    }
+
+    .slider {
+      position: absolute;
+      top: 2px; left: 2px;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: white;
+      transition: transform 0.3s;
+    }
+
+    .toggle input:checked + .slider {
+      transform: translateX(20px);
+    }
+
+    /* Rings */
+    .circle-ring {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%) scale(0.8);
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 4px solid var(--accent);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .circle-ring.pop.fire {
+      animation: expandFire 2.5s ease-out forwards;
+    }
+    .circle-ring.pop.water {
+      animation: expandWater 2s ease-out forwards;
+    }
+
+    @keyframes expandFire {
+      0%   { transform: translate(-50%, -50%) scale(0.9); opacity: 1; border-color: #d946ef; box-shadow: 0 0 20px #9333ea, 0 0 40px #c026d3; }
+      50%  { transform: translate(-50%, -50%) scale(1.5); border-color: #a21caf; box-shadow: 0 0 30px #a855f7, 0 0 60px #9333ea; }
+      100% { transform: translate(-50%, -50%) scale(2.8); opacity: 0; }
+    }
+
+    @keyframes expandWater {
+      0%   { transform: translate(-50%, -50%) scale(0.9); opacity: 1; border-color: #8b5cf6; box-shadow: 0 0 20px #7c3aed; }
+      100% { transform: translate(-50%, -50%) scale(2.8); opacity: 0; }
+    }
+
+    /* Idle flicker for purple fire */
+    .circle-container.fire-flicker {
+      box-shadow: 0 0 40px 10px rgba(168,85,247,0.5);
+      animation: fireIdle 2s infinite alternate;
+    }
+
+    @keyframes fireIdle {
+      0% { box-shadow: 0 0 30px 5px rgba(147,51,234,0.4), inset 0 0 20px rgba(192,38,211,0.3); }
+      50% { box-shadow: 0 0 60px 20px rgba(168,85,247,0.7), inset 0 0 40px rgba(147,51,234,0.5); }
+      100% { box-shadow: 0 0 40px 10px rgba(147,51,234,0.5), inset 0 0 25px rgba(192,38,211,0.4); }
+    }
+
+    /* Logo styles */
+    h1 {
+      margin-top: 20px;
+      font-size: 2.5rem;
+      transition: text-shadow 0.3s, color 0.3s;
+    }
+
+    p.tagline {
+      font-size: 1.2rem;
+      margin-bottom: 20px;
+      transition: text-shadow 0.3s, color 0.3s;
+    }
+
+    body.fire-mode h1, body.fire-mode p.tagline {
+      color: #d946ef;
+      text-shadow: 0 0 10px #a21caf, 0 0 20px #9333ea, 0 0 40px #c026d3;
+    }
+
+    body.water-mode h1, body.water-mode p.tagline {
+      color: #8b5cf6;
+      text-shadow: 0 0 10px #7c3aed, 0 0 20px #6366f1, 0 0 40px #4338ca;
+    }
+
+    footer {
+      margin-top: 40px;
+      font-size: 14px;
+      opacity: 0
