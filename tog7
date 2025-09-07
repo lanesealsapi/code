@@ -1,6 +1,6 @@
 #seal commands
 
-tog.sealx("{}");
+tog.find("{}");
 
 tog.push("*keywords");
 tog.pull("*keys");
