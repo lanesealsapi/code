@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>First 80 Elements — Reactivity Hover</title>
+<style>
+  :root{
+    --bg:#0f1720;
+    --card:#0b1220;
+    --text:#e6eef7;
+    --muted:#9fb0c4;
+    --accent:#4fd1c5;
+    --highlight:#ffd166;
+    --radius:10px;
+  }
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,#07121a 0%,#0f1720 100%);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+  .wrap{max-width:1100px;margin:36px auto;padding:20px;}
+  h1{margin:0 0 8px;font-size:20px;font-weight:600;}
+  p.lead{margin:0 0 18px;color:var(--muted);font-size:13px;}
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+    gap:10px;
+  }
+  .el{
+    background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    border:1px solid rgba(255,255,255,0.04);
+    padding:10px;
+    border-radius:8px;
+    position:relative;
+    cursor:default;
+    transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+    user-select:none;
+  }
+  .el:hover{transform:translateY(-4px);box-shadow:0 8px 18px rgba(2,6,23,0.6);border-color:rgba(255,255,255,0.08)}
+  .sym{font-weight:700;font-size:20px;}
+  .num{position:absolute;right:10px;top:8px;font-size:12px;color:var(--muted)}
+  .name{display:block;margin-top:8px;font-size:12px;color:var(--muted)}
+  .props{margin-top:8px;font-size:11px;color:var(--muted)}
+  .legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .chip{font-size:12px;padding:6px 8px;border-radius:999px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.03);color:var(--muted)}
+  .highlight{
+    box-shadow:0 0 18px 4px rgba(255,209,102,0.12) inset, 0 6px 20px rgba(255,209,102,0.08);
+    border-color:rgba(255,209,102,0.25) !important;
+    transform:translateY(-6px) scale(1.02);
+  }
+  .soft{
+    background:linear-gradient(180deg, rgba(79,209,197,0.06), rgba(79,209,197,0.02));
+    border-color:rgba(79,209,197,0.12);
+    box-shadow:0 6px 18px rgba(79,209,197,0.04);
+  }
+  .dim{opacity:0.28;filter:grayscale(40%);}
+  .controls{display:flex;gap:10px;align-items:center;margin-top:14px}
+  .btn{padding:8px 10px;border-radius:8px;background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted);font-size:13px;cursor:pointer}
+  footer{margin-top:18px;color:var(--muted);font-size:12px}
+  @media (max-width:520px){ .grid{grid-template-columns:repeat(2,1fr)} .el{padding:8px} .sym{font-size:16px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>First 80 Elements — Reactivity Hover</h1>
+  <p class="lead">Hover any element to highlight other elements that commonly react with it (conceptual categories only).</p>
+
+  <div class="legend" aria-hidden="true">
+    <div class="chip">Alkali/Alkali-earth</div>
+    <div class="chip">Halogens / Chalcogens</div>
+    <div class="chip">Oxygen / Oxidizers</div>
+    <div class="chip">Metals / Transition</div>
+    <div class="chip">Noble / Inert</div>
+  </div>
+
+  <div style="height:12px"></div>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="controls">
+    <button class="btn" id="reset">Reset</button>
+    <div style="flex:1"></div>
+    <div style="color:var(--muted);font-size:13px">This is educational — hover to explore.</div>
+  </div>
+
+  <footer>Note: Highlight rules are simplified. They indicate common reactivity tendencies (group/category) and are not reaction instructions.</footer>
+</div>
+
+<script>
+  // First 80 elements basic dataset
+  const elements = [
+{num:1,sym:"H",name:"Hydrogen",group:"nonmetal"},
+{num:2,sym:"He",name:"Helium",group:"noble"},
+{num:3,sym:"Li",name:"Lithium",group:"alkali"},
+{num:4,sym:"Be",name:"Beryllium",group:"alkaline"},
+{num:5,sym:"B",name:"Boron",group:"metalloid"},
+{num:6,sym:"C",name:"Carbon",group:"nonmetal"},
+{num:7,sym:"N",name:"Nitrogen",group:"nonmetal"},
+{num:8,sym:"O",name:"Oxygen",group:"chalcogen"},
+{num:9,sym:"F",name:"Fluorine",group:"halogen"},
+{num:10,sym:"Ne",name:"Neon",group:"noble"},
+{num:11,sym:"Na",name:"Sodium",group:"alkali"},
+{num:12,sym:"Mg",name:"Magnesium",group:"alkaline"},
+{num:13,sym:"Al",name:"Aluminium",group:"metal"},
+{num:14,sym:"Si",name:"Silicon",group:"metalloid"},
+{num:15,sym:"P",name:"Phosphorus",group:"nonmetal"},
+{num:16,sym:"S",name:"Sulfur",group:"chalcogen"},
+{num:17,sym:"Cl",name:"Chlorine",group:"halogen"},
+{num:18,sym:"Ar",name:"Argon",group:"noble"},
+{num:19,sym:"K",name:"Potassium",group:"alkali"},
+{num:20,sym:"Ca",name:"Calcium",group:"alkaline"},
+{num:21,sym:"Sc",name:"Scandium",group:"transition"},
+{num:22,sym:"Ti",name:"Titanium",group:"transition"},
+{num:23,sym:"V",name:"Vanadium",group:"transition"},
+{num:24,sym:"Cr",name:"Chromium",group:"transition"},
+{num:25,sym:"Mn",name:"Manganese",group:"transition"},
+{num:26,sym:"Fe",name:"Iron",group:"transition"},
+{num:27,sym:"Co",name:"Cobalt",group:"transition"},
+{num:28,sym:"Ni",name:"Nickel",group:"transition"},
+{num:29,sym:"Cu",name:"Copper",group:"transition"},
+{num:30,sym:"Zn",name:"Zinc",group:"transition"},
+{num:31,sym:"Ga",name:"Gallium",group:"metal"},
+{num:32,sym:"Ge",name:"Germanium",group:"metalloid"},
+{num:33,sym:"As",name:"Arsenic",group:"metalloid"},
+{num:34,sym:"Se",name:"Selenium",group:"chalcogen"},
+{num:35,sym:"Br",name:"Bromine",group:"halogen"},
+{num:36,sym:"Kr",name:"Krypton",group:"noble"},
+{num:37,sym:"Rb",name:"Rubidium",group:"alkali"},
+{num:38,sym:"Sr",name:"Strontium",group:"alkaline"},
+{num:39,sym:"Y",name:"Yttrium",group:"transition"},
+{num:40,sym:"Zr",name:"Zirconium",group:"transition"},
+{num:41,sym:"Nb",name:"Niobium",group:"transition"},
+{num:42,sym:"Mo",name:"Molybdenum",group:"transition"},
+{num:43,sym:"Tc",name:"Technetium",group:"transition"},
+{num:44,sym:"Ru",name:"Ruthenium",group:"transition"},
+{num:45,sym:"Rh",name:"Rhodium",group:"transition"},
+{num:46,sym:"Pd",name:"Palladium",group:"transition"},
+{num:47,sym:"Ag",name:"Silver",group:"transition"},
+{num:48,sym:"Cd",name:"Cadmium",group:"transition"},
+{num:49,sym:"In",name:"Indium",group:"metal"},
+{num:50,sym:"Sn",name:"Tin",group:"metal"},
+{num:51,sym:"Sb",name:"Antimony",group:"metalloid"},
+{num:52,sym:"Te",name:"Tellurium",group:"chalcogen"},
+{num:53,sym:"I",name:"Iodine",group:"halogen"},
+{num:54,sym:"Xe",name:"Xenon",group:"noble"},
+{num:55,sym:"Cs",name:"Caesium",group:"alkali"},
+{num:56,sym:"Ba",name:"Barium",group:"alkaline"},
+{num:57,sym:"La",name:"Lanthanum",group:"lanthanoid"},
+{num:58,sym:"Ce",name:"Cerium",group:"lanthanoid"},
+{num:59,sym:"Pr",name:"Praseodymium",group:"lanthanoid"},
+{num:60,sym:"Nd",name:"Neodymium",group:"lanthanoid"},
+{num:61,sym:"Pm",name:"Promethium",group:"lanthanoid"},
+{num:62,sym:"Sm",name:"Samarium",group:"lanthanoid"},
+{num:63,sym:"Eu",name:"Europium",group:"lanthanoid"},
+{num:64,sym:"Gd",name:"Gadolinium",group:"lanthanoid"},
+{num:65,sym:"Tb",name:"Terbium",group:"lanthanoid"},
+{num:66,sym:"Dy",name:"Dysprosium",group:"lanthanoid"},
+{num:67,sym:"Ho",name:"Holmium",group:"lanthanoid"},
+{num:68,sym:"Er",name:"Erbium",group:"lanthanoid"},
+{num:69,sym:"Tm",name:"Thulium",group:"lanthanoid"},
+{num:70,sym:"Yb",name:"Ytterbium",group:"lanthanoid"},
+{num:71,sym:"Lu",name:"Lutetium",group:"lanthanoid"},
+{num:72,sym:"Hf",name:"Hafnium",group:"transition"},
+{num:73,sym:"Ta",name:"Tantalum",group:"transition"},
+{num:74,sym:"W",name:"Tungsten",group:"transition"},
+{num:75,sym:"Re",name:"Rhenium",group:"transition"},
+{num:76,sym:"Os",name:"Osmium",group:"transition"},
+{num:77,sym:"Ir",name:"Iridium",group:"transition"},
+{num:78,sym:"Pt",name:"Platinum",group:"transition"},
+{num:79,sym:"Au",name:"Gold",group:"transition"},
+{num:80,sym:"Hg",name:"Mercury",group:"transition"}
+  ];
+
+  // Simplified reactivity mapping rules:
+  // For each element, we assign categories of elements that "commonly react" with it.
+  // These are conceptual and broad: 'halogen', 'alkali', 'alkaline', 'chalcogen', 'oxygen', 'metal', 'acid-base'
+  function categoriesFor(el){
+    const g = el.group;
+    const num = el.num;
+    const cats = new Set();
+
+    // Universal oxidizers/reducers interactions (conceptual)
+    if(g === 'alkali') { cats.add('halogen'); cats.add('chalcogen'); cats.add('oxygen'); cats.add('nonmetal'); cats.add('acid'); }
+    if(g === 'alkaline') { cats.add('halogen'); cats.add('chalcogen'); cats.add('oxygen'); cats.add('nonmetal'); }
+    if(g === 'halogen') { cats.add('alkali'); cats.add('alkaline'); cats.add('metal'); cats.add('hydrogen'); }
+    if(g === 'chalcogen') { cats.add('alkali'); cats.add('alkaline'); cats.add('metal'); cats.add('nonmetal'); }
+    if(g === 'nonmetal') { cats.add('metal'); cats.add('alkali'); cats.add('halogen'); cats.add('oxygen'); }
+    if(g === 'metal' || g === 'transition' || g === 'lanthanoid') { cats.add('oxygen'); cats.add('halogen'); cats.add('acid'); cats.add('nonmetal'); }
+    if(g === 'noble') { /* mostly inert; weak interactions */ cats.add('none'); }
+    if(g === 'metalloid') { cats.add('oxygen'); cats.add('halogen'); cats.add('metal'); cats.add('nonmetal'); }
+    if(g === 'lanthanoid') { cats.add('oxygen'); cats.add('halogen'); cats.add('acid'); }
+    // Specific tweaks
+    if(el.sym === 'H'){ cats.add('halogen'); cats.add('oxygen'); cats.add('metal'); cats.add('nonmetal'); }
+    if(el.sym === 'O'){ cats.add('metal'); cats.add('alkali'); cats.add('alkaline'); cats.add('nonmetal'); }
+    if(el.sym === 'N'){ cats.add('hydrogen'); cats.add('metal'); cats.add('nonmetal'); }
+    return [...cats].filter(x=>x!=='none');
+  }
+
+  // Map category tags to element groups for highlighting
+  function matchesCategory(targetCat, candidate){
+    const g = candidate.group;
+    if(targetCat === 'halogen') return g === 'halogen';
+    if(targetCat === 'alkali') return g === 'alkali';
+    if(targetCat === 'alkaline') return g === 'alkaline';
+    if(targetCat === 'chalcogen') return g === 'chalcogen';
+    if(targetCat === 'oxygen') return candidate.sym === 'O' || g==='chalcogen';
+    if(targetCat === 'metal') return g==='metal' || g==='transition' || g==='lanthanoid';
+    if(targetCat === 'nonmetal') return g==='nonmetal' || g==='metalloid';
+    if(targetCat === 'hydrogen') return candidate.sym === 'H';
+    if(targetCat === 'acid') return false; // acids aren't individual elements here
+    return false;
+  }
+
+  // Render grid
+  const grid = document.getElementById('grid');
+  elements.forEach(el=>{
+    const div = document.createElement('div');
+    div.className = 'el';
+    div.dataset.num = el.num;
+    div.dataset.sym = el.sym;
+    div.dataset.group = el.group;
+    div.innerHTML = `<div class="sym">${el.sym}</div><div class="num">${el.num}</div><div class="name">${el.name}</div><div class="props">${el.group}</div>`;
+    grid.appendChild(div);
+
+    // hover handlers
+    div.addEventListener('mouseenter', ()=>onHover(el));
+    div.addEventListener('mouseleave', ()=>clear());
+  });
+
+  function onHover(el){
+    const cats = categoriesFor(el); // e.g. ['halogen','oxygen']
+    const nodes = Array.from(document.querySelectorAll('.el'));
+    nodes.forEach(n=>{
+      const candNum = Number(n.dataset.num);
+      const candObj = elements.find(e=>e.num===candNum);
+      // self highlight
+      if(candNum === el.num){
+        n.classList.add('highlight');
+        return;
+      }
+      // if matches any category, highlight softly
+      const matches = cats.some(cat=>matchesCategory(cat,candObj));
+      if(matches) n.classList.add('soft');
+      else n.classList.add('dim');
+    });
+  }
+
+  function clear(){
+    document.querySelectorAll('.el').forEach(n=>n.classList.remove('soft','dim','highlight'));
+  }
+
+  document.getElementById('reset').addEventListener('click', clear);
+
+  // Accessibility: keyboard focus / hover via focus
+  document.querySelectorAll('.el').forEach(n=>{
+    n.tabIndex=0;
+    n.addEventListener('focus', ()=> {
+      const num = Number(n.dataset.num);
+      const el = elements.find(e=>e.num===num);
+      onHover(el);
+    });
+    n.addEventListener('blur', clear);
+  });
+</script>
+</body>
+</html>
