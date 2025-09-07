@@ -1,6 +1,0 @@
-#filter commands
-
-tog.find("{}");
-
-tog.push("*keywords");
-tog.pull("*keys");
