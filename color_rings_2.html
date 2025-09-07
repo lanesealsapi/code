@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Glowing Ring Animation</title>
+<style>
+  /* Full-viewport dark steel-grey background */
+  html,body {
+    height:100%;
+    margin:0;
+    background:#222528; /* steel grey, dark */
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+  }
+
+  /* Container fills viewport and centers the canvas */
+  .wrap {
+    position:fixed;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+  }
+
+  /* SVG scales to fill the viewport while preserving aspect */
+  svg {
+    width:100vmax; /* ensures it covers the largest viewport dimension */
+    height:100vmax;
+    display:block;
+    transform:translateZ(0); /* GPU hint for smoother animation */
+    will-change:opacity, transform;
+  }
+
+  /* Centering group to keep ring crisp */
+  .ring {
+    filter: url(#glow);
+    transform-origin:50% 50%;
+    animation: pulse 1s ease-in-out infinite;
+  }
+
+  /* Subtle background vignette to enhance contrast */
+  .vignette {
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 30%, rgba(0,0,0,0.35) 100%);
+    mix-blend-mode:multiply;
+  }
+
+  /* Key animation: scale ring and modulate stroke opacity/thickness */
+  @keyframes pulse {
+    0% {
+      transform: scale(0.88);
+      opacity:0.92;
+    }
+    50% {
+      transform: scale(1.00);
+      opacity:1;
+    }
+    100% {
+      transform: scale(0.88);
+      opacity:0.92;
+    }
+  }
+
+  /* Make sure the SVG is not selectable and stays smooth */
+  svg { user-select:none; -webkit-user-select:none; -ms-user-select:none; }
+
+</style>
+</head>
+<body>
+<div class="wrap" aria-hidden="true">
+  <!-- SVG ring centered in the viewport. Uses viewBox 0 0 1000 1000 for crispness. -->
+  <svg viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid meet" role="img">
+    <defs>
+      <!-- Soft multi-stop glow using Gaussian blur + feMerge for layered glow -->
+      <filter id="glow" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
+        <!-- Bright core -->
+        <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur1"/>
+        <feMerge>
+          <feMergeNode in="blur1"/>
+          <feMergeNode in="blur1"/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+
+        <!-- Outer colored halo -->
+        <feGaussianBlur in="SourceGraphic" stdDeviation="28" result="blur2"/>
+        <feColorMatrix in="blur2" type="matrix"
+          values="0 0 0 0 0.12
+                  0 0 0 0 0.58
+                  0 0 0 0 0.95
+                  0 0 0 0.6 0" result="halo"/>
+        <feMerge>
+          <feMergeNode in="halo"/>
+          <feMergeNode in="blur1"/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+
+      <!-- Thin subtle grain/overlay for perceived detail (keeps it clean) -->
+      <filter id="soften" x="-20%" y="-20%" width="140%" height="140%">
+        <feGaussianBlur stdDeviation="0.5"/>
+      </filter>
+
+      <!-- A radial gradient stroke to make ring appear dimensional -->
+      <radialGradient id="strokeGrad" cx="50%" cy="50%" r="60%">
+        <stop offset="0%" stop-color="#bfe8ff" stop-opacity="1"/>
+        <stop offset="50%" stop-color="#70d2ff" stop-opacity="0.95"/>
+        <stop offset="100%" stop-color="#2aa6ff" stop-opacity="0.7"/>
+      </radialGradient>
+    </defs>
+
+    <!-- Background subtle circle to fill edges and maintain clean look -->
+    <circle cx="500" cy="500" r="500" fill="rgba(0,0,0,0)" />
+
+    <!-- Glowing ring group: scales via CSS animation -->
+    <g class="ring">
+      <!-- Outer soft halo (thin, very blurred, for spread) -->
+      <circle cx="500" cy="500" r="260" fill="none" stroke="url(#strokeGrad)" stroke-width="28" opacity="0.40" style="filter: blur(12px);"/>
+      <!-- Main ring stroke (animates visually via SVG stroke-dashoffset to suggest motion) -->
+      <circle cx="500" cy="500" r="240" fill="none" stroke="url(#strokeGrad)" stroke-width="12"
+              stroke-linecap="round" stroke-linejoin="round"
+              stroke-dasharray="1500" stroke-dashoffset="0" style="mix-blend-mode:screen;"/>
+      <!-- Inner sheen for crisp bright rim -->
+      <circle cx="500" cy="500" r="220" fill="none" stroke="#e8fbff" stroke-width="2.4" opacity="0.88" />
+    </g>
+
+    <!-- A very subtle animated shimmer path that runs once per cycle to add polish -->
+    <g style="filter:url(#soften); opacity:0.95;">
+      <path id="shimmer" d="
+        M 500 260
+        A 240 240 0 0 1 740 500
+        " fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity="0.07">
+        <animate attributeName="stroke-opacity" values="0.07;0.35;0.07" dur="1s" repeatCount="indefinite" />
+        <animateTransform attributeName="transform" type="rotate" from="0 500 500" to="360 500 500" dur="1s" repeatCount="indefinite"/>
+      </path>
+    </g>
+
+  </svg>
+</div>
+
+<div class="vignette" aria-hidden="true"></div>
+
+<!-- Small, efficient script ensures the SVG always covers the viewport and remains crisp -->
+<script>
+(function(){
+  // Resize the SVG to always cover the viewport (ensures ring fits inside and fills)
+  var svg = document.querySelector('svg');
+  function fit() {
+    // use the larger dimension to keep it full-bleed and centered
+    var max = Math.max(window.innerWidth, window.innerHeight);
+    svg.style.width = max + 'px';
+    svg.style.height = max + 'px';
+  }
+  window.addEventListener('resize', fit, {passive:true});
+  fit();
+
+  // Optional: reduce motion for users who prefer reduced motion
+  var mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+  if (mq.matches) {
+    document.querySelector('.ring').style.animationDuration = '3s';
+    var anims = document.querySelectorAll('animate, animateTransform');
+    anims.forEach(a=> a.setAttribute('dur','3s'));
+  }
+})();
+</script>
+</body>
+</html>
