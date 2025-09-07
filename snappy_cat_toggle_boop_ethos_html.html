@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dual Snappy Toggles — Bloop & Cat</title>
+  <style>
+    :root {
+      --bg: #0f0e10;
+      --card: #17151b;
+      --ink: #f7f3ee;
+      --muted: #b9b3aa;
+      /* Toffee palette */
+      --toffee-1: green;
+      --toffee-2: turquoise;
+      --toffee-3: #f3cfa3;
+      /* Cat accent */
+      --cat-1: #232531;
+      --cat-2: #47506b;
+      --cat-3: #c6d0ff;
+
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius: 20px;
+      --speed: 180ms; /* snappy */
+      --spring: cubic-bezier(.2, .9, .2, 1);
+    }
+
+    body {
+      margin: 0;
+      font: 16px/1.2 ui-sans-serif, system-ui;
+      color: var(--ink);
+      background: var(--bg);
+      display: grid;
+      place-items: center;
+      padding: 32px;
+    }
+
+    .card {
+      width: min(780px, 92vw);
+      background: linear-gradient(180deg, var(--card), #121118);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: clamp(20px, 4vw, 36px);
+      border: 1px solid rgba(255,255,255,.06);
+    }
+
+    h1 { font-size: clamp(24px, 3vw, 36px); margin: 0 0 6px; }
+    .tag { color: var(--muted); margin: 0 0 18px; font-size: 0.95rem; }
+
+    .toggle { display:inline-block; position:relative; margin-right:20px; }
+    .toggle input { position:absolute; inset:0; opacity:0; }
+    .track { --w:120px; --h:50px; width:var(--w); height:var(--h); border-radius:var(--h); background: var(--toffee-2); display:block; position:relative; transition:background var(--speed) linear; }
+    .thumb { --size:38px; position:absolute; top:50%; left:6px; width:var(--size); height:var(--size); transform:translateY(-50%); border-radius:50%; background:#fff; transition:left var(--speed) var(--spring), background var(--speed) linear; }
+
+    .toggle.cat .ear, .toggle.cat .eye, .toggle.cat .nose, .toggle.cat .whiskers { transition:opacity var(--speed) linear; opacity:0; }
+    .ear { position:absolute; width:12px; height:12px; background:#fff; top:-6px; border-radius:2px; }
+    .ear.left{left:6px; transform:rotate(45deg);} .ear.right{right:6px; transform:rotate(-45deg);}
+    .eye{position:absolute;width:5px;height:5px;background:#000;border-radius:50%;top:12px;}
+    .eye.left{left:10px;} .eye.right{right:10px;}
+    .nose{position:absolute;width:6px;height:5px;background:#e28c8c;top:20px;left:50%;transform:translateX(-50%);border-radius:3px;}
+    .whiskers{position:absolute;width:16px;height:1px;background:#000;top:22px;}
+    .whiskers.left{left:-6px;box-shadow:0 -4px 0 0 #000,0 4px 0 0 #000;}
+    .whiskers.right{right:-6px;box-shadow:0 -4px 0 0 #000,0 4px 0 0 #000;}
+
+    .toggle input:checked + label .track { background: var(--cat-2); }
+    .toggle input:checked + label .thumb { left:calc(100% - 6px - var(--size)); background:#f9fbff; }
+    .toggle input:checked + label .ear,
+    .toggle input:checked + label .eye,
+    .toggle input:checked + label .nose,
+    .toggle input:checked + label .whiskers { opacity:1; }
+
+    .row { display:flex; align-items:center; gap:20px; flex-wrap:wrap; margin-bottom:16px; }
+    .status { margin-top:12px; color:var(--muted); }
+    .input-box { margin-top:20px; }
+    .input-box input { width:100%; padding:10px; border-radius:var(--radius); border:1px solid #ccc; font-size:1rem; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Dual Snappy Toggles</h1>
+    <p class="tag">Now with two toggles and an input box.</p>
+
+    <div class="row">
+      <div class="toggle toffee">
+        <input id="toggle1" type="checkbox" role="switch" />
+        <label for="toggle1">
+          <span class="track"></span>
+          <span class="thumb"></span>
+        </label>
+      </div>
+
+      <div class="toggle cat">
+        <input id="toggle2" type="checkbox" role="switch" />
+        <label for="toggle2">
+          <span class="track"></span>
+          <span class="thumb">
+            <span class="ear left"></span>
+            <span class="ear right"></span>
+            <span class="eye left"></span>
+            <span class="eye right"></span>
+            <span class="nose"></span>
+            <span class="whiskers left"></span>
+            <span class="whiskers right"></span>
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <div class="status" id="status">Toffee: Off · Cat: Off</div>
+
+    <div class="input-box">
+      <input type="text" id="userInput" placeholder="Type something..." />
+    </div>
+  </main>
+
+  <script>
+    const t1 = document.getElementById('toggle1');
+    const t2 = document.getElementById('toggle2');
+    const status = document.getElementById('status');
+
+    function updateStatus(){
+      status.textContent = `Toffee: ${t1.checked? 'On':'Off'} · Cat: ${t2.checked? 'On':'Off'}`;
+    }
+
+    t1.addEventListener('change', updateStatus);
+    t2.addEventListener('change', updateStatus);
+    updateStatus();
+  </script>
+</body>
+</html>
