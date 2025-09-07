@@ -1,4 +1,4 @@
-#seal commands
+#filter commands
 
 tog.find("{}");
 
