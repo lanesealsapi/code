@@ -1,0 +1,3 @@
+#sql like commands
+
+tog.select("*");
