@@ -2,5 +2,5 @@
 
 tog.seal("{}");
 
-tog.grab("*keywords");
+tog.pull("*keywords");
 tog.set("*keys");
