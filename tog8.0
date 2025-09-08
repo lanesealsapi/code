@@ -1,3 +1,6 @@
 tog.stressball().
 tog.workout().
 tog.flight().
+
+#visual effects added in window;
+tog.music.play("song");
