@@ -24,7 +24,7 @@ tog.exp();
 #fuzzy functions are lit;
 tog.fuzzy(func);
 
-#UI always has a bug or two... AND so do "" at times.
+#UI always has a bug or two... AND so do quotes at times.
 
 "A yet statement is a dollar a dime. If only it twas a thang."
 dog.woof yet yell;
@@ -36,4 +36,4 @@ dog.get.bone();
 bird.chirp().rarrrarr;
 
 sincerely,
-DR. PerPlex
+DR. Purplex
