@@ -31,3 +31,6 @@ dog.woof yet yell;
 
 "A dog finds his bone in the woods if he can yell."
 dog.get.bone();
+
+"Bird goes chirp IF wolf goes rarr rarr."
+bird.chirp().rarrrarr;
