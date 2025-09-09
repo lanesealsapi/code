@@ -24,7 +24,7 @@ tog.exp();
 #fuzzy functions are lit;
 tog.fuzzy(func);
 
-#UI always has a bug or two...
+#UI always has a bug or two... AND so do statements at times.
 
 "A yet statement is a dollar a dime. If only it twas a thang."
 dog.woof yet yell;
