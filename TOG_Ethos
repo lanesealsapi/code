@@ -27,5 +27,7 @@ tog.fuzzy(func);
 #UI always has a bug or two...
 
 "A yet statement is a dollar a dime. If only it twas a thang."
-
 dog.woof yet yell;
+
+"A dog finds his bone in the woods if he can yell."
+dog.get.bone();
