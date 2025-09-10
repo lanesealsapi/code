@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Magic Basketball Playbook — Demo</title>
+<style>
+  :root{--bg:#08121a;--card:#0b2632;--accent:#ffb84d;--muted:#98aab3;--good:#4af57a}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:#e6f6f4;display:flex;min-height:100vh;align-items:flex-start;justify-content:center;padding:28px}
+  .wrap{width:100%;max-width:1000px}
+  header{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+  .logo{width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,#ffb84d,#ff7a7a);display:grid;place-items:center;font-weight:800;color:#102132}
+  h1{margin:0;font-size:20px}
+  .grid{display:grid;grid-template-columns:1fr 380px;gap:18px}
+  .card{background:var(--card);padding:14px;border-radius:12px;box-shadow:0 8px 26px rgba(0,0,0,0.6)}
+  .muted{color:var(--muted);font-size:13px}
+  .plays{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+  .play-btn{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.03);padding:8px 10px;border-radius:8px;cursor:pointer;color:var(--muted)}
+  .court{width:100%;height:420px;background:linear-gradient(180deg,#67bfff11,#0b3f5211);border-radius:10px;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,0.03)}
+  .court .line{position:absolute;border-radius:2px;background:rgba(255,255,255,0.06)}
+  .midline{left:50%;top:0;bottom:0;width:2px;transform:translateX(-50%)}
+  .circle{position:absolute;border:2px dashed rgba(255,255,255,0.06);border-radius:50%}
+  .player{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:700;color:#042;position:absolute;transform:translate(-50%,-50%);cursor:default}
+  .teamA{background:linear-gradient(135deg,#ffb84d,#ff7a7a)}
+  .teamB{background:linear-gradient(135deg,#6fd3ff,#4d7eff)}
+  .ball{width:14px;height:14px;border-radius:50%;background:#f2a33c;position:absolute;transform:translate(-50%,-50%)}
+  .controls{display:flex;gap:8px;align-items:center;margin-top:12px}
+  button{background:var(--accent);border:0;padding:8px 10px;border-radius:8px;color:#102132;font-weight:700;cursor:pointer}
+  .small{background:rgba(255,255,255,0.04);color:var(--muted);padding:6px 8px;border-radius:8px;border:0}
+  .panel-right .stat{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.02)}
+  .log{margin-top:10px;background:rgba(255,255,255,0.02);padding:8px;border-radius:8px;max-height:150px;overflow:auto;font-size:13px}
+  footer{margin-top:12px;color:var(--muted);font-size:13px;text-align:center}
+  @media (max-width:920px){ .grid{grid-template-columns:1fr} .court{height:320px}}
+</style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <div class="logo">MB</div>
+      <div>
+        <h1>Magic Basketball Playbook — Demo</h1>
+        <div class="muted">Simple explanation, animated plays, and a tiny simulated mini-game.</div>
+      </div>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <h3 style="margin:0">Quick primer</h3>
+        <p class="muted" style="margin:8px 0 0">
+          Basketball basics: two teams (5 players each), objective is to score by getting the ball through the hoop. Plays coordinate player movement, screens, passes, and shots.
+        </p>
+
+        <hr style="border:0;border-top:1px solid rgba(255,255,255,0.03);margin:10px 0">
+
+        <div>
+          <strong>Core play elements:</strong>
+          <ul class="muted" style="margin:8px 0 0 18px;padding:0">
+            <li>Pick/screen — a teammate blocks a defender to free the ball-handler.</li>
+            <li>Curl/cut — quick movement toward the basket to receive a pass.</li>
+            <li>Isolation — one player creates their own shot.</li>
+            <li>Drive & kick — penetrate then pass out for an open shot.</li>
+          </ul>
+        </div>
+
+        <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div class="muted">Plays</div>
+            <div class="plays">
+              <button class="play-btn" data-play="pick">Pick & Roll</button>
+              <button class="play-btn" data-play="flare">Flare Cut</button>
+              <button class="play-btn" data-play="iso">Isolation</button>
+            </div>
+          </div>
+
+          <div style="text-align:right">
+            <div class="muted">Tempo</div>
+            <div style="font-weight:700">Quick demo</div>
+          </div>
+        </div>
+
+        <div class="court" id="court" aria-hidden="false">
+          <div class="line midline"></div>
+          <div class="circle" style="width:90px;height:90px;left:50%;top:36%;transform:translate(-50%,-50%);opacity:0.06"></div>
+
+          <!-- players (start positions) -->
+          <!-- Team A (orange) offense -->
+          <div class="player teamA" id="pA1" style="left:30%;top:70%;">PG</div>
+          <div class="player teamA" id="pA2" style="left:45%;top:60%;">SG</div>
+          <div class="player teamA" id="pA3" style="left:60%;top:70%;">SF</div>
+          <div class="player teamA" id="pA4" style="left:40%;top:80%;">PF</div>
+          <div class="player teamA" id="pA5" style="left:55%;top:80%;">C</div>
+
+          <!-- Team B (blue) defense -->
+          <div class="player teamB" id="pB1" style="left:30%;top:40%;">pg</div>
+          <div class="player teamB" id="pB2" style="left:45%;top:50%;">sg</div>
+          <div class="player teamB" id="pB3" style="left:60%;top:40%;">sf</div>
+          <div class="player teamB" id="pB4" style="left:40%;top:30%;">pf</div>
+          <div class="player teamB" id="pB5" style="left:55%;top:30%;">c</div>
+
+          <div class="ball" id="ball" style="left:30%;top:70%"></div>
+        </div>
+
+        <div class="controls">
+          <button id="animatePlay">Animate Play</button>
+          <button id="resetPositions" class="small">Reset</button>
+          <div style="margin-left:auto">
+            <button id="startSim">Start 4-min Game</button>
+          </div>
+        </div>
+
+        <div class="log" id="log">Actions will appear here.</div>
+      </section>
+
+      <aside class="card panel-right">
+        <h3 style="margin:0">Mini-game simulator</h3>
+        <div class="muted" style="margin-top:8px">4-minute simulated match: two teams of five. Plays, randomness, and stats.</div>
+
+        <div style="margin-top:12px">
+          <div class="stat"><div>Team Orange</div><div id="scoreA">0</div></div>
+          <div class="stat"><div>Team Blue</div><div id="scoreB">0</div></div>
+          <div class="stat"><div>Time left</div><div id="timeLeft">04:00</div></div>
+          <div class="stat"><div>Possession</div><div id="possession">Orange</div></div>
+        </div>
+
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <button id="playRandom" class="small">Random Play</button>
+          <button id="runStep" class="small">Step</button>
+          <button id="stopSim" class="small">Stop</button>
+        </div>
+
+        <div style="margin-top:12px">
+          <strong>Notes</strong>
+          <div class="muted" style="margin-top:6px">This is a lightweight demo: outcomes combine simple heuristics and random chance to produce scores and highlight plays.</div>
+        </div>
+
+        <footer>Made small & simple — tweak the rules as desired.</footer>
+      </aside>
+    </div>
+  </main>
+
+<script>
+/* Lightweight play animations + 4-minute mini-game simulator
+ - Players are DOM elements moved by changing left/top %
+ - Plays defined as sequences of position steps and ball movements
+ - Simulator runs discrete possessions with simple success chance calculations
+*/
+
+const logEl = document.getElementById('log');
+function log(s){ const d=document.createElement('div'); d.textContent = s; logEl.prepend(d); }
+
+// helpers
+function pct(v){ return (v*100).toFixed(2) + '%'; }
+function setPos(id, xPct, yPct){ const el=document.getElementById(id); el.style.left = xPct + '%'; el.style.top = yPct + '%'; }
+function move(el, xPct, yPct, ms=600){ el.style.transition = `left ${ms}ms linear, top ${ms}ms linear`; el.style.left = xPct + '%'; el.style.top = yPct + '%'; }
+function moveBallTo(xPct,yPct,ms=500){ const b=document.getElementById('ball'); move(b,xPct,yPct,ms); }
+
+function resetPositions(){
+  setPos('pA1',30,70); setPos('pA2',45,60); setPos('pA3',60,70); setPos('pA4',40,80); setPos('pA5',55,80);
+  setPos('pB1',30,40); setPos('pB2',45,50); setPos('pB3',60,40); setPos('pB4',40,30); setPos('pB5',55,30);
+  moveBallTo(30,70,200); // with PG
+  // clear transitions
+  setTimeout(()=>{document.querySelectorAll('.player, .ball').forEach(el=>el.style.transition='');},700);
+  log('Positions reset.');
+}
+document.getElementById('resetPositions').addEventListener('click', resetPositions);
+
+// Plays (short sequences)
+const plays = {
+  pick: [
+    {t:0, p:'pA1', x:30,y:70, ball:'pA1'},
+    {t:300, p:'pA4', x:38,y:68, note:'PF sets screen'},
+    {t:700, p:'pA1', x:45,y:60, ball:'pA1', note:'PG uses screen, drives'},
+    {t:1100, p:'pA4', x:40,y:78},
+    {t:1500, action:'shot', from:'pA1', successProb:0.45}
+  ],
+  flare: [
+    {t:0, p:'pA2', x:45,y:60, ball:'pA2'},
+    {t:300, p:'pA2', x:60,y:50, note:'SG fades out to perimeter'},
+    {t:700, p:'pA3', x:55,y:68},
+    {t:1100, action:'pass', from:'pA2', to:'pA3'},
+    {t:1500, action:'shot', from:'pA3', successProb:0.4}
+  ],
+  iso: [
+    {t:0, p:'pA3', x:60,y:70, ball:'pA3'},
+    {t:300, p:'pA3', x:55,y:60, note:'SF isolates'},
+    {t:700, action:'dribble', from:'pA3', x:50,y:55},
+    {t:1200, action:'shot', from:'pA3', successProb:0.42}
+  ]
+};
+
+function playSequence(seq){
+  resetPositions();
+  seq.forEach(step=>{
+    setTimeout(()=>{
+      if(step.p) move(document.getElementById(step.p), step.x, step.y, 500);
+      if(step.ball){
+        // position ball at player's current coords
+        const pl = document.getElementById(step.ball);
+        moveBallTo(parseFloat(pl.style.left), parseFloat(pl.style.top), 400);
+      }
+      if(step.action==='pass'){
+        const from = document.getElementById(step.from), to=document.getElementById(step.to);
+        moveBallTo(parseFloat(to.style.left), parseFloat(to.style.top), 450);
+        log('Pass from '+step.from+' to '+step.to);
+      }
+      if(step.action==='dribble'){
+        const pl=document.getElementById(step.from);
+        moveBallTo(step.x,step.y,400);
+      }
+      if(step.action==='shot'){
+        const shooter = document.getElementById(step.from);
+        // shot animation: ball to top center (hoop)
+        moveBallTo(50,10,700);
+        setTimeout(()=>{
+          const made = Math.random() < step.successProb;
+          log((made ? 'Score! ' : 'Missed. ') + step.from + ' (' + Math.round(step.successProb*100) + '%)');
+          // return ball to PG or opposing possession
+          if(made) moveBallTo(50,70,600); else moveBallTo(50,30,600);
+        },700);
+      }
+      if(step.note) log(step.note);
+    }, step.t);
+  });
+}
+
+// wire play buttons
+document.querySelectorAll('.play-btn').forEach(b=>{
+  b.addEventListener('click', ()=>{ const p=b.getAttribute('data-play'); playSequence(plays[p]); });
+});
+
+document.getElementById('animatePlay').addEventListener('click', ()=> playSequence(plays.pick));
+
+// --- Mini-game simulation ---
+let simRunning = false;
+let simTimer = null;
+let timeLeft = 240; // seconds (4:00)
+let scoreA = 0, scoreB = 0;
+let possession = 'A'; // 'A' or 'B'
+const scoreAEl = document.getElementById('scoreA'), scoreBEl = document.getElementById('scoreB'), timeEl = document.getElementById('timeLeft'), possEl = document.getElementById('possession');
+
+function formatTime(s){ const m=Math.floor(s/60); const sec = s%60; return (m<10?'0'+m:m)+':'+(sec<10?'0'+sec:sec); }
+
+function startSim(){
+  if(simRunning) return;
+  simRunning = true;
+  document.getElementById('startSim').textContent = 'Running...';
+  log('Simulation started.');
+  simTimer = setInterval(simStep, 1000);
+}
+
+function stopSim(){
+  simRunning = false;
+  clearInterval(simTimer);
+  document.getElementById('startSim').textContent = 'Start 4-min Game';
+  log('Simulation stopped.');
+}
+
+function simStep(){
+  if(timeLeft<=0){ stopSim(); log('Game over. Final: '+scoreA+' - '+scoreB); return; }
+  // each step represents a short possession chance every 6 seconds (approx)
+  // reduce time
+  timeLeft--;
+  timeEl.textContent = formatTime(timeLeft);
+  if(timeLeft % 6 !== 0) return; // only act every 6 seconds to simulate possessions
+
+  // simulate possession outcome
+  // basic team strengths (can be random or tuned)
+  const strengthA = 0.5 + Math.random()*0.2; // 0.5-0.7
+  const strengthB = 0.48 + Math.random()*0.22;
+  const team = possession === 'A' ? 'A' : 'B';
+  const offenseStrength = team==='A' ? strengthA : strengthB;
+  const shotTypeRoll = Math.random();
+  let pts = (shotTypeRoll<0.25) ? 3 : (shotTypeRoll<0.8) ? 2 : 2; // 25% 3pt, rest 2pt
+  // success prob influenced by offenseStrength and randomness
+  const baseProb = (pts===3) ? 0.34 : 0.5;
+  const success = Math.random() < (baseProb * offenseStrength);
+  if(success){
+    if(team==='A') scoreA += pts; else scoreB += pts;
+    log((team==='A' ? 'Orange' : 'Blue') + ' scores ' + pts + ' (' + (success? 'made' : 'miss') + ')');
+    // possession flips to other team after scoring
+    possession = (team==='A') ? 'B' : 'A';
+  } else {
+    // on miss, chance for offensive rebound small; otherwise possession flips
+    const oreb = Math.random() < 0.12;
+    if(oreb){
+      log((team==='A' ? 'Orange' : 'Blue') + ' misses but gets offensive rebound.');
+      // keep possession
+    } else {
+      log((team==='A' ? 'Orange' : 'Blue') + ' misses. Turnover to other team.');
+      possession = (team==='A') ? 'B' : 'A';
+    }
+  }
+  // update display
+  scoreAEl.textContent = scoreA; scoreBEl.textContent = scoreB; possEl.textContent = possession==='A' ? 'Orange' : 'Blue';
+  // animate simple play on court: random play from plays for possession team
+  const chosen = Object.values(plays)[Math.floor(Math.random()*Object.keys(plays).length)];
+  playSequence(chosen);
+  // end if time elapsed
+  if(timeLeft<=0){ stopSim(); log('Game over. Final: '+scoreA+' - '+scoreB); }
+}
+
+document.getElementById('startSim').addEventListener('click', ()=>{ timeLeft=240; scoreA=0; scoreB=0; possession='A'; timeEl.textContent=formatTime(timeLeft); scoreAEl.textContent=0; scoreBEl.textContent=0; possEl.textContent='Orange'; startSim(); });
+document.getElementById('stopSim').addEventListener('click', stopSim);
+document.getElementById('playRandom').addEventListener('click', ()=>{ const keys=Object.keys(plays); playSequence(plays[keys[Math.floor(Math.random()*keys.length)]]); });
+document.getElementById('runStep').addEventListener('click', simStep);
+
+// init
+resetPositions();
+timeEl.textContent = formatTime(timeLeft);
+scoreAEl.textContent = scoreA; scoreBEl.textContent = scoreB; possEl.textContent = 'Orange';
+</script>
+</body>
+</html>
