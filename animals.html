@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sheep & Panda Soundboard</title>
+  <style>
+    body { background: #f7f7f7; color: #333; font-family: sans-serif; text-align: center; padding: 2em; }
+    h1 { margin-bottom: 1em; }
+    img { max-width: 300px; height: auto; margin-bottom: 1em; }
+    .buttons { display: flex; justify-content: center; gap: 1em; margin-top: 1em; }
+    button { padding: 1em 2em; font-size: 1.2em; border: none; border-radius: 8px; cursor: pointer; }
+    .sheep-btn { background: #a8e6cf; }
+    .panda-btn { background: #ffd3b6; }
+    .other-btn { background: #ffd3b6; }
+  </style>
+</head>
+<body>
+  <h1>Sheep & Panda Sounds</h1>
+  <img src="data:image/png;base64,PASTE_BASE64_IMAGE_STRING_HERE" alt="Sheep and Panda">
+
+  <div class="buttons">
+    <button class="sheep-btn" onclick="play('sheep')">🐑 Sheep</button>
+    <button class="panda-btn" onclick="play('panda')">🐼 Panda</button>
+    <button class="other-btn" onclick="play('?')">? Other</button>
+  </div>
+
+  <script>
+    const sounds = {
+      sheep: "data:audio/wav;base64,PASTE_BASE64_SHEEP_SOUND",
+      panda: "data:audio/wav;base64,PASTE_BASE64_PANDA_SOUND",
+      other: "data:audio/wav;base64,PASTE_BASE64_OTHER_SOUND"
+    };
+
+    function play(animal) {
+      const audio = new Audio(sounds[animal]);
+      audio.play();
+    }
+  </script>
+</body>
+</html>
