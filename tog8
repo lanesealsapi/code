@@ -1,7 +1,0 @@
-tog.play.music();
-tog.pause.music();
-
-tog.play.media(".mp4");
-tog.pause.media(".mp4");
-
-tog.animate.window("do stuff");
