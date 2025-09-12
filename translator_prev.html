@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>English to Spanish Translator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        input {
+            padding: 10px;
+            width: 200px;
+            margin-bottom: 10px;
+        }
+        button {
+            padding: 10px 15px;
+        }
+        .result {
+            margin-top: 20px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<h1>English to Spanish Translator</h1>
+<input type="text" id="inputWord" placeholder="Enter a word" />
+<div class="result" id="result"></div>
+
+<script>
+// Translation module
+const Translator = (() => {
+    const translations = {
+        "hello": "hola",
+        "dog": "perro",
+        "cat": "gato",
+        "thank you": "gracias",
+        "goodbye": "adiós"
+    };
+
+    const addTranslation = (english, spanish) => {
+        translations[english] = spanish;
+    };
+
+    const translate = (english) => {
+        return translations[english.toLowerCase()] || "Translation not found";
+    };
+
+    return {
+        addTranslation,
+        translate
+    };
+})();
+
+// Event listener for input
+document.getElementById('inputWord').addEventListener('keypress', (event) => {
+    if (event.key === 'Enter') {
+        const inputWord = event.target.value;
+        const translation = Translator.translate(inputWord);
+        document.getElementById('result').innerText = translation;
+        event.target.value = ''; // Clear input field
+    }
+});
+</script>
+
+</body>
+</html>
