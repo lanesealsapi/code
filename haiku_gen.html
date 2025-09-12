@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Mini Hill || Crash Dude - Climber</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  html,body { height:100%; margin:0; background:#111; color:#eee; font-family:Arial,Helvetica,sans-serif; }
+  canvas { display:block; margin:0 auto; background:linear-gradient(#87ceeb,#bfefff 60%, #e6f7ff 100%); box-shadow:0 6px 20px rgba(0,0,0,.6); }
+  #ui { text-align:center; margin-top:8px; }
+  #info { font-size:14px; color:#ddd; }
+  button { padding:6px 12px; margin:0 6px; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1000" height="520"></canvas>
+<div id="ui">
+  <span id="info">Use ← → to lean, ↑ to accelerate, ↓ to brake. Reach as far as you can!</span>
+  <button id="restart">Restart</button>
+  <span id="score" style="margin-left:10px;">Score: 0</span>
+</div>
+
+<script>
+/*
+Mini Hill Climber (single-file)
+Controls:
+  ArrowUp: accelerate (pedal)
+  ArrowDown: brake / reverse
+  ArrowLeft/ArrowRight: lean/tilt (steer)
+Features:
+  - Procedural terrain (random height segments)
+  - Bicycle physics (simple, tuned for fun)
+  - Crash detection (angle or stuck on steep slope)
+  - On crash: short jump (forward or back) then reset to start
+  - Increasing difficulty with distance
+*/
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+let keys = {};
+addEventListener('keydown', e => { keys[e.key] = true; e.preventDefault && e.preventDefault(); });
+addEventListener('keyup', e => { keys[e.key] = false; e.preventDefault && e.preventDefault(); });
+
+document.getElementById('restart').onclick = () => reset();
+
+// ------- Terrain generation -------
+function generateTerrain(seedOffset=0) {
+  // create a polyline of points spaced horizontally
+  const points = [];
+  const segmentCount = 600; // long world; camera will pan
+  let x = 0;
+  let y = H*0.6;
+  const rng = mulberry32(12345 + seedOffset);
+  let slope = 0;
+  for (let i=0;i<segmentCount;i++) {
+    // difficulty increases with index: amplitude & slope variation grow
+    const difficulty = 1 + i/150;
+    slope += (rng()-0.5) * 0.6 * difficulty;
+    // clamp slope to keep playable
+    slope = Math.max(Math.min(slope, 2.2 + difficulty*0.2), -2.2 - difficulty*0.2);
+    x += 10 + (rng()*6); // variable spacing
+    y += slope * 6;
+    // clamp height
+    y = Math.max(Math.min(y, H*0.85), H*0.25);
+    points.push({x: x, y: y});
+  }
+  return points;
+}
+
+// deterministic RNG
+function mulberry32(a) {
+  return function() {
+    let t = a += 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+}
+
+// linear interpolation
+function lerp(a,b,t){ return a + (b-a)*t; }
+
+// find terrain height and slope at given world x
+function terrainAt(points, worldX) {
+  if (worldX <= points[0].x) return {y: points[0].y, slope: 0, angle:0};
+  for (let i=0;i<points.length-1;i++) {
+    const a = points[i], b = points[i+1];
+    if (worldX >= a.x && worldX <= b.x) {
+      const t = (worldX - a.x) / (b.x - a.x);
+      const y = lerp(a.y, b.y, t);
+      const dy = (b.y - a.y) / (b.x - a.x);
+      const angle = Math.atan2(dy, 1); // slope angle in radians (approx)
+      return {y, slope: dy, angle};
+    }
+  }
+  const last = points[points.length-1];
+  return {y:last.y, slope:0, angle:0};
+}
+
+// ------- Bicycle / rider state -------
+const state = {
+  bikeX: 50,          // world position x (starts near 0)
+  bikeY: 0,
+  vx: 0,
+  vy: 0,
+  angle: 0,          // tilt angle (radians), 0 means aligned with slope
+  angularV: 0,
+  onGround: true,
+  crashed: false,
+  crashTimer: 0,
+  distance: 0,
+  startX: 50,
+  jumpState: null
+};
+
+let terrain = generateTerrain(0);
+let cameraX = 0;
+let lastTime = performance.now();
+let scoreEl = document.getElementById('score');
+
+reset();
+requestAnimationFrame(loop);
+
+// ------- Reset / restart -------
+function reset() {
+  terrain = generateTerrain(Math.floor(Math.random()*100000));
+  state.bikeX = 50;
+  const t0 = terrainAt(terrain, state.bikeX);
+  state.bikeY = t0.y - 18;
+  state.vx = 0;
+  state.vy = 0;
+  state.angle = t0.angle;
+  state.angularV = 0;
+  state.onGround = true;
+  state.crashed = false;
+  state.crashTimer = 0;
+  state.distance = 0;
+  state.jumpState = null;
+  cameraX = 0;
+  updateScore();
+}
+
+// ------- Physics & update -------
+function loop(now) {
+  const dt = Math.min((now - lastTime)/1000, 0.05);
+  lastTime = now;
+
+  update(dt);
+  draw();
+
+  requestAnimationFrame(loop);
+}
+
+function update(dt) {
+  // input
+  const pedal = keys['ArrowUp'] || keys['w'] ? 1 : 0;
+  const brake = keys['ArrowDown'] || keys['s'] ? 1 : 0;
+  const left = keys['ArrowLeft'] || keys['a'] ? 1 : 0;
+  const right = keys['ArrowRight'] || keys['d'] ? 1 : 0;
+
+  // if in jump/crash recovery, handle jump animation
+  if (state.crashed) {
+    state.crashTimer += dt;
+    if (state.jumpState) {
+      // apply simple ballistic to move rider forward/back to start
+      state.vy += 800 * dt; // gravity positive downwards
+      state.bikeY += state.vy * dt;
+      state.bikeX += state.vx * dt;
+      state.angle += state.angularV * dt;
+      if (state.bikeY >= terrainAt(terrain, state.bikeX).y - 18 || state.crashTimer > 1.2) {
+        // land or timeout -> reset to start position (or small back step)
+        const backOrForward = Math.random() < 0.5 ? -80 : 40;
+        state.bikeX = Math.max(20, state.startX + backOrForward);
+        const t = terrainAt(terrain, state.bikeX);
+        state.bikeY = t.y - 18;
+        state.vx = 0;
+        state.vy = 0;
+        state.angle = t.angle;
+        state.angularV = 0;
+        state.onGround = true;
+        state.crashed = false;
+        state.crashTimer = 0;
+        state.jumpState = null;
+        updateScore();
+      }
+    } else {
+      // immediate small bounce for non-flip crash
+      state.crashTimer = 0.2;
+      state.crashed = false;
+      state.vx = 0;
+      state.vy = 0;
+    }
+    return;
+  }
+
+  // simple drivetrain
+  const power = (pedal - brake*0.8) * (80 + Math.min(state.distance/2, 200)); // stronger as distance grows
+  const drag = 6 + Math.abs(state.vx)*0.6;
+  const accel = (power - drag * Math.sign(state.vx)) * 0.0008;
+  state.vx += accel * dt * 1000;
+  // clamp speed
+  state.vx = Math.max(Math.min(state.vx, 700), -200);
+
+  // steering/lean affects angular velocity
+  const leanInput = (right - left); // right -> positive tilt forward
+  state.angularV += leanInput * 4 * dt;
+  // small self-stabilizer to align with slope when on ground
+  const groundInfo = terrainAt(terrain, state.bikeX);
+  if (state.onGround) {
+    // try to align bike angle to terrain angle slowly
+    const aim = groundInfo.angle;
+    const diff = aim - state.angle;
+    state.angularV += diff * 2 * dt;
+    // small friction
+    state.angularV *= 0.995;
+  } else {
+    // in-air rotation persisted, mild air resistance
+    state.angularV *= 0.999;
+  }
+
+  state.angle += state.angularV * dt;
+
+  // gravity / vertical motion if leaving ground
+  if (!state.onGround) {
+    state.vy += 1200 * dt;
+    state.bikeY += state.vy * dt;
+    state.bikeX += state.vx * dt;
+  } else {
+    // follow terrain: set y to terrain y minus bike offset
+    state.bikeX += state.vx * dt;
+    const t = terrainAt(terrain, state.bikeX);
+    const targetY = t.y - 18;
+    // smooth vertical to avoid tunneling
+    state.bikeY = lerp(state.bikeY, targetY, Math.min(1, dt*20));
+  }
+
+  // collision / ground check
+  const below = terrainAt(terrain, state.bikeX);
+  if (state.bikeY >= below.y - 18 - 0.5) {
+    // on ground
+    state.onGround = true;
+    state.bikeY = below.y - 18;
+    state.vy = 0;
+    // small rolling friction
+    state.vx *= 0.998;
+  } else {
+    state.onGround = false;
+  }
+
+  // crash detection:
+  // - angle too tilted relative to terrain
+  // - very high speed hitting a sudden steep uphill (sudden negative slope while speed forward)
+  const angleDelta = Math.abs(state.angle - below.angle);
+  if (angleDelta > Math.PI*0.45 || (state.vx>240 && below.slope < -0.2)) {
+    doCrash();
+  }
+
+  // flipping detection: if angular velocity large and angle large
+  if (Math.abs(state.angularV) > 6 && Math.abs(state.angle) > Math.PI*0.7) {
+    doCrash(true);
+  }
+
+  // camera follows with smoothing
+  cameraX = lerp(cameraX, state.bikeX - 200, 0.08);
+
+  // update score (distance traveled from start)
+  state.distance = Math.max(state.distance, Math.floor(state.bikeX - state.startX));
+  updateScore();
+}
+
+function doCrash(flip=false) {
+  state.crashed = true;
+  state.crashTimer = 0;
+  if (flip) {
+    // fling into air with rotation
+    state.jumpState = 'flip';
+    state.vy = -420 - Math.min(state.vx*0.2, 200);
+    state.vx = state.vx*0.4 + (Math.random()<0.5 ? -120 : 120);
+    state.angularV = (Math.random()<0.5 ? -6 : 6);
+  } else {
+    state.jumpState = 'bounce';
+    state.vy = -240;
+    state.vx = -Math.min(140, state.vx*0.6);
+    state.angularV = (Math.random()-0.5)*6;
+  }
+}
+
+// ------- Drawing -------
+function draw() {
+  ctx.clearRect(0,0,W,H);
+
+  // background sky gradient already set by canvas background; draw sun
+  const sunX = 120 - (cameraX*0.05 % 400);
+  const sunY = 80;
+  const grd = ctx.createRadialGradient(sunX,sunY,10,sunX,sunY,120);
+  grd.addColorStop(0,'rgba(255,250,200,0.95)');
+  grd.addColorStop(1,'rgba(255,250,200,0.0)');
+  ctx.fillStyle = grd;
+  ctx.beginPath(); ctx.arc(sunX,sunY,120,0,Math.PI*2); ctx.fill();
+
+  // draw terrain polyline clipped to camera view window
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#4a3420';
+  ctx.fillStyle = '#4a3420';
+  ctx.beginPath();
+  // start at left edge
+  const camLeft = cameraX - 80;
+  ctx.moveTo(0, H);
+  // draw segments across screen
+  for (let i=0;i<terrain.length;i++) {
+    const p = terrain[i];
+    const sx = Math.round(p.x - cameraX + 200);
+    if (sx < -100) continue;
+    if (sx > W+200) break;
+    ctx.lineTo(sx, p.y);
+  }
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.fill();
+
+  // draw terrain outline
+  ctx.beginPath();
+  let started=false;
+  for (let i=0;i<terrain.length;i++){
+    const p=terrain[i];
+    const sx = p.x - cameraX + 200;
+    if (sx < -200) continue;
+    if (sx > W+200) break;
+    if (!started){ ctx.moveTo(sx,p.y); started=true; } else ctx.lineTo(sx,p.y);
+  }
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#2f1f12';
+  ctx.stroke();
+
+  // draw some simple parallax clouds
+  drawClouds(nowNormalized = performance.now()*0.00005);
+
+  // draw bike: wheels, frame, rider
+  const bx = state.bikeX - cameraX + 200;
+  const by = state.bikeY;
+  // wheels positions relative to bike body
+  const wheelDist = 30;
+  const rear = {x: bx - wheelDist, y: by + 12};
+  const front = {x: bx + wheelDist, y: by + 12};
+
+  // draw wheels
+  drawWheel(rear.x, rear.y, 12, state.vx);
+  drawWheel(front.x, front.y, 12, state.vx);
+
+  // bike body pivot at bx,by; draw frame rotated by state.angle
+  ctx.save();
+  ctx.translate(bx, by);
+  ctx.rotate(state.angle);
+  // frame
+  ctx.strokeStyle = '#222';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(-wheelDist, 6);
+  ctx.lineTo(0, -8);
+  ctx.lineTo(wheelDist, 6);
+  ctx.stroke();
+  // seat
+  ctx.fillStyle = '#333';
+  ctx.fillRect(-6, -8-6, 12, 4);
+  // handlebar
+  ctx.fillRect(wheelDist-6, -6-2, 12, 3);
+  // rider: simple circle head and torso
+  ctx.fillStyle = '#ffdbb5';
+  ctx.beginPath(); ctx.arc(-2, -18, 6, 0, Math.PI*2); ctx.fill(); // head
+  ctx.fillStyle = '#355';
+  ctx.fillRect(-6, -12, 10, 8); // torso
+  ctx.restore();
+
+  // draw small shadow under bike
+  ctx.beginPath();
+  ctx.ellipse(bx, by+18, 28, 8, 0, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  ctx.fill();
+
+  // HUD
+  ctx.fillStyle = '#0009';
+  ctx.fillRect(10,10,160,44);
+  ctx.fillStyle = '#fff';
+  ctx.font = '14px Arial';
+  ctx.fillText('Distance: ' + Math.max(0,state.distance) + ' m', 18, 32);
+  ctx.fillStyle = '#ddd';
+  ctx.font = '12px Arial';
+  ctx.fillText('Speed: ' + Math.round(state.vx) + '  Lean: ' + state.angle.toFixed(2), 18, 44);
+}
+
+function drawWheel(x,y,r,speed){
+  // rim
+  ctx.beginPath();
+  ctx.fillStyle = '#111';
+  ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+  // rim highlight
+  ctx.beginPath(); ctx.arc(x,y,r-3,0,Math.PI*2);
+  ctx.fillStyle = '#222'; ctx.fill();
+  // spokes - quick rotating illusion
+  const spokeCount = 6;
+  const rot = (performance.now()*0.002 * (speed*0.01 + 1)) % (Math.PI*2);
+  ctx.strokeStyle = '#666'; ctx.lineWidth=2;
+  for (let i=0;i<spokeCount;i++){
+    const a = rot + i*(Math.PI*2/spokeCount);
+    ctx.beginPath();
+    ctx.moveTo(x + Math.cos(a)*(r-2), y + Math.sin(a)*(r-2));
+    ctx.lineTo(x + Math.cos(a+0.2)*(r-4), y + Math.sin(a+0.2)*(r-4));
+    ctx.stroke();
+  }
+}
+
+// clouds (parallax)
+function drawClouds(t){
+  const cloudCols = ['#fff','#f8fbff','#f4f9ff'];
+  for (let i=0;i<5;i++){
+    const cx = ((i*260) - (t*180*(0.6+i*0.2))) % (W+300) - 150;
+    const cy = 60 + (i%2)*20;
+    ctx.fillStyle = cloudCols[i%cloudCols.length];
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, 40, 22, 0, 0, Math.PI*2);
+    ctx.ellipse(cx+30, cy+6, 30, 18, 0, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+
+function updateScore(){ scoreEl.textContent = 'Score: ' + Math.max(0,state.distance); }
+
+</script>
+</body>
+</html>
