@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Cube Eater — 3D-ish Chi-Grow Balls Game</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<style>
+  html,body{height:100%;margin:0;background:#071020;color:#fff;font-family:system-ui,Segoe UI,Roboto;}
+  #game{display:block;margin:10px auto;background:linear-gradient(#083,#012);box-shadow:0 10px 30px rgba(0,0,0,.6);border-radius:8px;}
+  #hud{width:1000px;margin:8px auto;text-align:center;}
+  button{padding:6px 12px;margin:0 6px}
+  #info{font-size:14px;color:#cfe;}
+</style>
+</head>
+<body>
+<canvas id="game" width="1000" height="640"></canvas>
+<div id="hud">
+  <button id="start">Start</button>
+  <button id="reset">Reset</button>
+  <span id="info">Use ← → ↑ ↓ to move the cube. Eat balls, get powerups, become OP.</span>
+  <div id="stats"></div>
+</div>
+
+<script>
+/*
+Cube Eater — single-file, no libs.
+Controls: Arrow keys (or WASD). Eat balls to score.
+Concept: 2.5D cube drawn with simple shading; balls spawn and move; cube can get power-ups (speed, magnet, giant).
+Designed to be "OP" and fun.
+*/
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+let keys = {};
+addEventListener('keydown', e=>{ keys[e.key]=true; if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d'].includes(e.key)) e.preventDefault();});
+addEventListener('keyup', e=>{ keys[e.key]=false; });
+
+const startBtn = document.getElementById('start');
+const resetBtn = document.getElementById('reset');
+const statsEl = document.getElementById('stats');
+
+startBtn.onclick = ()=> { if(!running) start(); };
+resetBtn.onclick = ()=> resetGame();
+
+let running=false;
+let last=0;
+
+// Game state
+const state = {
+  cube: { x: W/2, y: H/2, size: 48, speed: 220, dirX:0, dirY:0, angle:0, power: null, powerTimer:0, score:0, mass:1 },
+  balls: [],
+  powerups: [],
+  t:0,
+  spawnTimer:0,
+  difficulty:1,
+  highSpeedMode:false
+};
+
+// Utilities
+function rand(a,b){ return a + Math.random()*(b-a); }
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+function dist(ax,ay,bx,by){ return Math.hypot(ax-bx, ay-by); }
+
+// Cube drawing (2.5D: draw top face, left face, right face with shading)
+function drawCube(x,y,size,angle,scale=1,color='#3cf') {
+  const s = size*scale;
+  // perspective offsets
+  const ox = Math.cos(angle)*s*0.35;
+  const oy = Math.sin(angle)*s*0.18;
+  // center square (front)
+  ctx.save();
+  ctx.translate(x,y);
+  // right face
+  ctx.fillStyle = shade(color, -18);
+  ctx.beginPath();
+  ctx.moveTo(0,0);
+  ctx.lineTo(s/2 + ox, -s/2 + oy);
+  ctx.lineTo(s/2 + ox, s/2 + oy);
+  ctx.lineTo(0,s);
+  ctx.closePath(); ctx.fill();
+  // left face
+  ctx.fillStyle = shade(color, -34);
+  ctx.beginPath();
+  ctx.moveTo(0,0);
+  ctx.lineTo(-s/2 + ox, -s/2 + oy);
+  ctx.lineTo(-s/2 + ox, s/2 + oy);
+  ctx.lineTo(0,s);
+  ctx.closePath(); ctx.fill();
+  // top face
+  ctx.fillStyle = shade(color, 10);
+  ctx.beginPath();
+  ctx.moveTo(-s/2 + ox, -s/2 + oy);
+  ctx.lineTo(s/2 + ox, -s/2 + oy);
+  ctx.lineTo(0,0);
+  ctx.closePath(); ctx.fill();
+  // outline
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-s/2 + ox, -s/2 + oy);
+  ctx.lineTo(s/2 + ox, -s/2 + oy);
+  ctx.lineTo(s/2 + ox, s/2 + oy);
+  ctx.lineTo(0,s);
+  ctx.lineTo(-s/2 + ox, s/2 + oy);
+  ctx.closePath(); ctx.stroke();
+  ctx.restore();
+}
+function shade(hex, lum){
+  // simple hex shade
+  hex = hex.replace('#','');
+  let r = parseInt(hex.substr(0,2),16), g=parseInt(hex.substr(2,2),16), b=parseInt(hex.substr(4,2),16);
+  r = clamp(Math.round(r + (lum/100)*255),0,255);
+  g = clamp(Math.round(g + (lum/100)*255),0,255);
+  b = clamp(Math.round(b + (lum/100)*255),0,255);
+  return 'rgb('+r+','+g+','+b+')';
+}
+
+// Ball entity
+function spawnBall(variant='normal'){
+  // spawn at random edge or within arena
+  const margin = 80;
+  const spawnEdge = Math.floor(rand(0,4));
+  let x,y;
+  if(Math.random() < 0.4){
+    // inside near edges
+    x = rand(margin, W-margin);
+    y = rand(margin, H-margin);
+  } else if(spawnEdge===0){ x=-30; y=rand(0,H); }
+  else if(spawnEdge===1){ x=W+30; y=rand(0,H); }
+  else if(spawnEdge===2){ x=rand(0,W); y=-30; }
+  else { x=rand(0,W); y=H+30; }
+  const speed = variant==='fast' ? rand(60,140) : rand(20,80);
+  const angleToward = Math.atan2(state.cube.y - y, state.cube.x - x);
+  const vx = Math.cos(angleToward + rand(-0.6,0.6)) * speed;
+  const vy = Math.sin(angleToward + rand(-0.6,0.6)) * speed;
+  const r = variant==='big' ? rand(12,20) : rand(6,12);
+  const color = variant==='fast' ? '#ffdd57' : variant==='big' ? '#7df' : '#fff';
+  state.balls.push({x,y,vx,vy,r,variant,color});
+}
+
+// Powerups
+function spawnPowerup(){
+  const x = rand(80,W-80), y = rand(80,H-80);
+  const kinds = ['speed','magnet','giant'];
+  const kind = kinds[Math.floor(rand(0,kinds.length))];
+  state.powerups.push({x,y,kind,ttl:12});
+}
+
+// Game loop
+function update(dt){
+  state.t += dt;
+  // input -> motor
+  const s = state.cube;
+  let inputX = 0, inputY = 0;
+  if(keys['ArrowLeft']||keys['a']) inputX = -1;
+  if(keys['ArrowRight']||keys['d']) inputX = 1;
+  if(keys['ArrowUp']||keys['w']) inputY = -1;
+  if(keys['ArrowDown']||keys['s']) inputY = 1;
+  // normalize diagonal
+  const mag = Math.hypot(inputX,inputY) || 1;
+  const targetVx = (inputX/mag) * s.speed * (s.power==='speed' ? 1.8 : 1);
+  const targetVy = (inputY/mag) * s.speed * (s.power==='speed' ? 1.8 : 1);
+  // smooth velocity (simple inertial)
+  s.dirX = lerp(s.dirX, targetVx, dt*6);
+  s.dirY = lerp(s.dirY, targetVy, dt*6);
+  s.x += s.dirX * dt;
+  s.y += s.dirY * dt;
+
+  // world wrap edges for fast play
+  if(s.x < -60) s.x = W+60; if(s.x > W+60) s.x = -60;
+  if(s.y < -60) s.y = H+60; if(s.y > H+60) s.y = -60;
+
+  // spawn balls faster as score increases
+  state.spawnTimer -= dt;
+  const spawnRate = clamp(0.6 - state.difficulty*0.04 - state.score*0.002, 0.12, 0.9);
+  if(state.spawnTimer <= 0){
+    // chance for variants
+    const r = Math.random();
+    if(r < 0.08) spawnBall('fast');
+    else if(r < 0.13) spawnBall('big');
+    else spawnBall('normal');
+    state.spawnTimer = spawnRate;
+  }
+
+  // spawn powerups occasionally
+  if(Math.random() < dt*0.02*(1+state.score/60)) spawnPowerup();
+
+  // update balls movement (simple)
+  for(let i=state.balls.length-1;i>=0;i--){
+    const b = state.balls[i];
+    // slight attraction to cube if magnet
+    if(s.power==='magnet'){
+      const dx = s.x - b.x, dy = s.y - b.y;
+      const d = Math.hypot(dx,dy) + 1;
+      b.vx += (dx/d) * 60 * dt;
+      b.vy += (dy/d) * 60 * dt;
+    }
+    // velocity damping and move
+    b.vx *= 0.998;
+    b.vy *= 0.998;
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+    // life: remove far off-screen long after spawn to keep light
+    if(b.x < -200 || b.x > W+200 || b.y < -200 || b.y > H+200) state.balls.splice(i,1);
+  }
+
+  // update powerups TTL
+  for(let i=state.powerups.length-1;i>=0;i--){
+    state.powerups[i].ttl -= dt;
+    if(state.powerups[i].ttl <= 0) state.powerups.splice(i,1);
+  }
+
+  // collisions: cube eats balls when overlapping
+  for(let i=state.balls.length-1;i>=0;i--){
+    const b = state.balls[i];
+    const d = dist(s.x,s.y,b.x,b.y);
+    const eatRadius = s.size * (s.power==='giant' ? 1.8 : 1.0) * 0.8;
+    if(d < eatRadius + b.r){
+      // eat!
+      // scoring depends on variant
+      const add = b.variant==='fast' ? 30 : b.variant==='big' ? 20 : 10;
+      state.cube.score += add * (s.power==='speed' ? 2 : 1);
+      // slight mass increase makes you chunkier/OP
+      s.mass = clamp(s.mass + 0.01*add/30, 1, 3);
+      // temporary speed buff on eating many
+      if(Math.random() < 0.28) activatePower('speed', 3);
+      // remove ball with flashy pop
+      popEffect(b.x,b.y, b.color);
+      state.balls.splice(i,1);
+      // difficulty scales
+      state.difficulty += 0.002;
+      continue;
+    }
+  }
+
+  // powerup pickup
+  for(let i=state.powerups.length-1;i>=0;i--){
+    const p = state.powerups[i];
+    if(dist(s.x,s.y,p.x,p.y) < s.size*0.9){
+      activatePower(p.kind, 6 + Math.floor(Math.random()*8));
+      state.powerups.splice(i,1);
+    }
+  }
+
+  // power timer
+  if(s.power){
+    s.powerTimer -= dt;
+    if(s.powerTimer <= 0){
+      s.power = null;
+      s.powerTimer = 0;
+    }
+  }
+
+  // keep ball count manageable
+  if(state.balls.length > 220) state.balls.splice(0, state.balls.length-220);
+
+  // stats
+  statsEl.textContent = `Score: ${Math.floor(s.score)}  Power: ${s.power||'none'}  Balls: ${state.balls.length}  Difficulty: ${state.difficulty.toFixed(2)}`;
+}
+
+// lerp
+function lerp(a,b,t){ return a + (b-a)*t; }
+
+// pop visual effects (temporary particle burst)
+let pops = [];
+function popEffect(x,y,color){
+  for(let i=0;i<10;i++){
+    pops.push({x,y,vx:rand(-160,160),vy:rand(-160,160),t:0,ttl:0.6,color,sz:rand(2,5)});
+  }
+}
+
+// Activate power
+function activatePower(kind, sec){
+  const s = state.cube;
+  s.power = kind;
+  s.powerTimer = sec;
+  // immediate effects
+  if(kind==='giant') s.mass = 2.0;
+  if(kind==='magnet') {/* effect in update */}
+  if(kind==='speed') s.mass = max2(s.mass, 1.1);
+}
+
+// draw everything
+function draw(){
+  // background
+  ctx.clearRect(0,0,W,H);
+  // subtle grid floor
+  ctx.save();
+  ctx.globalAlpha = 0.06;
+  ctx.strokeStyle = '#fff';
+  for(let gx=0;gx<W;gx+=40){
+    ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,H); ctx.stroke();
+  }
+  for(let gy=0;gy<H;gy+=40){
+    ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(W,gy); ctx.stroke();
+  }
+  ctx.restore();
+
+  // draw powerups
+  for(const p of state.powerups){
+    ctx.save();
+    ctx.translate(p.x,p.y);
+    ctx.fillStyle = p.kind==='speed' ? '#f56' : p.kind==='magnet' ? '#5af' : '#9f6';
+    ctx.beginPath(); ctx.arc(0,0,12,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#000'; ctx.font='12px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(p.kind[0].toUpperCase(), 0, 0);
+    ctx.restore();
+  }
+
+  // draw balls
+  for(const b of state.balls){
+    ctx.save();
+    // glow
+    ctx.fillStyle = b.color;
+    ctx.beginPath(); ctx.arc(b.x,b.y,b.r*1.8,0,Math.PI*2); ctx.globalAlpha = 0.08; ctx.fill(); ctx.globalAlpha=1;
+    // core
+    ctx.beginPath(); ctx.fillStyle = b.color; ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill();
+    // tiny shine
+    ctx.beginPath(); ctx.fillStyle='rgba(255,255,255,0.6)'; ctx.arc(b.x-b.r*0.35, b.y-b.r*0.35, Math.max(1,b.r*0.3), 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  // draw pops
+  for(let i=pops.length-1;i>=0;i--){
+    const p=pops[i];
+    p.t += 1/60;
+    p.x += p.vx/60; p.y += p.vy/60;
+    p.vx *= 0.985; p.vy *= 0.985;
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.globalAlpha = 1 - p.t/p.ttl; ctx.arc(p.x,p.y,p.sz,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
+    if(p.t > p.ttl) pops.splice(i,1);
+  }
+
+  // draw cube (big if giant)
+  const s = state.cube;
+  const scale = s.power==='giant' ? 1.6 : (1 + (s.mass-1)*0.35);
+  // subtle rotation based on movement
+  const angle = Math.atan2(s.dirY, s.dirX || 1) * 0.15;
+  drawCube(s.x, s.y, s.size, angle, scale, '#39f');
+
+  // draw aura for speed
+  if(s.power==='speed'){
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = '#ff8';
+    ctx.beginPath(); ctx.ellipse(s.x, s.y, s.size*scale*1.6, s.size*scale*1.1, 0, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  // HUD top-left
+  ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(12,12,220,68);
+  ctx.fillStyle = '#fff'; ctx.font='18px system-ui'; ctx.fillText('Cube Eater', 20, 36);
+  ctx.font='14px system-ui'; ctx.fillText('Score: '+Math.floor(s.score), 20, 58);
+  if(s.power){ ctx.fillStyle='#ffd'; ctx.fillText('Power: '+s.power+' ('+Math.ceil(s.powerTimer)+'s)', 130, 58); }
+}
+
+// helpers for anim
+function max2(a,b){ return a>b?a:b; }
+
+// main loop
+function frame(now){
+  if(!running) return;
+  if(!last) last = now;
+  const dt = Math.min((now-last)/1000, 0.035);
+  last = now;
+  update(dt);
+  draw();
+  requestAnimationFrame(frame);
+}
+
+// start/reset
+function start(){
+  resetGame();
+  running = true;
+  last = 0;
+  requestAnimationFrame(frame);
+}
+function resetGame(){
+  running = false;
+  state.balls.length = 0;
+  state.powerups.length = 0;
+  pops.length = 0;
+  state.t = 0;
+  state.spawnTimer = 0;
+  state.difficulty = 1;
+  state.cube = { x: W/2, y: H/2, size: 48, speed: 240, dirX:0, dirY:0, angle:0, power: null, powerTimer:0, score:0, mass:1 };
+  state.balls = [];
+  for(let i=0;i<18;i++) spawnBall();
+  draw();
+}
+
+resetGame();
+</script>
+</body>
+</html>
