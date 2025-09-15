@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Magic Dancing Panda</title>
+  <style>
+    body {
+      background: radial-gradient(circle at center, #222 0%, #000 100%);
+      color: white;
+      height: 100vh;
+      margin: 0;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Comic Sans MS', cursive, sans-serif;
+    }
+
+    .panda-container {
+      position: relative;
+      font-size: 100px;
+      animation: dance 1s infinite alternate ease-in-out;
+      text-shadow: 0 0 20px hotpink, 0 0 40px cyan;
+    }
+
+    .panda::after {
+      content: '✨';
+      position: absolute;
+      top: -30px;
+      left: -20px;
+      font-size: 40px;
+      animation: sparkle 1.5s infinite ease-in-out;
+    }
+
+    .panda::before {
+      content: '✨';
+      position: absolute;
+      bottom: -30px;
+      right: -20px;
+      font-size: 40px;
+      animation: sparkle 1.8s infinite ease-in-out;
+    }
+
+    @keyframes dance {
+      0% { transform: rotate(-10deg) translateY(0); }
+      100% { transform: rotate(10deg) translateY(-20px); }
+    }
+
+    @keyframes sparkle {
+      0%, 100% { opacity: 0.2; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.5) rotate(30deg); }
+    }
+
+    .sunglasses {
+      position: absolute;
+      top: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 30px;
+      pointer-events: none;
+    }
+
+    .text {
+      position: absolute;
+      bottom: 40px;
+      width: 100%;
+      text-align: center;
+      font-size: 24px;
+      color: hotpink;
+      text-shadow: 0 0 10px white;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  </style>
+</head>
+<body>
+  <div class="panda-container">
+    <div class="panda">🐼</div>
+    <div class="sunglasses">😎</div>
+  </div>
+  <div class="text">The Magic Dancing Panda is Here ✨</div>
+      
+      <script>
+        x = Math.floor(Math.random()*10);
+        arr = [0,1];
+        if (x > 5){
+            arr[1];
+            document.getElementsByClassName("panda")[0].innerText = "🐼";
+            }else{
+                document.getElementsByClassName("panda")[0].innerText = "😎";
+                };
+     
+      </script>
+</body>
+</html>

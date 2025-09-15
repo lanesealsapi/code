@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Emoji Survival Dance Party</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: radial-gradient(circle at center, #111, #000);
+    }
+
+    .emoji {
+      position: absolute;
+      font-size: 24px;
+      user-select: none;
+      transition: transform 0.2s ease;
+    }
+
+    .emoji.dancing {
+      animation: dance 0.6s infinite alternate ease-in-out;
+    }
+
+    @keyframes dance {
+      from { transform: translateY(0px) rotate(-10deg); }
+      to { transform: translateY(-10px) rotate(10deg); }
+    }
+  </style>
+</head>
+<body>
+
+<script>
+  const EMOJI_LIST = ['💃','🕺','🦄','🎉','🦖','👯‍♂️','🧟‍♂️','🐸','🐵','🎈'];
+  const COUNT = 100;
+  const emojis = [];
+
+  const body = document.body;
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+
+  // Create emojis
+  for (let i = 0; i < COUNT; i++) {
+    const el = document.createElement('div');
+    el.classList.add('emoji', 'dancing');
+    el.innerText = EMOJI_LIST[Math.floor(Math.random() * EMOJI_LIST.length)];
+    el.style.left = Math.random() * width + 'px';
+    el.style.top = Math.random() * height + 'px';
+    body.appendChild(el);
+
+    emojis.push({
+      el,
+      x: Math.random() * width,
+      y: Math.random() * height,
+      vx: (Math.random() - 0.5) * 2,
+      vy: (Math.random() - 0.5) * 2,
+      size: 24,
+      alive: true
+    });
+  }
+
+  function distance(a, b) {
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+
+  function update() {
+    for (let i = 0; i < emojis.length; i++) {
+      const e = emojis[i];
+      if (!e.alive) continue;
+
+      e.x += e.vx;
+      e.y += e.vy;
+
+      // Bounce off walls
+      if (e.x < 0 || e.x > width - e.size) e.vx *= -1;
+      if (e.y < 0 || e.y > height - e.size) e.vy *= -1;
+
+      e.el.style.left = e.x + 'px';
+      e.el.style.top = e.y + 'px';
+
+      // Check collision with others
+      for (let j = i + 1; j < emojis.length; j++) {
+        const other = emojis[j];
+        if (!other.alive) continue;
+        if (distance(e, other) < (e.size + other.size) * 0.5) {
+          // "Eat" the smaller one
+          if (e.size >= other.size) {
+            eat(e, other);
+          } else {
+            eat(other, e);
+          }
+        }
+      }
+    }
+
+    requestAnimationFrame(update);
+  }
+
+  function eat(eater, victim) {
+    if (!victim.alive) return;
+    victim.alive = false;
+    victim.el.remove();
+    eater.size += 4;
+    eater.el.style.fontSize = eater.size + 'px';
+  }
+
+  update();
+</script>
+
+</body>
+</html>
