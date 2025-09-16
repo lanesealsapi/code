@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Zebra Laser Party</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: radial-gradient(circle, #111, #000);
+      overflow: hidden;
+      height: 100%;
+      font-family: sans-serif;
+    }
+
+    .entity {
+      position: absolute;
+      font-size: 32px;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .zebra { animation: wiggle 0.5s infinite alternate; }
+    .monkey { animation: bounce 1s infinite alternate; }
+    .player { border: 2px solid yellow; border-radius: 50%; padding: 4px; }
+
+    @keyframes wiggle {
+      0% { transform: rotate(-5deg); }
+      100% { transform: rotate(5deg); }
+    }
+
+    @keyframes bounce {
+      0% { transform: translateY(0px); }
+      100% { transform: translateY(-10px); }
+    }
+
+    .laser, .rock {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      background: red;
+      border-radius: 50%;
+    }
+
+    .rock {
+      background: gray;
+    }
+
+    #game-over {
+      position: fixed;
+      top: 40%;
+      width: 100%;
+      text-align: center;
+      color: white;
+      font-size: 48px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+<div id="game-over">🦓 Zebra got hit! Game Over. <br><br>check out guitarmapfree.com !</div>
+
+<script>
+  const emojis = {
+    zebra: '🦓',
+    monkey: '🐵',
+  };
+
+  const entities = [];
+  const lasers = [];
+  const rocks = [];
+
+  const zebra = createEntity('zebra', emojis.zebra);
+  zebra.vulnerable = true;
+  zebra.x = 300;
+  zebra.y = 300;
+  zebra.vx = 1;
+  zebra.vy = 1;
+
+  entities.push(zebra);
+
+  // Generate other monkeys
+  const monkeyCount = 6;
+  for (let i = 0; i < monkeyCount; i++) {
+    const m = createEntity('monkey', emojis.monkey);
+    m.x = Math.random() * window.innerWidth;
+    m.y = Math.random() * window.innerHeight;
+    m.vx = Math.random() < 0.5 ? -1 : 1;
+    m.vy = Math.random() < 0.5 ? -1 : 1;
+    entities.push(m);
+  }
+
+  // Pick a player monkey
+  const player = entities.find(e => e.type === 'monkey');
+  player.el.classList.add('player');
+  player.isPlayer = true;
+
+  let keys = {};
+
+  document.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+  document.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+  document.addEventListener('click', () => {
+    // Throw a rock from player
+    const rock = {
+      el: document.createElement('div'),
+      x: player.x,
+      y: player.y,
+      vx: 5 * (Math.random() - 0.5),
+      vy: 5 * (Math.random() - 0.5),
+      type: 'rock',
+    };
+    rock.el.className = 'rock';
+    document.body.appendChild(rock.el);
+    rocks.push(rock);
+  });
+
+  function createEntity(type, emoji) {
+    const el = document.createElement('div');
+    el.className = `entity ${type}`;
+    el.textContent = emoji;
+    document.body.appendChild(el);
+    return { el, type, x: 100, y: 100, vx: 0, vy: 0, alive: true };
+  }
+
+  function shootLaser(from) {
+    const laser = {
+      el: document.createElement('div'),
+      x: from.x,
+      y: from.y,
+      vx: (Math.random() - 0.5) * 6,
+      vy: (Math.random() - 0.5) * 6,
+      type: 'laser',
+    };
+    laser.el.className = 'laser';
+    document.body.appendChild(laser.el);
+    lasers.push(laser);
+  }
+
+  function update() {
+    // Move player
+    if (player.alive) {
+      if (keys['arrowup'] || keys['w']) player.y -= 3;
+      if (keys['arrowdown'] || keys['s']) player.y += 3;
+      if (keys['arrowleft'] || keys['a']) player.x -= 3;
+      if (keys['arrowright'] || keys['d']) player.x += 3;
+    }
+
+    entities.forEach(e => {
+      if (!e.alive) return;
+      e.x += e.vx;
+      e.y += e.vy;
+
+      // Bounce off walls
+      if (e.x < 0 || e.x > window.innerWidth - 32) e.vx *= -1;
+      if (e.y < 0 || e.y > window.innerHeight - 32) e.vy *= -1;
+
+      e.el.style.left = e.x + 'px';
+      e.el.style.top = e.y + 'px';
+
+      // Monkeys shoot randomly
+      if (e.type === 'monkey' && !e.isPlayer && Math.random() < 0.01) {
+        shootLaser(e);
+      }
+    });
+
+    // Move lasers
+    lasers.forEach((l, i) => {
+      l.x += l.vx;
+      l.y += l.vy;
+      l.el.style.left = l.x + 'px';
+      l.el.style.top = l.y + 'px';
+
+      entities.forEach(e => {
+        if (!e.alive || !e.vulnerable) return;
+        if (Math.abs(e.x - l.x) < 20 && Math.abs(e.y - l.y) < 20) {
+          // Hit!
+          e.el.remove();
+          e.alive = false;
+          l.el.remove();
+          lasers.splice(i, 1);
+          if (e.type === 'zebra') {
+            document.getElementById('game-over').style.display = 'block';
+          }
+        }
+      });
+    });
+
+    // Move rocks
+    rocks.forEach((r, i) => {
+      r.x += r.vx;
+      r.y += r.vy;
+      r.el.style.left = r.x + 'px';
+      r.el.style.top = r.y + 'px';
+
+      entities.forEach(e => {
+        if (!e.alive || e.isPlayer) return;
+        if (Math.abs(e.x - r.x) < 20 && Math.abs(e.y - r.y) < 20) {
+          e.vx *= -1;
+          e.vy *= -1;
+          r.el.remove();
+          rocks.splice(i, 1);
+        }
+      });
+    });
+
+    requestAnimationFrame(update);
+  }
+
+  update();
+</script>
+</body>
+</html>
