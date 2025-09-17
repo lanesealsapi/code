@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cosmic Playground</title>
+<style>
+  body, html {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: radial-gradient(circle at center, #0b0c27, #000000);
+    height: 100%;
+    width: 100%;
+    font-family: Arial, sans-serif;
+  }
+  #ui {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 10;
+    color: white;
+  }
+  button {
+    padding: 10px;
+    margin: 5px;
+    background: #3a86ff;
+    border: none;
+    color: white;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  button:hover { background: #2658c4; }
+</style>
+</head>
+<body>
+<div id="ui">
+  <button onclick="spawn('star')">✨ Star</button>
+  <button onclick="spawn('moon')">🌙 Moon</button>
+  <button onclick="spawn('rocket')">🚀 Rocket</button>
+  <button onclick="clearCanvas()">Clear</button>
+</div>
+<canvas id="canvas"></canvas>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+window.addEventListener('resize', () => {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+});
+
+const objects = [];
+
+function random(min,max){return Math.random()*(max-min)+min;}
+
+function spawn(type){
+  const obj = {
+    type: type,
+    x: random(100, canvas.width-100),
+    y: random(100, canvas.height-100),
+    vx: random(-1,1),
+    vy: random(-1,1),
+    size: type === 'star' ? random(5,15) : type==='moon'? random(20,40) : random(15,25),
+    color: type==='star'? `hsl(${random(0,360)},100%,80%)` : '#aaa',
+    glow: 0
+  };
+  objects.push(obj);
+}
+
+function clearCanvas(){
+  objects.length = 0;
+}
+
+function draw(){
+  ctx.fillStyle = 'rgba(11,12,39,0.2)';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  objects.forEach(o => {
+    // Motion
+    o.x += o.vx;
+    o.y += o.vy;
+
+    // Bounce edges
+    if(o.x<0 || o.x>canvas.width) o.vx*=-1;
+    if(o.y<0 || o.y>canvas.height) o.vy*=-1;
+
+    // Glow effect
+    o.glow = (o.glow + 0.05) % 2;
+
+    // Draw object
+    if(o.type==='star'){
+      ctx.fillStyle = o.color;
+      ctx.beginPath();
+      ctx.arc(o.x,o.y,o.size+Math.sin(o.glow*3)*2,0,Math.PI*2);
+      ctx.fill();
+    } else if(o.type==='moon'){
+      ctx.fillStyle = '#ccc';
+      ctx.beginPath();
+      ctx.arc(o.x,o.y,o.size,0,Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(200,200,200,0.3)';
+      ctx.beginPath();
+      ctx.arc(o.x-5,o.y-5,o.size*0.8,0,Math.PI*2);
+      ctx.fill();
+    } else if(o.type==='rocket'){
+      ctx.fillStyle = '#ff3e3e';
+      ctx.beginPath();
+      ctx.moveTo(o.x,o.y-o.size);
+      ctx.lineTo(o.x-o.size/2,o.y+o.size);
+      ctx.lineTo(o.x+o.size/2,o.y+o.size);
+      ctx.closePath();
+      ctx.fill();
+
+      // Fire trail
+      ctx.fillStyle = 'orange';
+      ctx.beginPath();
+      ctx.moveTo(o.x,o.y+o.size);
+      ctx.lineTo(o.x-o.size/4,o.y+o.size+10+Math.sin(o.glow*5)*5);
+      ctx.lineTo(o.x+o.size/4,o.y+o.size+10+Math.sin(o.glow*5)*5);
+      ctx.closePath();
+      ctx.fill();
+    }
+  });
+
+  requestAnimationFrame(draw);
+}
+
+draw();
+
+// Optional: click to spawn small sparkle effect
+canvas.addEventListener('click', e=>{
+  for(let i=0;i<5;i++){
+    const spark = {
+      type:'star',
+      x:e.clientX,
+      y:e.clientY,
+      vx:random(-2,2),
+      vy:random(-2,2),
+      size:random(3,8),
+      color:`hsl(${random(0,360)},100%,80%)`,
+      glow:0
+    };
+    objects.push(spark);
+  }
+});
+</script>
+</body>
+</html>
