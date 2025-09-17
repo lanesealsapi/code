@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Monkey vs Zebra — HTML5 Canvas</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  html,body{height:100%;margin:0;background:#111;color:#ddd;font-family:system-ui,Segoe UI,Roboto,Arial}
+  #game {display:block;margin:0 auto;background:#6fb; image-rendering: pixelated;}
+  #ui {text-align:center;padding:8px;}
+  .hint {opacity:0.75;font-size:13px}
+</style>
+</head>
+<body>
+<canvas id="game" width="800" height="480"></canvas>
+<div id="ui">
+  <span class="hint">Move: WASD / Arrows — Attack: Space — Debug hit zebra: K</span>
+  <div id="status"></div>
+</div>
+
+<script>
+/* Monkey vs Zebra — Single-file HTML5 Canvas game
+   - Monkey is player, controlled by keyboard.
+   - Zebra is an enemy with HP, hit flinch, and death animation.
+   - Includes simple sprite-like animations drawn procedurally.
+   - Small particle effect on hit.
+   - Tweak settings below.
+*/
+
+/* ---------- Settings ---------- */
+const SETTINGS = {
+  width: 800, height: 480,
+  monkeySpeed: 220,      // pixels/sec
+  monkeyAttackRange: 60,
+  attackCooldown: 0.45,  // seconds between attacks
+  zebraMaxHP: 5,
+  zebraSpeed: 70,
+  hitStaggerTime: 0.28,
+  particleCount: 12,
+};
+
+/* ---------- Canvas & Timing ---------- */
+const canvas = document.getElementById('game');
+canvas.width = SETTINGS.width;
+canvas.height = SETTINGS.height;
+const ctx = canvas.getContext('2d');
+
+let last = performance.now();
+let accum = 0;
+
+/* ---------- Input ---------- */
+const keys = {};
+window.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; });
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+/* ---------- Utilities ---------- */
+function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+function lerp(a,b,t){ return a + (b-a)*t; }
+function rand(min, max){ return Math.random()*(max-min)+min; }
+
+/* ---------- Particles ---------- */
+class Particle {
+  constructor(x,y, vx,vy, life, color){
+    this.x=x; this.y=y; this.vx=vx; this.vy=vy; this.life=life; this.maxLife=life; this.color=color;
+  }
+  update(dt){
+    this.life -= dt;
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    // gravity-ish
+    this.vy += 300 * dt;
+  }
+  draw(ctx){
+    if(this.life<=0) return;
+    const t = this.life / this.maxLife;
+    ctx.globalAlpha = t;
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, 2 + 2*(1-t), 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+const particles = [];
+function spawnHitParticles(x,y, color){
+  for(let i=0;i<SETTINGS.particleCount;i++){
+    const angle = rand(0, Math.PI*2);
+    const speed = rand(60, 260);
+    particles.push(new Particle(
+      x + rand(-6,6),
+      y + rand(-6,6),
+      Math.cos(angle)*speed, Math.sin(angle)*speed - 80,
+      rand(0.4, 0.9),
+      color
+    ));
+  }
+}
+
+/* ---------- Entities ---------- */
+class Monkey {
+  constructor(x,y){
+    this.x = x; this.y = y;
+    this.w = 44; this.h = 44;
+    this.vx = 0; this.vy = 0;
+    this.attackTimer = 0;
+    this.attackWind = 0; // for attack animation
+    this.facing = 1; // 1 right, -1 left
+    this.idleTime = 0;
+    this.attacking = false;
+  }
+  update(dt){
+    // movement input
+    let mx = 0, my = 0;
+    if(keys['arrowleft'] || keys['a']) mx -= 1;
+    if(keys['arrowright'] || keys['d']) mx += 1;
+    if(keys['arrowup'] || keys['w']) my -= 1;
+    if(keys['arrowdown'] || keys['s']) my += 1;
+    const mag = Math.hypot(mx, my) || 1;
+    mx /= mag; my /= mag;
+    this.vx = mx * SETTINGS.monkeySpeed;
+    this.vy = my * SETTINGS.monkeySpeed;
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    // clamp to screen
+    this.x = clamp(this.x, 20, SETTINGS.width - 20);
+    this.y = clamp(this.y, 40, SETTINGS.height - 20);
+
+    // facing
+    if(Math.abs(this.vx) > 10) this.facing = this.vx > 0 ? 1 : -1;
+
+    // idle bob
+    this.idleTime += dt;
+
+    // attacks
+    this.attackTimer = Math.max(0, this.attackTimer - dt);
+    this.attacking = false;
+    if((keys[' '] || keys['space']) && this.attackTimer === 0){
+      this.attackTimer = SETTINGS.attackCooldown;
+      this.attackWind = 0.18; // brief wind animation
+      this.attacking = true;
+      // trigger attack check in main loop (we'll call performAttack)
+      window.performAttack();
+    }
+    if(this.attackWind > 0) this.attackWind = Math.max(0, this.attackWind - dt);
+  }
+  draw(ctx){
+    // body bob amount
+    const bob = Math.sin(this.idleTime * 3) * 2;
+    ctx.save();
+    ctx.translate(this.x, this.y + bob);
+
+    // shadow
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.ellipse(0, this.h*0.6, this.w*0.8, this.h*0.25, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // torso
+    ctx.fillStyle = "#8b5a2b";
+    roundRect(ctx, -this.w/2, -this.h/2, this.w, this.h, 8);
+    ctx.fill();
+
+    // head
+    ctx.fillStyle = "#d9b38c";
+    ctx.beginPath();
+    ctx.arc((this.facing*6), -this.h/2 - 10, 12, 0, Math.PI*2);
+    ctx.fill();
+
+    // eyes
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.arc((this.facing*6) + (this.facing*-3), -this.h/2 - 12, 2.2, 0, Math.PI*2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc((this.facing*6) + (this.facing*1), -this.h/2 - 12, 2.2, 0, Math.PI*2);
+    ctx.fill();
+
+    // simple arm / attack swipe
+    ctx.save();
+    const wind = this.attackWind > 0 ? (1 - this.attackWind/0.18) : 0;
+    const armX = 10 * this.facing;
+    const armY = -4;
+    ctx.translate(armX + wind*40*this.facing, armY);
+    ctx.rotate((Math.PI/8) * -this.facing * wind);
+    ctx.fillStyle = "#6b3";
+    roundRect(ctx, -6*this.facing, -6, 14, 10, 6);
+    ctx.restore();
+
+    // simple legs
+    ctx.fillStyle = "#6b3";
+    ctx.fillRect(-16, this.h/2 - 6, 10, 8);
+    ctx.fillRect(6, this.h/2 - 6, 10, 8);
+
+    ctx.restore();
+
+    // if attack range draw arc for debugging (optional)
+    // drawRange(this.x, this.y, SETTINGS.monkeyAttackRange);
+  }
+}
+
+class Zebra {
+  constructor(x,y){
+    this.x=x; this.y=y;
+    this.w=56; this.h=40;
+    this.vx=0; this.vy=0;
+    this.hp = SETTINGS.zebraMaxHP;
+    this.alive = true;
+    this.idleTime = rand(0,Math.PI*2);
+    this.stagger = 0; // time left stunned
+    this.deathTimer = 0;
+    this.facing = -1;
+    this.flash = 0; // hit flash
+  }
+  update(dt, target){
+    if(!this.alive){
+      this.deathTimer += dt;
+      // fall over slowly
+      this.y += 40 * dt;
+      this.x += 10 * dt * (this.facing);
+      this.flash = Math.max(0, this.flash - dt*3);
+      return;
+    }
+
+    // AI: simple chase unless staggered
+    if(this.stagger > 0){
+      this.stagger = Math.max(0, this.stagger - dt);
+      // slight wobble
+      this.x += Math.sin(this.stagger * 30) * 2 * dt;
+    } else {
+      const dx = target.x - this.x;
+      const dy = target.y - this.y;
+      const d = Math.hypot(dx, dy) || 1;
+      this.vx = (dx / d) * SETTINGS.zebraSpeed;
+      this.vy = (dy / d) * SETTINGS.zebraSpeed;
+      this.x += this.vx * dt;
+      this.y += this.vy * dt;
+      this.facing = this.vx > 0 ? 1 : -1;
+    }
+
+    // clamp
+    this.x = clamp(this.x, 40, SETTINGS.width - 40);
+    this.y = clamp(this.y, 60, SETTINGS.height - 20);
+
+    // idle sway timer
+    this.idleTime += dt;
+
+    // flash decay
+    this.flash = Math.max(0, this.flash - dt*3);
+  }
+  takeHit(strength, hitX, hitY){
+    if(!this.alive) return false;
+    this.hp -= strength;
+    this.flash = 1;
+    this.stagger = SETTINGS.hitStaggerTime;
+    spawnHitParticles(hitX, hitY, '#fff');
+    if(this.hp <= 0){
+      this.alive = false;
+      this.deathTimer = 0;
+      spawnHitParticles(this.x, this.y, '#f0f');
+      return true; // died
+    }
+    return false; // alive
+  }
+  draw(ctx){
+    ctx.save();
+    ctx.translate(this.x, this.y);
+
+    // shadow
+    ctx.globalAlpha = this.alive ? 0.28 : 0.18;
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.ellipse(0, this.h*0.6, this.w*0.9, this.h*0.25, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // death tilt if dead
+    const deathTilt = this.alive ? 0 : lerp(0, Math.PI/2, clamp(this.deathTimer/1.2, 0, 1));
+    ctx.rotate(deathTilt * (this.facing));
+
+    // body sway when idle or slight bob when moving
+    const sway = Math.sin(this.idleTime * 2) * 3 * (this.alive ? 1 : 0.3);
+
+    // zebra body
+    ctx.save();
+    if(this.flash > 0){
+      ctx.globalAlpha = 0.6 + 0.4 * Math.sin(this.flash * Math.PI*6);
+      ctx.fillStyle = "#fff";
+      roundRect(ctx, -this.w/2, -this.h/2 + sway, this.w, this.h, 8);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    // stripes drawn procedurally
+    ctx.fillStyle = "#fff";
+    roundRect(ctx, -this.w/2, -this.h/2 + sway, this.w, this.h, 8);
+    ctx.fill();
+    ctx.fillStyle = "#000";
+    for(let i=0;i<4;i++){
+      const rx = -this.w/2 + 6 + i*10;
+      ctx.beginPath();
+      ctx.ellipse(rx, -6 + sway, 8, 18, -0.5 + i*0.12, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // head
+    ctx.save();
+    ctx.translate(this.w/2 - 6, -this.h/2 - 6 + sway);
+    ctx.scale(1,1);
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.ellipse(0,0,16,12,0,0,Math.PI*2);
+    ctx.fill();
+    // black nose stripe
+    ctx.fillStyle = "#000";
+    ctx.fillRect(-4, -2, 8, 6);
+    // eye
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.arc(6, -4, 2, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    // legs simple
+    ctx.fillStyle = "#000";
+    ctx.fillRect(-this.w/2 + 6, this.h/2 - 6, 8, 10);
+    ctx.fillRect(this.w/2 - 14, this.h/2 - 6, 8, 10);
+
+    ctx.restore();
+
+    // hp bar
+    if(this.alive){
+      const bw = 60;
+      const bh = 6;
+      const px = this.x - bw/2, py = this.y - this.h/2 - 18;
+      ctx.fillStyle = "#333";
+      roundRect(ctx, px, py, bw, bh, 3);
+      ctx.fillStyle = "#e33";
+      const w = bw * (this.hp / SETTINGS.zebraMaxHP);
+      roundRect(ctx, px, py, clamp(w,0,bw), bh, 3);
+      ctx.fill();
+    }
+  }
+}
+
+/* ---------- Helper draw funcs ---------- */
+function roundRect(ctx,x,y,w,h,r){
+  const radius = r ?? 4;
+  ctx.beginPath();
+  ctx.moveTo(x+radius,y);
+  ctx.arcTo(x+w,y,x+w,y+h,radius);
+  ctx.arcTo(x+w,y+h,x,y+h,radius);
+  ctx.arcTo(x,y+h,x,y,radius);
+  ctx.arcTo(x,y,x+w,y,radius);
+  ctx.closePath();
+}
+
+/* ---------- Game State ---------- */
+const monkey = new Monkey(160, 240);
+const zebra = new Zebra(620, 240);
+let score = 0;
+
+/* Expose attack callback used by monkey */
+window.performAttack = () => {
+  // check distance to zebra
+  const dx = zebra.x - monkey.x;
+  const dy = zebra.y - monkey.y;
+  const dist = Math.hypot(dx, dy);
+  if(dist <= SETTINGS.monkeyAttackRange + zebra.w/2 + 6 && zebra.alive){
+    // compute hit point near zebra front
+    const hitX = zebra.x - (zebra.facing * 8);
+    const hitY = zebra.y - 8;
+    const died = zebra.takeHit(1, hitX, hitY);
+    if(died){
+      score += 1;
+    }
+    // small camera shake simulated via global canvas translate for a frame (implemented in render)
+    camera.shake(0.12, 6);
+  }
+};
+
+/* Debug key to instantly hit zebra */
+window.addEventListener('keydown', e => {
+  if(e.key.toLowerCase()==='k'){
+    if(zebra.alive){
+      zebra.takeHit(1, zebra.x, zebra.y);
+    } else {
+      // respawn zebra for testing
+      zebra.x = rand(200, 700);
+      zebra.y = rand(80, 380);
+      zebra.hp = SETTINGS.zebraMaxHP;
+      zebra.alive = true;
+      zebra.deathTimer = 0;
+    }
+  }
+});
+
+/* Simple camera for shake effect */
+const camera = {
+  shakeTime: 0, intensity: 0,
+  sx: 0, sy: 0,
+  shake(t, inten){ this.shakeTime = t; this.intensity = inten; },
+  update(dt){
+    if(this.shakeTime > 0){
+      this.shakeTime -= dt;
+      const s = this.intensity * (this.shakeTime / (this.shakeTime + dt + 0.0001));
+      this.sx = rand(-s, s);
+      this.sy = rand(-s, s);
+    } else { this.sx = 0; this.sy = 0; }
+  }
+}
+
+/* ---------- Main Loop ---------- */
+function update(dt){
+  monkey.update(dt);
+  zebra.update(dt, monkey);
+
+  // update particles
+  for(let i=particles.length-1;i>=0;i--){
+    particles[i].update(dt);
+    if(particles[i].life <= 0) particles.splice(i,1);
+  }
+
+  camera.update(dt);
+
+  // update UI
+  const status = document.getElementById('status');
+  status.textContent = `Zebra HP: ${zebra.alive ? zebra.hp : 0}   Score: ${score}`;
+}
+
+function render(){
+  // camera shake translate
+  ctx.save();
+  ctx.clearRect(0,0,canvas.width, canvas.height);
+  ctx.translate(camera.sx, camera.sy);
+
+  // background
+  ctx.fillStyle = '#7ec';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // ground
+  ctx.fillStyle = '#3a6';
+  ctx.fillRect(0, canvas.height - 80, canvas.width, 80);
+
+  // draw zebra behind monkey sometimes based on y for simple depth
+  if(zebra.y < monkey.y) zebra.draw(ctx);
+  monkey.draw(ctx);
+  if(zebra.y >= monkey.y) zebra.draw(ctx);
+
+  // draw particles (over everything)
+  for(const p of particles) p.draw(ctx);
+
+  // overlay messages
+  if(!zebra.alive){
+    ctx.fillStyle = "rgba(0,0,0,0.45)";
+    ctx.fillRect(0,0,canvas.width, canvas.height);
+    ctx.fillStyle = "#fff";
+    ctx.font = "28px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Zebra down! Press K to respawn.", canvas.width/2, canvas.height/2 - 20);
+  }
+
+  ctx.restore();
+}
+
+/* ---------- Game Loop ---------- */
+function loop(now){
+  const dt = Math.min(0.033, (now - last) / 1000); // clamp dt to avoid big jumps
+  last = now;
+  update(dt);
+  render();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ---------- Minor polish: start message, credits ---------- */
+setTimeout(()=> {
+  const status = document.getElementById('status');
+  status.style.opacity = 1;
+}, 300);
+
+/* ---------- End of file ---------- */
+</script>
+</body>
+</html>
