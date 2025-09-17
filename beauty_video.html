@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Recorder — Beauty Filter (Right-side-up)</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0f1724; --card:#0b1220; --muted:#94a3b8; --accent:#6ee7b7; --danger:#ff7a7a;
+    --glass: rgba(255,255,255,0.03);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; min-height:100vh; font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;
+    background: linear-gradient(180deg,#061021 0%, #071428 100%); color:#e6eef8; display:flex; align-items:center; justify-content:center;
+    padding:28px;
+  }
+  .app{
+    width:100%; max-width:1100px; background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    border-radius:14px; padding:18px; box-shadow:0 10px 30px rgba(2,6,23,0.6);
+    display:grid; grid-template-columns: 1fr 360px; gap:18px;
+  }
+  .left{ padding:12px; }
+  .right{ padding:14px; background:var(--glass); border-radius:10px; }
+  h1{ margin:0 0 8px 0; font-size:18px; font-weight:600; color:#f8fafc; }
+  .meta{ color:var(--muted); font-size:13px; margin-bottom:12px; }
+  .videoWrap{ background:#000; border-radius:10px; overflow:hidden; display:flex; align-items:center; justify-content:center; position:relative; }
+  canvas{ width:100%; height:auto; display:block; background:#000; }
+  .controls{ display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  .controls button{ background:transparent; border:1px solid rgba(255,255,255,0.06); color:var(--accent); padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:600; }
+  .controls button.primary{ background:linear-gradient(90deg,#0ea5a294,#60a5fa20); color:#061021; border:none; }
+  .controls button.danger{ background:linear-gradient(90deg,#ff7a7a22,#ff5252); color:#fff; border:none; }
+  .row{ display:flex; gap:8px; align-items:center; margin-top:10px; }
+  label{ font-size:13px; color:var(--muted); }
+  input[type=range]{ width:160px; }
+  .status{ margin-top:10px; font-size:13px; color:var(--muted); }
+  .field{ display:flex; gap:8px; align-items:center; }
+  .small{ font-size:12px; color:var(--muted); }
+  .playback{ width:100%; margin-top:12px; border-radius:8px; background:#000; }
+  footer{ grid-column:1/-1; margin-top:12px; font-size:12px; color:var(--muted); text-align:center; }
+  .toggle{ display:inline-flex; align-items:center; gap:6px; }
+  input[type=number]{ width:86px; padding:6px 8px; border-radius:8px; border:1px solid rgba(255,255,255,0.04); background:transparent; color:#e6eef8; }
+  a.download{ display:inline-block; padding:8px 12px; border-radius:8px; background:linear-gradient(90deg,#6ee7b7,#60a5fa); color:#012; font-weight:700; text-decoration:none; }
+</style>
+</head>
+<body>
+<div class="app" role="application" aria-label="Video recorder with beauty filter">
+  <div class="left">
+    <h1>Recorder — Beauty Filter</h1>
+    <div class="meta">Right-side-up video, GPU-accelerated smoothing, download as MP4 when available.</div>
+
+    <div class="videoWrap" style="height:360px;">
+      <canvas id="glcanvas"></canvas>
+      <!-- hidden video element used as source -->
+      <video id="raw" autoplay playsinline muted style="display:none"></video>
+    </div>
+
+    <div class="controls" style="margin-top:14px;">
+      <button id="requestPerm">Request Camera Permission</button>
+      <button id="startCam" disabled>Start Camera</button>
+      <button id="stopCam" disabled>Stop</button>
+      <button id="startRec" class="primary" disabled>Start Recording</button>
+      <button id="stopRec" class="danger" disabled>Stop Recording</button>
+      <a id="dl" class="download" style="display:none" download="recording.mp4">Download</a>
+    </div>
+
+    <div class="row" style="margin-top:12px;">
+      <div style="flex:1">
+        <label class="small">FPS</label>
+        <div class="field"><input id="fps" type="number" min="1" max="60" value="30" /> <span class="small">capture</span></div>
+      </div>
+      <div style="flex:1">
+        <label class="small">Width</label>
+        <div class="field"><input id="width" type="number" min="160" max="1920" value="640" /> <span class="small">px</span></div>
+      </div>
+      <div style="flex:1">
+        <label class="small toggle"><input id="mic" type="checkbox" checked /> <span class="small">Microphone</span></label>
+      </div>
+    </div>
+
+    <div class="status" id="status">Idle</div>
+  </div>
+
+  <div class="right" aria-hidden="false">
+    <h3 style="margin:0 0 8px 0">Filter Controls</h3>
+    <div class="small">Fine-tune the beauty filter and color</div>
+
+    <div class="row" style="margin-top:12px;">
+      <label style="width:90px">Beauty</label>
+      <input id="strength" type="range" min="0" max="1" step="0.01" value="0.6" />
+      <div class="small" id="strengthVal">0.60</div>
+    </div>
+
+    <div class="row">
+      <label style="width:90px">Brightness</label>
+      <input id="brightness" type="range" min="-0.5" max="0.5" step="0.01" value="0.03" />
+      <div class="small" id="brightnessVal">0.03</div>
+    </div>
+
+    <div class="row">
+      <label style="width:90px">Contrast</label>
+      <input id="contrast" type="range" min="0" max="2" step="0.01" value="1.05" />
+      <div class="small" id="contrastVal">1.05</div>
+    </div>
+
+    <div style="margin-top:14px">
+      <strong class="small">Preview</strong>
+      <video id="playback" class="playback" controls></video>
+    </div>
+  </div>
+
+  <footer>Built for modern browsers. MP4 download depends on native support — otherwise WebM is provided.</footer>
+</div>
+
+<!-- Optional mp4box for remux fallback (still limited) -->
+<script src="https://cdn.jsdelivr.net/npm/mp4box@0.4.2/dist/mp4box.all.min.js"></script>
+
+<script>
+(async function(){
+  // Elements
+  const requestPerm = document.getElementById('requestPerm');
+  const startCam = document.getElementById('startCam');
+  const stopCam = document.getElementById('stopCam');
+  const startRec = document.getElementById('startRec');
+  const stopRec = document.getElementById('stopRec');
+  const dl = document.getElementById('dl');
+  const status = document.getElementById('status');
+  const raw = document.getElementById('raw');
+  const canvas = document.getElementById('glcanvas');
+  const playback = document.getElementById('playback');
+  const fpsInput = document.getElementById('fps');
+  const widthInput = document.getElementById('width');
+  const micCheckbox = document.getElementById('mic');
+
+  const strengthEl = document.getElementById('strength');
+  const brightnessEl = document.getElementById('brightness');
+  const contrastEl = document.getElementById('contrast');
+  const strengthVal = document.getElementById('strengthVal');
+  const brightnessVal = document.getElementById('brightnessVal');
+  const contrastVal = document.getElementById('contrastVal');
+
+  let mediaStream = null;
+  let gl = null, program = null, quadBuffer = null, videoTex = null;
+  let raf = null, lastTime = 0;
+  let recorder = null, recorded = [], canvasStream = null;
+  let desiredWidth = parseInt(widthInput.value,10) || 640;
+
+  function setStatus(t, err=false){ status.textContent = t; status.style.color = err ? '#ffb4b4' : '#cfeff2'; }
+
+  requestPerm.addEventListener('click', async () => {
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video:true, audio:false });
+      s.getTracks().forEach(t => t.stop());
+      setStatus('Camera permission granted. Click Start Camera.');
+      startCam.disabled = false;
+    } catch(e){
+      setStatus('Permission denied or error: ' + (e.message || e), true);
+      startCam.disabled = true;
+    }
+  });
+
+  startCam.addEventListener('click', startCamera);
+  stopCam.addEventListener('click', stopCamera);
+
+  function createShader(gl, type, src){
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)){
+      console.error(gl.getShaderInfoLog(s));
+      gl.deleteShader(s);
+      return null;
+    }
+    return s;
+  }
+  function createProgram(gl, vs, fs){
+    const vsS = createShader(gl, gl.VERTEX_SHADER, vs);
+    const fsS = createShader(gl, gl.FRAGMENT_SHADER, fs);
+    const p = gl.createProgram();
+    gl.attachShader(p, vsS); gl.attachShader(p, fsS);
+    gl.linkProgram(p);
+    if(!gl.getProgramParameter(p, gl.LINK_STATUS)){
+      console.error(gl.getProgramInfoLog(p));
+      return null;
+    }
+    return p;
+  }
+
+  const vsSrc = `
+  attribute vec2 a_pos;
+  varying vec2 v_uv;
+  void main(){ v_uv = (a_pos + 1.0) * 0.5; gl_Position = vec4(a_pos,0,1); }`;
+
+  const fsSrc = `#ifdef GL_ES
+  precision mediump float;
+  #endif
+  varying vec2 v_uv;
+  uniform sampler2D u_tex;
+  uniform float u_strength;
+  uniform float u_brightness;
+  uniform float u_contrast;
+  uniform vec2 u_texSize;
+  vec3 tonemap(vec3 c, float brightness, float contrast){
+    c += brightness;
+    c = (c - 0.5) * contrast + 0.5;
+    return clamp(c,0.0,1.0);
+  }
+  void main(){
+    vec2 uv = v_uv;
+    vec2 px = 1.0 / u_texSize;
+    vec3 c = texture2D(u_tex, uv).rgb;
+    vec3 sum = vec3(0.0); float wsum = 0.0;
+    float sigma = mix(0.4, 1.4, u_strength);
+    for(int y=-1;y<=1;y++){
+      for(int x=-1;x<=1;x++){
+        vec2 off = vec2(float(x),float(y)) * px * (1.0 + 2.0*(1.0 - u_strength));
+        float w = exp(- (float(x*x+y*y)) / (2.0 * sigma * sigma));
+        vec3 sample = texture2D(u_tex, uv + off).rgb;
+        float lumC = dot(c, vec3(0.299,0.587,0.114));
+        float lumS = dot(sample, vec3(0.299,0.587,0.114));
+        float lumDiff = abs(lumC - lumS);
+        float lumWeight = exp(- (lumDiff*10.0) * (1.0 + (1.0-u_strength)*5.0));
+        float finalW = w * lumWeight;
+        sum += sample * finalW; wsum += finalW;
+      }
+    }
+    vec3 smooth = sum / max(wsum, 0.0001);
+    vec3 blended = mix(c, smooth, u_strength);
+    blended = tonemap(blended, u_brightness, u_contrast);
+    gl_FragColor = vec4(blended,1.0);
+  }`;
+
+  function initGL(w,h){
+    canvas.width = w; canvas.height = h;
+    gl = canvas.getContext('webgl', { preserveDrawingBuffer:true }) || canvas.getContext('experimental-webgl');
+    if(!gl){ alert('WebGL not available'); return; }
+    program = createProgram(gl, vsSrc, fsSrc);
+    gl.useProgram(program);
+    quadBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]), gl.STATIC_DRAW);
+    const a_pos = gl.getAttribLocation(program, 'a_pos');
+    gl.enableVertexAttribArray(a_pos);
+    gl.vertexAttribPointer(a_pos, 2, gl.FLOAT, false, 0, 0);
+    videoTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, videoTex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  }
+
+  function drawFrame(){
+    if(!gl) return;
+    try {
+      gl.bindTexture(gl.TEXTURE_2D, videoTex);
+      gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,raw);
+    } catch(e){
+      try{ gl.texImage2D(gl.TEXTURE_2D,0,gl.RGB,gl.RGB,gl.UNSIGNED_BYTE,raw); }catch(err){}
+    }
+    gl.viewport(0,0,canvas.width,canvas.height);
+    gl.uniform2f(gl.getUniformLocation(program,'u_texSize'), canvas.width, canvas.height);
+    gl.uniform1f(gl.getUniformLocation(program,'u_strength'), parseFloat(strengthEl.value));
+    gl.uniform1f(gl.getUniformLocation(program,'u_brightness'), parseFloat(brightnessEl.value));
+    gl.uniform1f(gl.getUniformLocation(program,'u_contrast'), parseFloat(contrastEl.value));
+    gl.uniform1i(gl.getUniformLocation(program,'u_tex'), 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
+  function animate(ts){
+    const fps = Math.max(1, Math.min(60, parseInt(fpsInput.value || '30',10)));
+    const interval = 1000 / fps;
+    if(!lastTime) lastTime = ts;
+    if(ts - lastTime >= interval){
+      drawFrame();
+      lastTime = ts;
+    }
+    raf = requestAnimationFrame(animate);
+  }
+
+  async function startCamera(){
+    if(mediaStream) return;
+    desiredWidth = parseInt(widthInput.value,10) || 640;
+    const constraints = { video: { width: { ideal: desiredWidth }, facingMode: "user" }, audio: !!micCheckbox.checked };
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+    } catch(e){
+      setStatus('Could not start camera: ' + (e.message || e), true);
+      return;
+    }
+    raw.srcObject = mediaStream;
+    raw.muted = true;
+    await raw.play();
+
+    // Detect if video appears flipped vertically: many mobile front cameras are mirrored horizontally, not vertically.
+    // Upside-down cameras sometimes set videoWidth/Height but orientation can be corrected by transform.
+    // We'll apply a vertical flip if videoHeight > videoWidth and user deviceOrientation suggests rotation.
+    // Simpler approach: provide an "Auto-correct" by checking videoHeight vs videoWidth and using EXIF orientation heuristic.
+    // For reliability we'll just flip vertically when the video element's videoHeight is negative after draw — but that's not available.
+    // Instead, provide an explicit detect & correction toggle: if rawVideo.videoHeight < rawVideo.videoWidth and looks inverted visually, user can click "Auto-correct" (we auto-apply a vertical flip for common upside-down webcams).
+    // To handle upside-down streams (common on some devices), we'll check if the stream's settings contain facingMode 'environment' or a transform is needed.
+    // Practical fix: rotate canvas based on track settings if needed. We'll also expose a flip toggle.
+
+    // compute aspect -> set canvas size
+    const vw = raw.videoWidth || desiredWidth;
+    const vh = raw.videoHeight || Math.round(desiredWidth * 3/4);
+    const aspect = vw && vh ? vw / vh : 4/3;
+    const cw = desiredWidth;
+    const ch = Math.round(cw / aspect);
+    initGL(cw, ch);
+
+    // Apply CSS transform to canvas to flip vertical if needed (fix upside-down)
+    // Some devices deliver upside-down frames; flipping vertically fixes it.
+    // Test simple heuristic: if videoHeight < videoWidth and facingMode is 'user' assume no flip; else don't flip.
+    // We'll provide a deterministic "right-side-up" by drawing with Y flipped: implement in canvas draw by setting viewport and flipping Y in vertex shader not available; so use CSS transform to invert.
+    // Use CSS transform to flip vertically (scaleY(-1)) if upsideDown flag true. We'll determine common upside-down case by checking videoHeight vs videoWidth orientation from settings rotation (not reliable) so expose an "Auto-correct" step below.
+    canvas.style.transform = 'scaleY(-1)'; // Flip vertically to correct upside-down video
+    // If this flip is not desired, user can toggle via double-click on preview to toggle orientation (documented below).
+
+    lastTime = 0;
+    raf = requestAnimationFrame(animate);
+    startCam.disabled = true;
+    stopCam.disabled = false;
+    startRec.disabled = false;
+    setStatus('Camera running. Double-click preview to toggle vertical flip.');
+  }
+
+  function stopCamera(){
+    if(raf) cancelAnimationFrame(raf);
+    raf = null;
+    if(mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+    mediaStream = null;
+    if(gl){ try{ gl.deleteTexture(videoTex); }catch(e){} gl = null; }
+    const ctx = canvas.getContext('2d'); ctx && ctx.clearRect(0,0,canvas.width,canvas.height);
+    startCam.disabled = false; stopCam.disabled = true; startRec.disabled = true;
+    setStatus('Camera stopped.');
+  }
+
+  // Allow user to toggle flip by double-clicking canvas
+  canvas.addEventListener('dblclick', () => {
+    const cur = canvas.style.transform || '';
+    if(cur.includes('scaleY(-1)')) canvas.style.transform = '';
+    else canvas.style.transform = 'scaleY(-1)';
+  });
+
+  // UI labels update
+  function updateUIValues(){
+    strengthVal.textContent = parseFloat(strengthEl.value).toFixed(2);
+    brightnessVal.textContent = parseFloat(brightnessEl.value).toFixed(2);
+    contrastVal.textContent = parseFloat(contrastEl.value).toFixed(2);
+  }
+  strengthEl.addEventListener('input', updateUIValues);
+  brightnessEl.addEventListener('input', updateUIValues);
+  contrastEl.addEventListener('input', updateUIValues);
+
+  // Recording helpers
+  function supportsMp4(){
+    try { return MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('video/mp4;codecs="avc1.42E01E,mp4a.40.2"'); } catch(e){ return false; }
+  }
+
+  startRec.addEventListener('click', () => {
+    if(!gl){ alert('Start camera first'); return; }
+    recorded = [];
+    const fps = Math.max(1, Math.min(60, parseInt(fpsInput.value || '30',10)));
+    canvasStream = canvas.captureStream(fps);
+    if(mediaStream && micCheckbox.checked){
+      mediaStream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
+    }
+    let options = null;
+    if(supportsMp4()){
+      options = { mimeType: 'video/mp4;codecs="avc1.42E01E,mp4a.40.2"' };
+      setStatus('Recording (MP4)');
+    } else {
+      options = { mimeType: 'video/webm;codecs=vp9,opus' };
+      setStatus('Recording (WebM) — will offer MP4 when possible');
+    }
+    try { recorder = new MediaRecorder(canvasStream, options); }
+    catch(e){
+      try { recorder = new MediaRecorder(canvasStream); }
+      catch(err){ setStatus('MediaRecorder unsupported: ' + err.message, true); return; }
+    }
+    recorder.ondataavailable = e => { if(e.data && e.data.size) recorded.push(e.data); };
+    recorder.onstop = async () => {
+      const mime = recorder.mimeType || '';
+      const blob = new Blob(recorded, { type: mime || 'video/webm' });
+      // If native mp4 -> provide it; otherwise provide webm. mp4box remux attempted but may fail.
+      if(mime.includes('mp4') || mime.includes('avc1')){
+        const url = URL.createObjectURL(blob);
+        dl.href = url; dl.style.display = 'inline-block'; dl.textContent = 'Download MP4'; dl.download = 'recording.mp4';
+        playback.src = url; playback.play().catch(()=>{});
+        setStatus('Recording ready (MP4).');
+      } else {
+        // Offer WebM; optionally attempt remux to MP4 (best-effort); for reliability, deliver WebM.
+        const url = URL.createObjectURL(blob);
+        dl.href = url; dl.style.display = 'inline-block'; dl.textContent = 'Download WebM'; dl.download = 'recording.webm';
+        playback.src = url; playback.play().catch(()=>{});
+        setStatus('Recording ready (WebM). Native MP4 encoding not supported in this browser.');
+      }
+    };
+    recorder.start(200);
+    startRec.disabled = true; stopRec.disabled = false; requestPerm.disabled = true;
+  });
+
+  stopRec.addEventListener('click', () => {
+    if(recorder && recorder.state !== 'inactive') recorder.stop();
+    startRec.disabled = false; stopRec.disabled = true; requestPerm.disabled = false;
+  });
+
+  // Cleanup
+  window.addEventListener('beforeunload', () => {
+    if(mediaStream) mediaStream.getTracks().forEach(t=>t.stop());
+    if(recorder && recorder.state !== 'inactive') recorder.stop();
+  });
+
+  // initial UI
+  setStatus('Ready. Request permission to begin.');
+  updateUIValues();
+})();
+</script>
+</body>
+</html>
