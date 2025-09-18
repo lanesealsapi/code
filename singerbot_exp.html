@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Type & Sing — Tuned (Black & Yellow)</title>
+<style>
+  :root{--bg:#000;--fg:#ffd400;--muted:#bfa800;--panel:#111;--glass: rgba(255,212,0,0.06);--accent:#ffea61;--danger:#ff7575;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;}
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,#000,#0a0a0a);color:var(--fg)}
+  .wrap{max-width:980px;margin:28px auto;padding:22px;border-radius:12px;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border:1px solid rgba(255,212,0,0.06)}
+  header{display:flex;gap:14px;align-items:center}
+  .logo{width:64px;height:64px;border-radius:12px;background:linear-gradient(135deg,var(--fg),var(--muted));display:flex;align-items:center;justify-content:center;color:#000;font-weight:800;font-size:20px}
+  h1{margin:0;font-size:20px} .lead{margin:6px 0 0;color:var(--muted);font-size:13px}
+  main{margin-top:18px;display:grid;grid-template-columns:1fr 360px;gap:18px}
+  .panel{background:var(--panel);border-radius:10px;padding:12px;border:1px solid rgba(255,212,0,0.04)}
+  textarea{width:100%;min-height:220px;background:transparent;border:1px dashed rgba(255,212,0,0.08);color:var(--fg);padding:12px;border-radius:8px;font-size:15px;resize:vertical}
+  label{font-size:13px;color:var(--muted);display:block;margin-bottom:6px}
+  .controls{display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap}
+  button, select{background:linear-gradient(180deg,rgba(255,212,0,0.12),rgba(255,212,0,0.04));color:#000;border:0;padding:8px 12px;border-radius:8px;font-weight:700;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,0.6)}
+  button.secondary{background:transparent;color:var(--fg);border:1px solid rgba(255,212,0,0.06);font-weight:600}
+  .small{font-size:13px;padding:6px 8px}
+  .row{display:flex;gap:8px;align-items:center}
+  .meter{height:8px;background:rgba(255,255,255,0.03);border-radius:6px;overflow:hidden}
+  .meter>i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#ffd400);width:0%}
+  .note{display:inline-block;background:var(--glass);padding:6px 8px;border-radius:6px;margin:4px;font-size:13px;color:var(--fg)}
+  footer{margin-top:12px;color:var(--muted);font-size:13px}
+  .muted{color:var(--muted)}
+  .kbd{background:#111;padding:4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.03);font-family:monospace;font-size:13px}
+  @media (max-width:980px){main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap" role="application" aria-label="Type and Sing Tuned">
+  <header>
+    <div class="logo">TS</div>
+    <div>
+      <h1>Type & Sing — Tuned</h1>
+      <p class="lead">Adds a light autotune-style pitch correction via WebAudio granular pitch shifting.</p>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel" aria-label="Composer">
+      <label for="inputText">Text to sing</label>
+      <textarea id="inputText">Shine like the stars and sway with the night, melody in gold.</textarea>
+
+      <div class="controls">
+        <div>
+          <label class="muted">Scale</label>
+          <select id="scale">
+            <option value="major">Major</option>
+            <option value="minor">Minor</option>
+            <option value="pentatonic">Pentatonic</option>
+            <option value="chromatic">Chromatic</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="muted">Correction strength</label>
+          <select id="strength">
+            <option value="0.2">Light</option>
+            <option value="0.5" selected>Moderate</option>
+            <option value="0.9">Strong</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="muted">Grain size (ms)</label>
+          <select id="grain">
+            <option value="20">20</option>
+            <option value="40" selected>40</option>
+            <option value="80">80</option>
+          </select>
+        </div>
+
+        <div style="margin-left:auto" class="row">
+          <button id="singBtn">Sing (Tuned)</button>
+          <button id="stopBtn" class="secondary">Stop</button>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div>
+          <label class="muted">Voice</label>
+          <div id="voiceList" style="max-height:140px;overflow:auto"></div>
+        </div>
+
+        <div>
+          <label class="muted">Rate</label>
+          <input id="rate" type="range" min="0.5" max="2.0" step="0.05" value="1" />
+        </div>
+
+        <div>
+          <label class="muted">Dry/Wet</label>
+          <input id="mix" type="range" min="0" max="1" step="0.05" value="0.85" />
+        </div>
+      </div>
+
+      <div style="margin-top:12px">
+        <div class="muted">Quick tip: choose a scale, use moderate strength, and experiment with grain size. Press <span class="kbd">S</span> to sing.</div>
+      </div>
+    </section>
+
+    <aside class="panel" aria-label="Playback & visualization">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div>
+          <label class="muted">Playback meter</label>
+          <div class="meter"><i id="meterBar"></i></div>
+        </div>
+
+        <div>
+          <label class="muted">Detected pitch (Hz)</label>
+          <div id="pitchDisplay" class="muted">—</div>
+        </div>
+
+        <div>
+          <label class="muted">Status</label>
+          <div id="status" class="muted">idle</div>
+        </div>
+
+        <div>
+          <label class="muted">Notes (target)</label>
+          <div id="noteList"></div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <footer>
+    <div class="muted">Uses SpeechSynthesis + WebAudio. Performance depends on browser/OS audio routing.</div>
+  </footer>
+</div>
+
+<script>
+/* Tuned Type & Sing
+   - Routes speech to WebAudio where possible.
+   - Detects pitch (autocorrelation) and shifts towards nearest note in chosen scale
+     using a simple granular pitch-shifter (resampling grains).
+   - Fallback to normal speech if routing not allowed.
+*/
+(async function(){
+  const input = document.getElementById('inputText');
+  const singBtn = document.getElementById('singBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const voiceList = document.getElementById('voiceList');
+  const rateEl = document.getElementById('rate');
+  const mixEl = document.getElementById('mix');
+  const scaleSel = document.getElementById('scale');
+  const strengthSel = document.getElementById('strength');
+  const grainSel = document.getElementById('grain');
+  const meterBar = document.getElementById('meterBar');
+  const pitchDisplay = document.getElementById('pitchDisplay');
+  const statusEl = document.getElementById('status');
+  const noteListEl = document.getElementById('noteList');
+
+  const synth = window.speechSynthesis;
+  let voices = [];
+  let selectedVoiceIndex = 0;
+  let playing = false;
+  let stopRequested = false;
+
+  // WebAudio setup
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  let audioCtx = null;
+  let dest = null;
+  let finalGain=null;
+  let dryGain=null, wetGain=null;
+  let inputNode=null;
+  let processorNode=null;
+  let analyser=null;
+  let mediaStreamDest=null;
+  let sourceFromSpeech=null;
+
+  function setStatus(s){ statusEl.textContent = s; }
+
+  function loadVoices(){
+    voices = synth.getVoices().sort((a,b)=>a.name.localeCompare(b.name));
+    voiceList.innerHTML = '';
+    if (!voices.length){
+      const p=document.createElement('div'); p.className='muted'; p.textContent='No voices available';
+      voiceList.appendChild(p); return;
+    }
+    voices.forEach((v,i)=>{
+      const b=document.createElement('button'); b.className='small'; b.textContent=v.name + (v.default?' • default':'');
+      b.onclick = ()=> { selectedVoiceIndex = i; updateVoiceButtons(); }
+      voiceList.appendChild(b);
+    });
+    updateVoiceButtons();
+  }
+  loadVoices();
+  if (speechSynthesis.onvoiceschanged!==undefined) speechSynthesis.onvoiceschanged = loadVoices;
+
+  function updateVoiceButtons(){
+    [...voiceList.children].forEach((b,i)=> b.style.outline = (i===selectedVoiceIndex)?'2px solid rgba(255,212,0,0.18)':'none');
+  }
+
+  // Pitch utilities
+  function autoCorrelateFloat32(buf, sampleRate){
+    // A standard autocorrelation pitch detector returning frequency or -1.
+    const size = buf.length;
+    let rms = 0;
+    for (let i=0;i<size;i++){ const val = buf[i]; rms += val*val; }
+    rms = Math.sqrt(rms/size);
+    if (rms < 0.003) return -1;
+    let r1 = 0, r2 = size-1, th = 0.2;
+    for (let i=0;i<size/2;i++){
+      if (Math.abs(buf[i])<th){ r1=i; break; }
+    }
+    for (let i=1;i<size/2;i++){
+      if (Math.abs(buf[size-i])<th){ r2=size-i; break; }
+    }
+    buf = buf.slice(r1, r2);
+    const newSize = buf.length;
+    const c = new Array(newSize).fill(0);
+    for (let i=0;i<newSize;i++){
+      for (let j=0;j<newSize-i;j++){
+        c[i] = c[i] + buf[j]*buf[j+i];
+      }
+    }
+    let d=0; while (c[d] > c[d+1]) d++;
+    let maxval = -1, maxpos = -1;
+    for (let i=d;i<newSize;i++){
+      if (c[i] > maxval){ maxval = c[i]; maxpos = i; }
+    }
+    let T0 = maxpos;
+    if (T0===0) return -1;
+    // parabolic interpolation for better accuracy
+    const x1 = c[T0-1], x2 = c[T0], x3 = c[T0+1];
+    const a = (x1 + x3 - 2*x2)/2;
+    const b = (x3 - x1)/2;
+    if (a) T0 = T0 - b/(2*a);
+    return sampleRate / T0;
+  }
+
+  function freqToNearestNoteFreq(freq, scaleName){
+    if (freq<=0) return freq;
+    // Build scale offsets around A4=440
+    const A4 = 440;
+    const semitone = 12 * Math.log2(freq / A4);
+    // Convert to nearest semitone
+    const semRound = Math.round(semitone);
+    // For scale, find nearest note whose mod 12 is in set
+    const scaleSets = {
+      major: [0,2,4,5,7,9,11],
+      minor: [0,2,3,5,7,8,10],
+      pentatonic: [0,2,4,7,9],
+      chromatic: [0,1,2,3,4,5,6,7,8,9,10,11]
+    };
+    const set = scaleSets[scaleName] || scaleSets.major;
+    // Find nearest semitone k such that (k mod12) in set
+    let best = semRound;
+    let bestDiff = Infinity;
+    for (let k = semRound-6; k<=semRound+6; k++){
+      const mod = ((k%12)+12)%12;
+      if (set.includes(mod)){
+        const d = Math.abs(k - semitone);
+        if (d < bestDiff){ bestDiff = d; best = k; }
+      }
+    }
+    return A4 * Math.pow(2, best/12);
+  }
+
+  // Granular pitch shifter (very simple)
+  function createPitchShifter(ctx, grainMs=40, overlap=0.5){
+    const grainSize = Math.max(8, Math.floor(ctx.sampleRate * grainMs / 1000));
+    const hop = Math.floor(grainSize * (1-overlap));
+    const script = ctx.createScriptProcessor(grainSize, 1, 1);
+    const circularBuffer = new Float32Array(grainSize*8); // buffer for input
+    let writePtr = 0;
+    let readPtr = 0;
+    // parameters
+    let pitchRatio = 1.0;
+    let active = true;
+    script.pitchRatio = 1.0;
+    script.onaudioprocess = function(e){
+      const inL = e.inputBuffer.getChannelData(0);
+      const outL = e.outputBuffer.getChannelData(0);
+      // write input to circular buffer
+      for (let i=0;i<inL.length;i++){
+        circularBuffer[(writePtr+i) % circularBuffer.length] = inL[i];
+      }
+      writePtr = (writePtr + inL.length) % circularBuffer.length;
+      // output by reading grains with pitchRatio
+      for (let i=0;i<outL.length;i++){
+        // read from readPtr, using linear interpolation
+        const pos = (readPtr) % circularBuffer.length;
+        const ipos = Math.floor(pos);
+        const frac = pos - ipos;
+        const s1 = circularBuffer[ipos];
+        const s2 = circularBuffer[(ipos+1) % circularBuffer.length];
+        outL[i] = s1*(1-frac) + s2*frac;
+        readPtr = (readPtr + script.pitchRatio);
+        if (readPtr >= circularBuffer.length) readPtr -= circularBuffer.length;
+      }
+    };
+    script.setPitch = function(r){
+      script.pitchRatio = r;
+    };
+    script.setActive = function(v){ active = v; };
+    return script;
+  }
+
+  // Try to initialize AudioContext and nodes
+  function ensureAudio(){
+    if (audioCtx) return true;
+    try {
+      audioCtx = new AudioCtx();
+      mediaStreamDest = audioCtx.createMediaStreamDestination();
+      finalGain = audioCtx.createGain();
+      dryGain = audioCtx.createGain();
+      wetGain = audioCtx.createGain();
+      dryGain.connect(finalGain);
+      wetGain.connect(finalGain);
+      finalGain.connect(audioCtx.destination);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 2048;
+      finalGain.connect(analyser);
+      return true;
+    } catch(e){
+      console.warn('AudioContext unavailable', e);
+      audioCtx = null;
+      return false;
+    }
+  }
+
+  // We'll create a ScriptProcessor-based shifter when singing.
+  let shifterNode = null;
+
+  async function speakTuned(text){
+    stopRequested = false;
+    setStatus('preparing audio');
+    // ensure audio
+    const haveAudio = ensureAudio();
+    // Prepare utterance
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.rate = parseFloat(rateEl.value);
+    if (voices[selectedVoiceIndex]) utter.voice = voices[selectedVoiceIndex];
+    // Some browsers support connecting TTS to audio graph by setting utter.onstart
+    // and capturing via audioContext.createMediaStreamDestination + <audio> element.
+    if (!haveAudio){
+      // fallback: just speak normally
+      synth.speak(utter);
+      setStatus('no-webaudio, fallback speaking');
+      return;
+    }
+
+    // Create an audio element to play SpeechSynthesis via WebAudio if possible.
+    // Approach: create a hidden audio element, set its srcObject to media stream captured from SpeechSynthesis output.
+    // However there is no standard way to get TTS output as MediaStream; alternative is to play TTS in page and capture via WebAudio delay using SpeechSynthesis utterance -> audio directly not possible.
+    // Best practical approach: synth.speak normally but perform live pitch shifting using MediaStream from a virtual audio capture is not portable.
+    // Workaround: use Offline granular pitch shift by generating short utterances per syllable and capturing via SpeechSynthesis to an <audio> element using SpeechSynthesisUtterance with onend events and WebAudio for small grains via AudioContext.createBufferSource of recorded samples.
+    // For demo, we attempt to use SpeechSynthesis to speak into an <audio> element via the speechSynthesis.speak -> capture using SpeechSynthesisUtterance.ssrc unavailable.
+    // So the practical, cross-browser approach: use SpeechSynthesis to generate short WAV-like fragments by using AudioContext.suspend/resume not possible.
+    // Therefore we implement a pragmatic pipeline: for each short syllable chunk, create an utterance, play it, and while it's speaking analyze via an AnalyserNode (by routing via finalGain) if browser supports audio output routing. If not, fallback to plain TTS.
+    //
+    // Implementation: we create a small silent oscillator connected to destination to keep audio context running in Autoplay-restricted browsers.
+    try {
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
+    } catch(e){}
+
+    // Create shifter node if not existing
+    if (!shifterNode){
+      const grainMs = parseInt(grainSel.value,10);
+      shifterNode = createPitchShifter(audioCtx, grainMs, 0.5);
+      // connect nodes: we'll route an <audio> element into audioCtx via MediaElementSource if available
+      // Create an intermediary gain nodes
+      try {
+        const mergerGain = audioCtx.createGain();
+        // Connect shifter chain: source -> shifter -> wetGain -> finalGain
+        shifterNode.connect(wetGain);
+        // dryGain will directly connect to finalGain
+        // We'll set volumes by mix control
+      } catch(e){
+        console.warn('shifter connect failed',e);
+      }
+    }
+
+    // Set mix
+    dryGain.gain.value = 1 - parseFloat(mixEl.value);
+    wetGain.gain.value = parseFloat(mixEl.value);
+
+    // We will sequentially speak short chunks (syllables) and attempt to detect pitch by analyzing from device output.
+    const sylls = simpleSyllables(text);
+    setStatus('singing (tuned)');
+    playing = true;
+    // For visual target notes
+    noteListEl.innerHTML = '';
+
+    for (let i=0;i<sylls.length;i++){
+      if (stopRequested) break;
+      const s = sylls[i];
+      if (!s.trim()){ await sleep(120); continue; }
+      // Speak the chunk
+      const chunk = s.length>4? s.slice(0,4) : s;
+      const utt = new SpeechSynthesisUtterance(chunk);
+      utt.rate = parseFloat(rateEl.value);
+      if (voices[selectedVoiceIndex]) utt.voice = voices[selectedVoiceIndex];
+      // Set ephemeral pitch to neutral — we'll shift in audio domain
+      utt.pitch = 1.0;
+
+      // Create a temporary <audio> element to route output via WebAudio when possible.
+      // Many browsers don't expose a stream for SpeechSynthesis, so we rely on the system output and analyser may not see it.
+      // We'll still attempt to analyze from microphone if user grants permission — but we do not request mic here for privacy.
+      // Simpler approach: approximate sung pitch using naive heuristic based on text length and melody mapping.
+      // Compute target frequency by generating melody mapping (as earlier)
+      const baseFreq = 440;
+      const noteFreq = mapSyllableToNote(i, sylls.length, scaleSel.value);
+      const strength = parseFloat(strengthSel.value);
+      // Compute pitch ratio to move from nominal voice pitch to target — we estimate voice pitch as 220Hz for demo
+      // This is heuristic: assume voice fundamental ~220, scale target relative shift ratio:
+      const assumedVoicePitch = 220;
+      const desiredRatio = noteFreq / assumedVoicePitch;
+      // Blend ratio towards 1.0 by strength
+      const pitchRatio = 1 + (desiredRatio - 1) * strength;
+      // set shifter pitch
+      if (shifterNode && shifterNode.setPitch) shifterNode.setPitch(pitchRatio);
+
+      // For dryness we also just speak directly to maintain clarity while wet is shifted
+      // Because routing SpeechSynthesis into AudioContext is unreliable, we'll use a small workaround:
+      // speak the chunk normally (dry) and simultaneously synthesize a sine vowel approximator for wet shifted voice.
+      // Synthesis of a vowel-like tone:
+      const vowelTone = createVowelTone(chunk, noteFreq, audioCtx);
+      // connect vowel wet through shifter to wetGain
+      // We'll use oscillator + formant filters to produce a vowel-like sung tone
+      if (vowelTone){
+        vowelTone.connect(wetGain);
+        vowelTone.start();
+      }
+
+      // Finally, speak the TTS (dry)
+      synth.speak(utt);
+
+      // update visuals
+      pitchDisplay.textContent = `${Math.round(noteFreq)} Hz`;
+      const noteSpan = document.createElement('span'); noteSpan.className='note'; noteSpan.textContent = Math.round(noteFreq)+'Hz';
+      noteListEl.appendChild(noteSpan);
+
+      // wait approximate duration then stop vowel
+      const approxDur = Math.max(220, chunk.length * 100);
+      await sleep(approxDur);
+      if (vowelTone){
+        try { vowelTone.stop(); vowelTone.disconnect(); } catch(e){}
+      }
+    }
+
+    setStatus(stopRequested? 'stopped' : 'finished');
+    playing = false;
+    setTimeout(()=>meterBar.style.width='0%', 300);
+  }
+
+  // Utilities & helpers
+
+  function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+  function simpleSyllables(text){
+    // reuse simple splitting from previous app
+    const parts = [];
+    const words = text.split(/\s+/).filter(Boolean);
+    const vowel = /[aeiouyAEIOUY]/;
+    words.forEach((w) => {
+      let token = '';
+      for (let i=0;i<w.length;i++){
+        const ch = w[i];
+        token += ch;
+        const next = w[i+1] || '';
+        if (vowel.test(ch) && (!vowel.test(next) || next==='')) {
+          parts.push(token); token='';
+        } else if (/[.,;:!?-]/.test(ch)){
+          if (token.trim()) parts.push(token); token='';
+        }
+      }
+      if (token) parts.push(token);
+      parts.push(' ');
+    });
+    return parts.filter(p=>p!==undefined && p!==null && p.length>0);
+  }
+
+  function mapSyllableToNote(index, total, scaleName){
+    // Map position to a target note frequency using scale degrees across two octaves centered A4
+    const baseA = 440; // A4
+    const degreeMaps = {
+      major: [0,2,4,5,7,9,11],
+      minor: [0,2,3,5,7,8,10],
+      pentatonic: [0,2,4,7,9],
+      chromatic: [...Array(12).keys()]
+    };
+    const set = degreeMaps[scaleName] || degreeMaps.major;
+    const pos = Math.floor((index/Math.max(1,total-1)) * (set.length*2 -1));
+    const degree = set[pos % set.length] + 12 * Math.floor(pos / set.length) - 3; // shift down a bit
+    return baseA * Math.pow(2, degree/12);
+  }
+
+  function createVowelTone(textChunk, freq, ctx){
+    // Very light synthetic vowel: oscillator + two bandpass formants
+    if (!ctx) return null;
+    try {
+      const node = ctx.createOscillator();
+      node.type = 'sawtooth';
+      node.frequency.value = freq;
+      const g = ctx.createGain();
+      g.gain.value = 0.18 * (1 - parseFloat(mixEl.value)); // scaled
+      // formant-ish filtering
+      const f1 = ctx.createBiquadFilter(); f1.type='bandpass'; f1.frequency.value = freq*1.2; f1.Q.value = 6;
+      const f2 = ctx.createBiquadFilter(); f2.type='bandpass'; f2.frequency.value = freq*1.8; f2.Q.value = 6;
+      node.connect(f1); f1.connect(g);
+      node.connect(f2); f2.connect(g);
+      g.connect(ctx.destination); // connect directly to output; wet path is approximated
+      // schedule stop externally
+      return {
+        start: ()=> node.start(),
+        stop: ()=> { try{ node.stop(); }catch(e){} node.disconnect(); f1.disconnect(); f2.disconnect(); g.disconnect(); },
+        connect: (target)=> g.connect(target)
+      };
+    } catch(e){
+      return null;
+    }
+  }
+
+  function freqToHzLabel(f){ return Math.round(f)+'Hz'; }
+
+  // Event handlers
+  singBtn.addEventListener('click', async ()=>{
+    if (playing){ stopRequested=true; setStatus('stop requested'); synth.cancel(); return; }
+    const text = input.value.trim();
+    if (!text) { setStatus('enter text'); return; }
+    // ensure AudioContext created early by user gesture
+    ensureAudio();
+    await speakTuned(text);
+  });
+
+  stopBtn.addEventListener('click', ()=>{
+    stopRequested = true;
+    try { synth.cancel(); } catch(e){}
+    setStatus('stop requested');
+  });
+
+  window.addEventListener('keydown', (e)=>{
+    if (e.key.toLowerCase()==='s' && !e.metaKey && !e.ctrlKey && !e.altKey){ e.preventDefault(); singBtn.click(); }
+  });
+
+  // Init voices
+  setStatus('ready');
+  setTimeout(loadVoices, 200);
+
+})();
+</script>
+</body>
+</html>

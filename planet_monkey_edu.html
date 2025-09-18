@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Planet Monkey(parody sort of) — World Economy Dashboard (Static)</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root{--bg:#0f1724; --card:#0b1220; --muted:#9aa4b2; --accent:#00d4ff; --glass: rgba(255,255,255,0.03); --success: #3ee5a8; --danger:#ff6b6b; --gold:#f1c40f; font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;}
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,#041026 0%, #071226 100%);color:#e6eef6}
+    .wrap{max-width:1200px;margin:28px auto;padding:24px}
+    header{display:flex;align-items:center;gap:16px}
+    .logo{width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#6f8cff);display:flex;align-items:center;justify-content:center;font-weight:800;color:#06202b}
+    h1{margin:0;font-size:20px}
+    p.lead{margin:0;color:var(--muted);font-size:13px}
+    .grid{display:grid;grid-template-columns: 1fr 420px;gap:18px;margin-top:18px}
+    .card{background:var(--card);padding:14px;border-radius:12px;box-shadow:0 6px 24px rgba(2,6,12,0.6);}
+    .row{display:flex;gap:12px;align-items:center}
+    .markets{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+    .index{padding:12px;border-radius:8px;background:var(--glass);display:flex;justify-content:space-between;align-items:center}
+    .index small{display:block;color:var(--muted)}
+    .big{font-weight:700;font-size:18px}
+    .controls{display:flex;flex-direction:column;gap:12px}
+    .switch{display:flex;align-items:center;gap:10px}
+    .toggle{width:44px;height:26px;background:#09121a;border-radius:14px;padding:3px;cursor:pointer;position:relative}
+    .toggle .knob{width:20px;height:20px;border-radius:50%;background:#e6eef6;position:absolute;top:3px;left:3px;transition:all .18s}
+    .toggle.on{background:linear-gradient(90deg,#0b6  #06b6d4)}
+    .toggle.on .knob{left:21px}
+    .map{height:340px;border-radius:10px;overflow:hidden}
+    .map svg{width:100%;height:100%;display:block}
+    footer{margin-top:18px;color:var(--muted);font-size:13px}
+    @media (max-width:980px){.grid{grid-template-columns:1fr;}.map{height:260px}}
+    .badge{padding:6px 10px;border-radius:999px;background:rgba(255,255,255,0.03);font-weight:600;font-size:12px}
+    .insights{display:flex;flex-direction:column;gap:8px}
+    .insight{padding:10px;border-radius:8px;background:linear-gradient(180deg,rgba(6,10,16,0.6), rgba(6,10,16,0.4));border:1px solid rgba(255,255,255,0.02)}
+    table{width:100%;border-collapse:collapse}
+    td,th{padding:8px 6px;text-align:left;font-size:13px}
+    thead th{color:var(--muted);font-weight:600}
+    .muted{color:var(--muted)}
+    .up{color:var(--success)} .down{color:var(--danger)}
+    .download{background:linear-gradient(90deg,#2b6cff,#00d4ff);padding:8px 12px;border-radius:8px;color:#021221;border:none;font-weight:700;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">PM</div>
+      <div>
+        <h1>Planet Money — World Economy Dashboard (Static)</h1>
+        <p class="lead">All data is embedded statically in this single HTML file. Replace values if you want different samples.</p>
+      </div>
+      <div style="margin-left:auto" class="row">
+        <div class="badge">Static</div>
+      </div>
+    </header>
+
+    <div class="grid">
+      <div>
+        <div class="card">
+          <div class="row" style="justify-content:space-between;margin-bottom:12px">
+            <div>
+              <div class="muted">Markets snapshot (static)</div>
+              <div style="font-weight:800;font-size:18px">Global Indices & Currencies</div>
+            </div>
+            <div class="row"><div class="badge">Updated: embedded sample</div></div>
+          </div>
+
+          <div class="markets" style="margin-bottom:12px">
+            <div class="index">
+              <div>
+                <small>Dow Jones</small>
+                <div class="big" id="dowVal">46,150.13</div>
+                <div class="muted" id="dowChg">+0.29%</div>
+              </div>
+              <div style="text-align:right">
+                <div class="muted">Volume (avg)</div>
+                <div id="dowVol">1.05B</div>
+              </div>
+            </div>
+
+            <div class="index">
+              <div>
+                <small>S&P 500</small>
+                <div class="big" id="spVal">5,190.45</div>
+                <div class="muted" id="spChg">+0.21%</div>
+              </div>
+              <div style="text-align:right">
+                <div class="muted">Volume (avg)</div>
+                <div id="spVol">3.28B</div>
+              </div>
+            </div>
+
+            <div class="index">
+              <div>
+                <small>Nikkei</small>
+                <div class="big" id="nikVal">33,750</div>
+                <div class="muted" id="nikChg">-0.04%</div>
+              </div>
+              <div style="text-align:right">
+                <div class="muted">Volume</div>
+                <div id="nikVol">420M</div>
+              </div>
+            </div>
+
+            <div class="index">
+              <div>
+                <small>FTSE 100</small>
+                <div class="big" id="ftVal">7,250</div>
+                <div class="muted" id="ftChg">+0.06%</div>
+              </div>
+              <div style="text-align:right">
+                <div class="muted">Volume</div>
+                <div id="ftVol">600M</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:12px;align-items:center">
+            <div style="flex:1">
+              <canvas id="marketChart" height="140"></canvas>
+            </div>
+            <div style="width:240px">
+              <div style="font-weight:700;margin-bottom:8px">Major currencies</div>
+              <table>
+                <thead><tr><th>Pair</th><th>Price</th><th>Chg</th></tr></thead>
+                <tbody id="fxTable"></tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <div style="font-weight:700">Insights (static)</div>
+            <div class="muted">Highlights embedded</div>
+          </div>
+          <div class="insights">
+            <div class="insight">Global growth hotspots (sample): Asia, Europe.</div>
+            <div class="insight">Geopolitical risk (sample): Eastern Europe, South China Sea.</div>
+            <div class="insight">Trade: Pacific & Atlantic remain busiest routes (sample).</div>
+          </div>
+        </div>
+
+      </div>
+
+      <aside class="controls">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div style="font-weight:700">World Map — SVG (static)</div>
+            <div class="muted">Flat projection</div>
+          </div>
+          <div class="map" id="mapContainer">
+            <!-- A more detailed but still static SVG world map (Mercator-like); each path is assigned an id. -->
+            <svg viewBox="-180 -90 360 180" xmlns="http://www.w3.org/2000/svg" id="worldSvg">
+              <rect x="-180" y="-90" width="360" height="180" fill="transparent" />
+              <g id="world" transform="scale(1,1)" stroke-opacity="0.06" stroke="#ffffff">
+                <!-- North America (simplified) -->
+                <path id="NA" d="M-130,-20 L-100,-45 L-80,-40 L-60,-45 L-50,-30 L-40,-35 L-30,-20 L-40,-10 L-50,0 L-70,10 L-90,5 L-110,0 L-130,-10 Z" fill="#081221"/>
+                <!-- South America -->
+                <path id="SA" d="M-60,10 L-50,30 L-40,45 L-35,60 L-40,75 L-50,85 L-65,80 L-70,65 L-75,50 L-70,35 L-60,20 Z" fill="#081221"/>
+                <!-- Europe -->
+                <path id="EU" d="M0,-40 L10,-42 L20,-38 L30,-40 L35,-30 L30,-20 L20,-18 L10,-20 L0,-22 Z" fill="#081221"/>
+                <!-- Africa -->
+                <path id="AF" d="M10,-10 L20,0 L25,15 L20,35 L10,45 L0,40 L-5,25 L0,5 Z" fill="#081221"/>
+                <!-- Asia -->
+                <path id="AS" d="M40,-30 L60,-35 L80,-30 L95,-20 L100,-5 L95,10 L85,20 L75,25 L60,30 L50,22 L45,10 L40,0 L42,-15 Z" fill="#081221"/>
+                <!-- Australia -->
+                <path id="OC" d="M110,40 L120,45 L125,50 L120,60 L110,58 L105,50 Z" fill="#081221"/>
+                <!-- Antarctica -->
+                <path id="AN" d="M-160,80 L-120,85 L-80,88 L-40,87 L0,88 L40,88 L80,86 L120,82 L160,80 L160,90 L-160,90 Z" fill="#081221"/>
+              </g>
+            </svg>
+          </div>
+
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="badge" id="btnPan">Pan</button>
+            <button class="badge" id="btnZoom">Zoom</button>
+            <button class="badge" id="btnReset">Reset view</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="font-weight:700;margin-bottom:6px">Controls</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div class="switch"><label>Smart insights <div id="smartToggle" class="toggle on"><div class="knob"></div></div></label></div>
+            <div class="switch"><label>Animate charts <div id="animToggle" class="toggle on"><div class="knob"></div></div></label></div>
+            <div style="display:flex;gap:8px;margin-top:6px"><button id="downloadCsv" class="download">Export CSV</button></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="font-weight:700;margin-bottom:6px">Quick facts</div>
+          <div class="muted" id="quickFacts">All numbers are static examples embedded in this file.</div>
+        </div>
+
+      </aside>
+    </div>
+
+    <footer>
+      This single-file, static demo contains embedded arrays for charts and an SVG world map. Use it offline or drop into a static site.
+    </footer>
+  </div>
+
+  <script>
+    // ---------- Statics: 6 months (approx 180 trading days) of Dow volume (sample) and Dow daily close (sample) ----------
+    // These arrays are static sample data and can be edited directly in this file.
+    const dowSeries = [46150,46120,46040,45980,46010,46180,46200,46190,46250,46310,46280,46350,46290,46320,46260,46190,46230,46300,46370,46340,46390,46420,46300,46210,46180,46270,46350,46310,46280,46240,46270,46330,46380,46320,46260,46290,46370,46330,46280,46220,46250,46190,46260,46310,46280,46250,46200,46170,46130,46150,46180,46220,46260,46290,46340,46380,46410,46370,46320,46280,46240,46200,46170,46150,46180,46210,46260,46290,46250,46210,46170,46140,46110,46080,46120,46160,46190,46240,46280,46320,46290,46250,46210,46170,46130,46160,46200,46250,46300,46270,46230,46190,46150,46110,46080,46050,46020,46060,46100,46150,46200,46260,46230,46190,46160,46120,46090,46050,46020,45990,45960,45930,45970,46010,46060,46100,46140,46180,46210,46250,46290,46320,46360,46390,46350,46310,46280,46240,46210,46170,46130,46100,46070,46030,45990,45960,45930,45980,46020,46070,46110,46150,46190,46220,46260,46300,46340,46380,46410,46370,46320,46280,46240,46200,46160,46120,46090,46050,46020,45990,45960,45930,45900,45860,45820,45850,45900,45940,45980,46020,46060,46100,46140,46180,46220,46260,46300,46340,46360,46320,46280,46240,46200,46160,46120,46080,46040,46000];
+
+    const dowVolume = [1050000000,980000000,1120000000,1250000000,1010000000,1150000000,990000000,1080000000,1200000000,1300000000,950000000,980000000,1100000000,1000000000,1020000000,1150000000,1080000000,1200000000,980000000,970000000,1010000000,990000000,1005000000,980000000,1012000000,1030000000,990000000,1000000000,980000000,970000000,1010000000,1040000000,1080000000,980000000,990000000,1010000000,1050000000,980000000,970000000,1000000000,1012000000,1030000000,980000000,990000000,1000000000,1015000000,1020000000,1030000000,1040000000,980000000,970000000,1000000000,1010000000,1020000000,990000000,1000000000,1010000000,1022500000,1031000000,1040000000,980000000,970000000,990000000,1005000000,1012000000,1018000000,1024000000,1031000000,1040000000,990000000,980000000,1010000000,1020000000,1035000000,1040000000,1050000000,1000000000,990000000,1012000000,1020000000,1031000000,1040000000,1000000000,990000000,980000000,970000000,1010000000,1020000000,1030000000,1040000000,1050000000,990000000,980000000,1000000000,1010000000,1020000000,1030000000,1040000000,1051000000,1060000000,980000000,990000000,1000000000,1013000000,1020000000,1030000000,990000000,980000000,1010000000,1020000000,1030000000,1040000000,1050000000,990000000,980000000,1000000000,1010000000,1020000000,1030000000,1040000000,1050000000,1060000000,990000000,980000000,1010000000,1020000000,1035000000,1042000000,1050000000,990000000,980000000,1010000000,1020000000,1030000000,1040000000,1050000000,1060000000,1070000000,980000000,990000000,1005000000,1012000000,1020000000,1030000000,1040000000,1050000000,1065000000,1072000000,980000000,990000000,1000000000,1010000000,1020000000,1030000000,1040000000,1050000000,1060000000,1070000000,980000000,990000000,1000000000,1012000000,1020000000,1030000000,1040000000,1050000000,1060000000,1070000000,980000000,990000000,1000000000,1010000000,1020000000,1030000000,1040000000,1050000000,1060000000,1070000000,980000000,990000000,1000000000,1010000000,1020000000];
+
+    // ---------- Static FX pairs (sample) ----------
+    const sampleFX = [
+      {pair:'USD/EUR',price:0.9186,chg: -0.12},
+      {pair:'USD/JPY',price:157.40,chg: +0.24},
+      {pair:'GBP/USD',price:1.2702,chg: -0.08},
+      {pair:'USD/CNY',price:7.4261,chg: +0.10}
+    ];
+
+    // ---------- render FX table (static) ----------
+    const fxTable = document.getElementById('fxTable');
+    function renderFX(){
+      fxTable.innerHTML='';
+      sampleFX.forEach(f=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML=`<td><strong>${f.pair}</strong></td><td>${f.price.toFixed(4)}</td><td class='${f.chg>=0?'up':'down'}'>${f.chg.toFixed(2)}%</td>`;
+        fxTable.appendChild(tr);
+      })
+    }
+    renderFX();
+
+    // ---------- Market chart: static Dow series + volume ----------
+    const ctx = document.getElementById('marketChart').getContext('2d');
+    const labels = dowSeries.map((_,i)=>`-${dowSeries.length-i}d`);
+    const marketChart = new Chart(ctx, {
+      type:'bar',
+      data:{
+        labels: labels,
+        datasets:[
+          {type:'line',label:'Dow (close)',data:dowSeries,borderWidth:2,tension:0.2,fill:true,backgroundColor:'rgba(0,212,255,0.06)',pointRadius:0},
+          {type:'bar',label:'Volume',data:dowVolume,backgroundColor:'rgba(255,255,255,0.02)',yAxisID:'v2'}
+        ]
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        scales:{
+          y:{display:true,position:'left'},
+          v2:{type:'linear',display:false,position:'right'}
+        },
+        plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false}}
+      }
+    });
+
+    // map simple hover highlights for static SVG
+    const regions = ['NA','SA','EU','AF','AS','OC','AN'];
+    regions.forEach(id=>{
+      const el = document.getElementById(id);
+      if(!el) return;
+      el.addEventListener('mouseenter', ()=>{ el.setAttribute('fill','#0b3954'); showTooltip(id); });
+      el.addEventListener('mouseleave', ()=>{ el.setAttribute('fill','#081221'); hideTooltip(); });
+      el.style.transition='all .12s';
+    });
+
+    // tooltip
+    const tooltipEl = document.createElement('div');
+    tooltipEl.style.position='fixed';tooltipEl.style.padding='8px 10px';tooltipEl.style.background='rgba(2,10,20,0.9)';tooltipEl.style.border='1px solid rgba(255,255,255,0.03)';tooltipEl.style.borderRadius='6px';tooltipEl.style.pointerEvents='none';tooltipEl.style.display='none';tooltipEl.style.fontSize='13px';
+    document.body.appendChild(tooltipEl);
+    function showTooltip(txt){ tooltipEl.textContent = txt; tooltipEl.style.display='block'; document.addEventListener('mousemove', posTooltip); }
+    function hideTooltip(){ tooltipEl.style.display='none'; document.removeEventListener('mousemove', posTooltip); }
+    function posTooltip(e){ tooltipEl.style.left = (e.clientX+14)+'px'; tooltipEl.style.top = (e.clientY+10)+'px'; }
+
+    // toggles
+    function bindToggle(id, cb){ const el = document.getElementById(id); el.addEventListener('click', ()=>{ el.classList.toggle('on'); cb(el.classList.contains('on')); }); }
+    bindToggle('smartToggle', (v)=>{ document.getElementById('quickFacts').textContent = v ? 'Smart insights ON — static mode' : 'Smart insights OFF'; });
+    bindToggle('animToggle', (v)=>{ marketChart.options.animation = v; marketChart.update(); });
+
+    document.getElementById('downloadCsv').addEventListener('click', ()=>{
+      let csv = 'day,close,volume
+';
+      for(let i=0;i<dowSeries.length;i++) csv += `${i},${dowSeries[i]},${dowVolume[i]}
+`;
+      const blob = new Blob([csv],{type:'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download='dow-6months-sample.csv'; a.click(); URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('btnReset').addEventListener('click', ()=>{ document.getElementById('worldSvg').removeAttribute('style'); });
+
+    // populate headline values
+    document.getElementById('dowVal').textContent = dowSeries[dowSeries.length-1].toLocaleString();
+    const pct = (((dowSeries[dowSeries.length-1]/dowSeries[0])-1)*100).toFixed(2);
+    document.getElementById('dowChg').textContent = (pct>0?'+':'')+pct+'%';
+    document.getElementById('dowVol').textContent = Math.round(dowVolume.reduce((a,b)=>a+b,0)/dowVolume.length/1e6) + 'M';
+
+  </script>
+</body>
+</html>
