@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Simple Ant Simulator</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root{
+      --bg:#0f1720;
+      --grid:#15202b;
+      --cell:#0b1220;
+      --ant:#ffd166;
+      --food:#06d6a0;
+      --pher:#8ecae6;
+    }
+    html,body{height:100%;margin:0;background:var(--bg);color:#e6eef8;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial}
+    .wrap{display:flex;gap:12px;padding:12px;align-items:flex-start}
+    canvas{background:linear-gradient(180deg,var(--grid),#09121a);border-radius:6px;box-shadow:0 6px 20px rgba(2,6,23,.6)}
+    .panel{min-width:220px;max-width:320px;background:#07131b;padding:12px;border-radius:8px}
+    .row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+    label{font-size:13px;color:#cfe8ff}
+    input[type=range]{width:100%}
+    button{background:#0b6bff;border:none;color:white;padding:8px 10px;border-radius:6px;cursor:pointer}
+    small{color:#94b4d8}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <canvas id="world" width="600" height="600"></canvas>
+
+    <div class="panel">
+      <h3 style="margin:0 0 8px 0">Ant Simulator</h3>
+
+      <div class="row">
+        <label>Grid size</label>
+        <select id="gridSize">
+          <option value="30">30×30</option>
+          <option value="40" selected>40×40</option>
+          <option value="50">50×50</option>
+          <option value="60">60×60</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label>Ants</label>
+        <input id="antCount" type="number" min="1" max="500" value="60" style="width:72px;margin-left:auto">
+      </div>
+
+      <div class="row">
+        <label>Food pieces</label>
+        <input id="foodCount" type="number" min="1" max="200" value="8" style="width:72px;margin-left:auto">
+      </div>
+
+      <div class="row">
+        <label>Evaporation</label>
+        <input id="evap" type="range" min="0" max="0.2" step="0.005" value="0.02">
+      </div>
+
+      <div class="row">
+        <label>Deposit</label>
+        <input id="deposit" type="range" min="0" max="1" step="0.01" value="0.2">
+      </div>
+
+      <div class="row">
+        <label>Speed</label>
+        <input id="speed" type="range" min="1" max="10" step="1" value="4">
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button id="startBtn">Start</button>
+        <button id="resetBtn">Reset</button>
+      </div>
+
+      <hr style="border:none;border-top:1px solid rgba(255,255,255,0.04);margin:10px 0">
+
+      <small>Click canvas to add/remove food. Drag to paint obstacles (not implemented — placeholder).</small>
+    </div>
+  </div>
+
+  <script>
+  // Simple modular ant simulator
+  // Date: Sep 19, 2025
+
+  /* -------------------------
+     Utilities
+     ------------------------- */
+  const randInt = (a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+  const dirs8 = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+
+  /* -------------------------
+     Cell & Grid
+     ------------------------- */
+  class Cell {
+    constructor(){
+      this.food = 0;          // amount of food
+      this.pheromone = 0;     // pheromone strength
+      this.block = false;     // obstacle (future)
+    }
+  }
+
+  class Grid {
+    constructor(size){
+      this.size = size;
+      this.cells = new Array(size*size);
+      for(let i=0;i<this.cells.length;i++) this.cells[i]=new Cell();
+    }
+    index(x,y){ return y*this.size + x; }
+    inBounds(x,y){ return x>=0 && y>=0 && x<this.size && y<this.size; }
+    get(x,y){ return this.cells[this.index(x,y)]; }
+    forEach(fn){
+      for(let y=0;y<this.size;y++) for(let x=0;x<this.size;x++) fn(this.get(x,y),x,y);
+    }
+    evaporate(rate){
+      for(let i=0;i<this.cells.length;i++){
+        let p = this.cells[i].pheromone;
+        p *= (1 - rate);
+        if(p < 1e-4) p = 0;
+        this.cells[i].pheromone = p;
+      }
+    }
+    diffuse(factor=0.1){
+      // simple, cheap diffusion: each cell shares a bit with neighbors
+      const s = this.size;
+      const out = new Float32Array(this.cells.length);
+      for(let y=0;y<s;y++){
+        for(let x=0;x<s;x++){
+          const idx = this.index(x,y);
+          let sum = this.cells[idx].pheromone;
+          let count = 1;
+          for(const d of dirs8){
+            const nx=x+d[0], ny=y+d[1];
+            if(this.inBounds(nx,ny)){
+              sum += this.get(nx,ny).pheromone;
+              count++;
+            }
+          }
+          out[idx] = sum / count;
+        }
+      }
+      for(let i=0;i<out.length;i++) this.cells[i].pheromone = this.cells[i].pheromone*(1-factor) + out[i]*factor;
+    }
+  }
+
+  /* -------------------------
+     Ant
+     ------------------------- */
+  class Ant {
+    constructor(x,y,grid,homeX,homeY){
+      this.x = x; this.y = y;
+      this.grid = grid;
+      this.homeX = homeX; this.homeY = homeY;
+      this.carry = 0;        // carrying food (0/1)
+      this.dir = randInt(0,7); // direction index into dirs8
+      this.steps = 0;
+    }
+
+    step(params){
+      const {depositAmount,randTurnProb} = params;
+      this.steps++;
+
+      // sense: look at neighboring pheromones (and food)
+      const choices = [];
+      for(let i=-1;i<=1;i++){
+        const di = (this.dir + i + 8) % 8;
+        const d = dirs8[di];
+        const nx = this.x + d[0], ny = this.y + d[1];
+        if(!this.grid.inBounds(nx,ny)) continue;
+        const cell = this.grid.get(nx,ny);
+        // score depends on whether carrying food or not
+        let score = cell.pheromone + (cell.food>0 ? 1.5 : 0);
+        // when carrying food, bias toward home
+        if(this.carry){
+          const distNow = Math.hypot(this.homeX - this.x, this.homeY - this.y);
+          const distNext = Math.hypot(this.homeX - nx, this.homeY - ny);
+          if(distNext < distNow) score += 2;
+        } else {
+          // when searching, avoid home
+          const distNext = Math.hypot(this.homeX - nx, this.homeY - ny);
+          const distNow = Math.hypot(this.homeX - this.x, this.homeY - this.y);
+          if(distNext > distNow) score += 0.5;
+        }
+        choices.push({di, nx, ny, score, hasFood: cell.food>0});
+      }
+
+      // pick by softmax-like probability
+      if(choices.length===0) return;
+      // random exploration
+      if(Math.random() < randTurnProb){
+        const c = choices[randInt(0,choices.length-1)];
+        this.dir = c.di;
+      } else {
+        // choose highest weighted by score
+        let best = choices[0];
+        for(const c of choices) if(c.score > best.score) best = c;
+        this.dir = best.di;
+      }
+
+      // move
+      const d = dirs8[this.dir];
+      const nx = this.x + d[0], ny = this.y + d[1];
+      if(this.grid.inBounds(nx,ny)){
+        this.x = nx; this.y = ny;
+      }
+
+      const cell = this.grid.get(this.x,this.y);
+
+      // interact: pick up or drop food
+      if(this.carry === 0 && cell.food > 0){
+        // pickup with some probability
+        if(Math.random() < 0.9){
+          cell.food = Math.max(0, cell.food - 1);
+          this.carry = 1;
+        }
+      } else if(this.carry === 1){
+        // if at home, drop
+        if(this.x === this.homeX && this.y === this.homeY){
+          this.carry = 0;
+          // optionally increase some home stock (not tracked)
+        } else {
+          // chance to drop (rare)
+          if(Math.random() < 0.005){
+            this.carry = 0;
+            cell.food += 1;
+          }
+        }
+      }
+
+      // deposit pheromone if carrying food (trail to home) or when searching
+      const deposit = depositAmount * (this.carry ? 1.0 : 0.2);
+      cell.pheromone = Math.min(1.0, cell.pheromone + deposit);
+    }
+  }
+
+  /* -------------------------
+     Simulator
+     ------------------------- */
+  class Simulator {
+    constructor(canvas){
+      this.canvas = canvas;
+      this.ctx = canvas.getContext('2d');
+      this.running = false;
+      this.initFromControls();
+      this.attachEvents();
+    }
+
+    initFromControls(){
+      const size = parseInt(document.getElementById('gridSize').value,10);
+      this.grid = new Grid(size);
+      this.cellPx = Math.floor(this.canvas.width / size);
+      this.homeX = Math.floor(size/2);
+      this.homeY = Math.floor(size/2);
+      this.ants = [];
+      const antCount = parseInt(document.getElementById('antCount').value,10);
+      const foodCount = parseInt(document.getElementById('foodCount').value,10);
+      for(let i=0;i<antCount;i++){
+        // spawn around home
+        const x = clamp(this.homeX + randInt(-2,2),0,size-1);
+        const y = clamp(this.homeY + randInt(-2,2),0,size-1);
+        this.ants.push(new Ant(x,y,this.grid,this.homeX,this.homeY));
+      }
+      // place random food
+      for(let i=0;i<foodCount;i++){
+        const fx = randInt(0,size-1);
+        const fy = randInt(0,size-1);
+        // avoid placing on home
+        if(fx===this.homeX && fy===this.homeY) continue;
+        this.grid.get(fx,fy).food += randInt(1,4);
+      }
+    }
+
+    step(){
+      const depositAmount = parseFloat(document.getElementById('deposit').value);
+      const evap = parseFloat(document.getElementById('evap').value);
+      const speed = parseInt(document.getElementById('speed').value,10);
+
+      // multiple micro-steps per frame to control speed
+      for(let s=0;s<speed;s++){
+        for(const ant of this.ants) ant.step({depositAmount, randTurnProb: 0.05});
+        this.grid.evaporate(evap*0.01); // scale so slider is intuitive
+        this.grid.diffuse(0.15);
+      }
+    }
+
+    draw(){
+      const ctx = this.ctx;
+      const s = this.grid.size;
+      const px = this.cellPx;
+      ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
+
+      // draw cells
+      for(let y=0;y<s;y++){
+        for(let x=0;x<s;x++){
+          const cell = this.grid.get(x,y);
+          const gx = x*px, gy = y*px;
+          // base
+          ctx.fillStyle = cell.food>0 ? '#042f26' : '#071622';
+          ctx.fillRect(gx,gy,px,px);
+          // pheromone overlay
+          if(cell.pheromone > 0.002){
+            const a = clamp(cell.pheromone,0,1);
+            ctx.fillStyle = `rgba(142,202,230,${a*0.9})`;
+            ctx.fillRect(gx,gy,px,px);
+          }
+          // food
+          if(cell.food>0){
+            ctx.fillStyle = '#06d6a0';
+            const r = Math.max(2, Math.floor(px*0.18));
+            ctx.beginPath();
+            ctx.arc(gx+px/2, gy+px/2, r, 0, Math.PI*2);
+            ctx.fill();
+          }
+        }
+      }
+
+      // draw home
+      ctx.fillStyle = '#ffd166';
+      ctx.fillRect(this.homeX*px+px*0.2, this.homeY*px+px*0.2, px*0.6, px*0.6);
+
+      // draw ants
+      for(const ant of this.ants){
+        const ax = ant.x*px + px*0.5;
+        const ay = ant.y*px + px*0.5;
+        ctx.beginPath();
+        ctx.fillStyle = ant.carry ? '#ff9f1c' : '#ffd166';
+        ctx.arc(ax,ay, Math.max(1, px*0.18), 0, Math.PI*2);
+        ctx.fill();
+        // direction indicator
+        ctx.beginPath();
+        const d = dirs8[ant.dir];
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.moveTo(ax,ay);
+        ctx.lineTo(ax + d[0]*px*0.35, ay + d[1]*px*0.35);
+        ctx.stroke();
+      }
+
+      // grid lines (optional subtle)
+      ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+      for(let i=0;i<=s;i++){
+        const v = i*px;
+        ctx.beginPath();
+        ctx.moveTo(v,0); ctx.lineTo(v,this.canvas.height); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0,v); ctx.lineTo(this.canvas.width,v); ctx.stroke();
+      }
+    }
+
+    runLoop = ()=>{
+      if(!this.running) return;
+      this.step();
+      this.draw();
+      requestAnimationFrame(this.runLoop);
+    }
+
+    start(){
+      if(this.running) return;
+      this.running = true;
+      requestAnimationFrame(this.runLoop);
+    }
+    stop(){ this.running = false; }
+
+    reset(){
+      this.stop();
+      this.initFromControls();
+      this.draw();
+    }
+
+    attachEvents(){
+      // controls
+      document.getElementById('startBtn').addEventListener('click', ()=>{
+        if(this.running){ this.stop(); document.getElementById('startBtn').textContent='Start'; }
+        else { this.start(); document.getElementById('startBtn').textContent='Pause'; }
+      });
+      document.getElementById('resetBtn').addEventListener('click', ()=>{ this.reset(); document.getElementById('startBtn').textContent='Start'; });
+
+      // grid size change resets
+      document.getElementById('gridSize').addEventListener('change', ()=> this.reset());
+      document.getElementById('antCount').addEventListener('change', ()=> this.reset());
+      document.getElementById('foodCount').addEventListener('change', ()=> this.reset());
+
+      // canvas click to add/remove food
+      this.canvas.addEventListener('click', (e)=>{
+        const rect = this.canvas.getBoundingClientRect();
+        const cx = Math.floor((e.clientX - rect.left) / this.cellPx);
+        const cy = Math.floor((e.clientY - rect.top) / this.cellPx);
+        if(!this.grid.inBounds(cx,cy)) return;
+        const cell = this.grid.get(cx,cy);
+        cell.food = (cell.food > 0) ? 0 : randInt(1,4);
+        this.draw();
+      });
+
+      // simple drag painting placeholder (no obstacles implemented)
+      let painting=false;
+      this.canvas.addEventListener('pointerdown', ()=> painting=true);
+      this.canvas.addEventListener('pointerup', ()=> painting=false);
+      this.canvas.addEventListener('pointermove', (e)=>{
+        if(!painting) return;
+        const rect = this.canvas.getBoundingClientRect();
+        const cx = Math.floor((e.clientX - rect.left) / this.cellPx);
+        const cy = Math.floor((e.clientY - rect.top) / this.cellPx);
+        if(!this.grid.inBounds(cx,cy)) return;
+        // toggle food while dragging for quick placement
+        this.grid.get(cx,cy).food = randInt(1,3);
+      });
+    }
+  }
+
+  // init
+  const canvas = document.getElementById('world');
+  const sim = new Simulator(canvas);
+  sim.draw();
+
+  </script>
+</body>
+</html>
