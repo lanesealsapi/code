@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Haiku Generator 3🌸</title>
+<style>
+  body{margin:0;font-family:sans-serif;background:linear-gradient(180deg,#fffafc,#f8f4ff);color:#444;display:flex;justify-content:center;align-items:center;height:100vh}
+  .card{background:#fff;padding:24px;border-radius:16px;box-shadow:0 6px 18px rgba(0,0,0,0.1);max-width:400px;text-align:center}
+  h1{margin:0 0 12px;color:#a06cd5}
+  .haiku{white-space:pre-wrap;font-size:20px;line-height:1.5;color:#6a994e;margin:20px 0;background:#faf6ff;padding:16px;border-radius:12px}
+  button{padding:10px 18px;border:none;border-radius:10px;font-weight:bold;cursor:pointer;background:linear-gradient(90deg,#a06cd5,#f28482);color:#fff}
+  footer{margin-top:12px;font-size:12px;color:#999}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🌸 Haiku</h1>
+  <div id="haiku" class="haiku">Press generate for positivity!</div>
+  <button id="genBtn">Generate Haiku</button>
+  <footer>Random female voice each time</footer>
+</div>
+
+<script>
+const words=["joy","peace","love","hope","bloom","shine","glow","happy","grace","smile","brave","kind",
+"cheer","calm","dream","spark","light","trust","pure","radiant","serene","uplift","zeal","flourish",
+"gentle","harmony","inspire","jubilant","lively","miracle","optimism","thriving","tranquil","vibrant",
+"wonder","wisdom","victory","warm","abundant","adore","bright","delight","fantastic","friendly",
+"golden","grateful","healthy","ideal","merry","mindful","pleasant","positive","strong","sunny",
+"thankful","thrill","verdant","wondrous","courage","creative","dazzle","embrace","enjoy","faith",
+"favorite","focus","fresh","glimmer","glorious","gracious","honest","hug","motivated","open",
+"rejoice","resilient","sparkle"];
+function syllables(word){
+  const special={love:1,joy:1,peace:1,hope:1,light:1};
+  if(special[word]) return special[word];
+  let m=word.match(/[aeiouy]+/g);let c=m?m.length:1;
+  if(word.endsWith("e")) c--;return c<1?1:c;
+}
+function buildLine(n){
+  let out=[],s=0,tries=0;
+  while(s<n && tries<500){
+    let w=words[Math.floor(Math.random()*words.length)];
+    let syl=syllables(w);
+    if(s+syl<=n){out.push(w);s+=syl;}
+    tries++;
+  }
+  return out.join(" ");
+}
+function makeHaiku(){return [buildLine(5),buildLine(7),buildLine(5)].map(l=>l.charAt(0).toUpperCase()+l.slice(1)).join("\n");}
+
+const haikuEl=document.getElementById("haiku");
+const synth=window.speechSynthesis;
+let voices=[];
+
+function getFemaleVoices(){
+  return voices.filter(v=>/female|woman|samantha|zira|google uk english female/i.test(v.name));
+}
+function pickRandomVoice(){
+  let fv=getFemaleVoices();
+  if(fv.length) return fv[Math.floor(Math.random()*fv.length)];
+  return voices.length?voices[Math.floor(Math.random()*voices.length)]:null;
+}
+function speak(text){
+  if(!text)return;
+  synth.cancel();
+  let u=new SpeechSynthesisUtterance(text);
+  u.voice=pickRandomVoice();
+  u.rate=0.5;
+  synth.speak(u);
+}
+document.getElementById("genBtn").onclick=()=>{
+  let h=makeHaiku();
+  haikuEl.textContent=h;
+  speak(h);
+};
+speechSynthesis.onvoiceschanged=()=>{voices=synth.getVoices();};
+voices=synth.getVoices();
+</script>
+</body>
+</html>
