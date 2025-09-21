@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SmokeLess — Calm habit helper</title>
+  <style>
+    :root{
+      --bg:#f7fbff; --card:#ffffff; --muted:#6b7280; --accent:#4f46e5; --good:#10b981; --soft:#eef2ff;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--bg),#ffffff);}
+    .wrap{max-width:900px;margin:28px auto;padding:20px}
+    header{display:flex;align-items:center;gap:16px}
+    .logo{width:56px;height:56px;border-radius:12px;background:linear-gradient(135deg,var(--accent),#06b6d4);display:flex;align-items:center;justify-content:center;color:white;font-weight:700}
+    h1{margin:0;font-size:20px}
+    p.lead{margin:6px 0;color:var(--muted)}
+    .grid{display:grid;grid-template-columns:1fr 320px;gap:16px;margin-top:18px}
+    .card{background:var(--card);border-radius:14px;box-shadow:0 6px 18px rgba(16,24,40,0.06);padding:18px}
+    .big{font-size:36px;font-weight:700}
+    .muted{color:var(--muted)}
+    .controls{display:flex;gap:8px;margin-top:12px}
+    button{background:var(--accent);color:white;border:none;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:600}
+    button.ghost{background:transparent;color:var(--accent);border:1px solid rgba(79,70,229,0.12)}
+    input[type=range]{width:100%}
+    .center{text-align:center}
+    .small{font-size:13px}
+    ul{padding-left:18px;margin:8px 0}
+    .progress{height:10px;background:var(--soft);border-radius:999px;overflow:hidden}
+    .progress > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#06b6d4)}
+    .stats{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+    .stat{flex:1;min-width:120px;padding:10px;border-radius:8px;background:linear-gradient(180deg,#fff,#fbfdff);text-align:center}
+    footer{margin-top:16px;color:var(--muted);font-size:13px}
+    .badge{display:inline-block;padding:6px 9px;border-radius:999px;background:rgba(16,185,129,0.12);color:var(--good);font-weight:600}
+    .calm{border-left:4px solid var(--accent);padding-left:12px;margin-top:12px}
+    /* small responsive */
+    @media (max-width:880px){.grid{grid-template-columns:1fr} .logo{width:48px;height:48px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">SL</div>
+      <div>
+        <h1>SmokeLess — a gentle app to help you smoke less</h1>
+        <p class="lead">A friendly timer, simple goals, and calm reminders — keep it light, keep it kind.</p>
+      </div>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div class="small muted">Next cigarette timer</div>
+            <div id="countdown" class="big">—:—</div>
+            <div class="small muted">Time until your next scheduled smoke</div>
+          </div>
+          <div style="width:120px;text-align:center">
+            <div id="smokeIcon" style="font-size:40px">🚭</div>
+            <div class="small muted">You got this</div>
+          </div>
+        </div>
+
+        <div class="controls">
+          <button id="postpone">Postpone +5m</button>
+          <button id="reset" class="ghost">Reset timer</button>
+          <button id="iSmoked" class="ghost">I smoked</button>
+        </div>
+
+        <div style="margin-top:12px">
+          <label class="small muted">Target minimum minutes between cigarettes: <strong id="minsLabel">60</strong> min</label>
+          <input id="mins" type="range" min="10" max="240" value="60" />
+        </div>
+
+        <div style="margin-top:14px;display:flex;gap:10px;align-items:center">
+          <div style="flex:1">
+            <div class="small muted">Daily cigarette limit</div>
+            <input id="daily" type="range" min="1" max="50" value="10" />
+            <div class="small muted">Set a realistic number for today. You can change it anytime.</div>
+          </div>
+          <div style="width:120px;text-align:center">
+            <div class="badge" id="dailyBadge">10 / day</div>
+          </div>
+        </div>
+
+        <div class="calm small muted">
+          <strong>Reminder:</strong> If you slip, it's okay. Small steps add up. Breathe — try the breathing tool below when cravings hit.
+        </div>
+
+        <div style="margin-top:12px">
+          <div class="small muted">Progress</div>
+          <div class="progress" aria-hidden="true" style="margin-top:6px"><i id="progressBar" style="width:0%"></i></div>
+          <div style="display:flex;justify-content:space-between;margin-top:8px">
+            <div class="small muted">Cigarettes today: <strong id="todayCount">0</strong></div>
+            <div class="small muted">Streak days: <strong id="streak">0</strong></div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+          <button id="breathe" class="ghost">Breathing exercise</button>
+          <button id="logButton" class="ghost">View log</button>
+        </div>
+      </section>
+
+      <aside class="card">
+        <div style="text-align:center">
+          <div class="small muted">Motivation</div>
+          <h2 style="margin:6px 0">Run faster, jump farther</h2>
+          <p class="muted small">Every minute you replace with movement, your body thanks you. We'll keep reminders friendly.</p>
+        </div>
+
+        <div style="margin-top:12px">
+          <div class="small muted">Quick tips</div>
+          <ul class="small muted">
+            <li>Swap one cigarette a day for a 5-minute walk.</li>
+            <li>Drink a glass of water when a craving comes.</li>
+            <li>Short breathing sessions reduce urge intensity.</li>
+          </ul>
+        </div>
+
+        <div style="margin-top:10px">
+          <div class="small muted">Achievements</div>
+          <div class="stats">
+            <div class="stat">
+              <div class="small muted">Longest gap</div>
+              <div id="longest" style="font-weight:700">0m</div>
+            </div>
+            <div class="stat">
+              <div class="small muted">Cigarettes avoided</div>
+              <div id="avoided" style="font-weight:700">0</div>
+            </div>
+            <div class="stat">
+              <div class="small muted">Run-ready</div>
+              <div id="runReady" style="font-weight:700">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;text-align:center">
+          <button id="startStop">Start</button>
+          <div class="small muted" style="margin-top:8px">Gentle nudges when your timer ends — not scary, just kind reminders.</div>
+        </div>
+
+        <footer>
+          <div style="margin-top:12px">Saved locally in your browser. No accounts, no judgment.</div>
+        </footer>
+      </aside>
+    </div>
+
+    <!-- modal / log -->
+    <div id="modal" style="display:none;position:fixed;inset:0;background:rgba(2,6,23,0.4);align-items:center;justify-content:center;padding:20px">
+      <div style="background:white;padding:18px;border-radius:12px;max-width:720px;width:100%;box-shadow:0 10px 30px rgba(2,6,23,0.3)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h3 style="margin:0">Today log</h3>
+          <button id="closeModal" class="ghost">Close</button>
+        </div>
+        <div id="logArea" style="margin-top:12px;max-height:320px;overflow:auto;font-size:13px;color:var(--muted)"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Simple local storage state
+    const state = {
+      minsBetween: 60, dailyLimit: 10, todayCount: 0, started: false,
+      nextSmoke: null, log: [], longestGap: 0, streak: 0
+    };
+
+    const $ = id => document.getElementById(id);
+    const mins = $('mins'), minsLabel = $('minsLabel'), daily = $('daily'), dailyBadge = $('dailyBadge');
+    const countdown = $('countdown'), progressBar = $('progressBar');
+    const post = $('postpone'), reset = $('reset'), iSmoked = $('iSmoked');
+    const startStop = $('startStop'), breathe = $('breathe'), logButton = $('logButton');
+    const modal = $('modal'), closeModal = $('closeModal'), logArea = $('logArea');
+
+    // load state from localStorage
+    function load(){
+      try{
+        const raw = localStorage.getItem('smokeless_v1');
+        if(raw){
+          const s = JSON.parse(raw);
+          Object.assign(state,s);
+        }
+      }catch(e){console.warn(e)}
+      mins.value = state.minsBetween;
+      minsLabel.textContent = state.minsBetween;
+      daily.value = state.dailyLimit;
+      dailyBadge.textContent = `${state.dailyLimit} / day`;
+      $('todayCount').textContent = state.todayCount;
+      $('longest').textContent = state.longestGap + 'm';
+      $('avoided').textContent = (state.avoided||0);
+      $('streak').textContent = state.streak;
+      updateRunReady();
+    }
+
+    function save(){ localStorage.setItem('smokeless_v1', JSON.stringify(state)); }
+
+    function updateRunReady(){
+      const minutes = Math.max(0, Math.round(state.minsBetween - (state.todayCount * 2)));
+      $('runReady').textContent = minutes + ' min gap goal';
+    }
+
+    mins.addEventListener('input', ()=>{
+      state.minsBetween = parseInt(mins.value,10);
+      minsLabel.textContent = state.minsBetween;
+      save();
+    });
+    daily.addEventListener('input', ()=>{
+      state.dailyLimit = parseInt(daily.value,10);
+      dailyBadge.textContent = `${state.dailyLimit} / day`;
+      save();
+    });
+
+    post.addEventListener('click', ()=>{
+      if(!state.nextSmoke) scheduleNow();
+      state.nextSmoke = Date.now() + 5*60*1000; // add 5 min
+      save();
+      tick();
+    });
+    reset.addEventListener('click', ()=>{
+      scheduleNow();
+    });
+
+    iSmoked.addEventListener('click', ()=>{ recordSmoke(); });
+
+    startStop.addEventListener('click', ()=>{
+      state.started = !state.started;
+      startStop.textContent = state.started ? 'Pause' : 'Start';
+      if(state.started && !state.nextSmoke) scheduleNow();
+      save();
+    });
+
+    breathe.addEventListener('click', ()=>{ startBreathingExercise(); });
+
+    logButton.addEventListener('click', ()=>{
+      openLog();
+    });
+    closeModal.addEventListener('click', ()=>{ modal.style.display='none'; });
+
+    function scheduleNow(){
+      state.nextSmoke = Date.now() + state.minsBetween*60*1000;
+      save();
+      tick();
+    }
+
+    function recordSmoke(){
+      const now = Date.now();
+      // if a smoke recorded while not started, start app automatically
+      if(!state.started) state.started = true, startStop.textContent='Pause';
+
+      // count today
+      state.todayCount = (state.todayCount||0) + 1;
+      // log
+      const prev = state.lastSmoke || null;
+      if(prev){
+        const gap = Math.round((now - prev)/60000);
+        if(gap > state.longestGap) state.longestGap = gap;
+      }
+      state.lastSmoke = now;
+      state.avoided = Math.max(0, (state.avoided||0));
+
+      state.log = state.log || [];
+      state.log.unshift({t: now, type:'smoked'});
+
+      // schedule next
+      state.nextSmoke = now + state.minsBetween*60*1000;
+
+      // update daily avoidance estimate
+      const avoidedToday = Math.max(0, state.dailyLimit - state.todayCount);
+      // friendly not scary message
+      showToast(`Nice — you logged a smoke. Today's count: ${state.todayCount}. Try a 2-minute walk.`);
+
+      // if user exceeded daily goal, a gentle nudge
+      if(state.todayCount > state.dailyLimit){ showToast("You've passed today's target — try adjusting tomorrow's target to be realistic."); }
+
+      $('todayCount').textContent = state.todayCount;
+      $('longest').textContent = state.longestGap + 'm';
+      $('avoided').textContent = state.avoided;
+      save();
+      tick();
+    }
+
+    // Tick every second
+    setInterval(tick,1000);
+    function tick(){
+      // update progress
+      if(state.nextSmoke){
+        const ms = state.nextSmoke - Date.now();
+        if(ms <= 0){
+          countdown.textContent = 'Now';
+          progressBar.style.width = '100%';
+          // notify gently
+          if(state.started){ gentleNotify(); state.nextSmoke = null; save(); }
+        } else {
+          const m = Math.floor(ms/60000); const s = Math.floor((ms%60000)/1000);
+          countdown.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+          const total = state.minsBetween*60*1000; const pct = Math.min(100, Math.round(100*(1 - ms/total)));
+          progressBar.style.width = pct + '%';
+        }
+      } else {
+        countdown.textContent = '—:—';
+      }
+      // progress toward daily limit
+      const pctDay = Math.min(100, Math.round(100 * (state.todayCount / Math.max(1,state.dailyLimit))));
+      // badge or progress could be tied to this
+    }
+
+    // Gentle desktop notification + soft sound (if allowed)
+    function gentleNotify(){
+      // friendly modal-free notice
+      const msg = 'Time for your planned break. Gentle reminder — consider a short walk or water.';
+      showToast(msg);
+      // try browser notification
+      if(Notification && Notification.permission === 'granted'){
+        new Notification('SmokeLess reminder', {body: msg});
+      } else if(Notification && Notification.permission !== 'denied'){
+        Notification.requestPermission().then(()=>{});
+      }
+    }
+
+    // lightweight toast
+    function showToast(text){
+      const el = document.createElement('div');
+      el.textContent = text; el.style.position='fixed'; el.style.right='18px'; el.style.bottom='18px';
+      el.style.background='white'; el.style.padding='12px 14px'; el.style.borderRadius='12px'; el.style.boxShadow='0 8px 20px rgba(2,6,23,0.12)';
+      el.style.fontSize='13px'; document.body.appendChild(el);
+      setTimeout(()=>{ el.style.opacity='0'; setTimeout(()=>el.remove(),500); },4000);
+    }
+
+    // breathing exercise simple animation
+    function startBreathingExercise(){
+      const steps = [4,4,6]; // inhale hold exhale in seconds
+      let i = 0; let phase = 0;
+      showModalBreath();
+      function showModalBreath(){
+        const m = document.createElement('div');
+        m.style.position='fixed'; m.style.inset='0'; m.style.display='flex'; m.style.alignItems='center'; m.style.justifyContent='center';
+        m.style.background='rgba(2,6,23,0.45)';
+        const box = document.createElement('div'); box.style.background='white'; box.style.padding='18px'; box.style.borderRadius='12px'; box.style.textAlign='center';
+        const circle = document.createElement('div'); circle.style.width='120px'; circle.style.height='120px'; circle.style.borderRadius='999px'; circle.style.margin='8px auto'; circle.style.transition='all 1s ease';
+        const label = document.createElement('div'); label.style.fontSize='16px'; label.style.color='var(--muted)'; label.textContent='Get comfortable...';
+        box.appendChild(circle); box.appendChild(label);
+        m.appendChild(box); document.body.appendChild(m);
+        let stepIndex = 0;
+        function nextPhase(){
+          if(stepIndex >= 6) { m.remove(); return; }
+          const t = steps[stepIndex%3];
+          const phaseName = ['Inhale','Hold','Exhale'][stepIndex%3];
+          label.textContent = `${phaseName} — ${t}s`;
+          if(phaseName==='Inhale'){ circle.style.transform='scale(1.2)'; }
+          else if(phaseName==='Hold'){ circle.style.transform='scale(1.05)'; }
+          else { circle.style.transform='scale(0.75)'; }
+          stepIndex++;
+          setTimeout(nextPhase, t*1000);
+        }
+        setTimeout(nextPhase,700);
+      }
+    }
+
+    // Simple log viewer
+    function openLog(){
+      modal.style.display='flex';
+      logArea.innerHTML = '';
+      if(!(state.log && state.log.length)){ logArea.textContent = 'No entries yet.'; return; }
+      state.log.forEach(it=>{
+        const d = new Date(it.t);
+        const line = document.createElement('div');
+        line.style.padding='8px 0'; line.style.borderBottom='1px solid #f1f5f9';
+        line.textContent = `${d.toLocaleString()} — ${it.type}`;
+        logArea.appendChild(line);
+      });
+    }
+
+    // init
+    load();
+    // small friendly onboarding if first run
+    if(!localStorage.getItem('smokeless_v1_first')){
+      showToast('Welcome — set a gentle target and start. Small steps add up.');
+      localStorage.setItem('smokeless_v1_first','1');
+    }
+
+    // save periodically
+    setInterval(save,5000);
+  </script>
+</body>
+</html>
