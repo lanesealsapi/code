@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Prayer App (POST demo)</title>
+  <style>
+    :root{
+      --bg:#f6f7fb;
+      --card:#fff;
+      --accent:#2b6cb0;
+      --muted:#6b7280;
+      --success:#16a34a;
+      --danger:#dc2626;
+    }
+    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial}
+    body{display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#eef2ff, var(--bg));padding:24px}
+    .card{width:100%;max-width:520px;background:var(--card);border-radius:12px;box-shadow:0 6px 24px rgba(12,18,34,0.08);padding:20px}
+    h1{margin:0 0 8px;font-size:18px;color:#0f172a}
+    p.lead{margin:0 0 16px;color:var(--muted);font-size:13px}
+    textarea{width:100%;min-height:140px;padding:12px;border-radius:8px;border:1px solid #e6e9ef;font-size:15px;resize:vertical;box-sizing:border-box}
+    .row{display:flex;align-items:center;gap:10px;margin-top:12px}
+    .btn{
+      background:var(--accent);color:#fff;border:0;padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer;
+      display:inline-flex;align-items:center;gap:8px;
+    }
+    .btn:active{transform:translateY(1px)}
+    .btn[disabled]{opacity:.6;cursor:not-allowed}
+    .bell{
+      width:40px;height:40px;border-radius:8px;border:1px solid #e6e9ef;background:#fff;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
+      box-shadow:0 2px 6px rgba(11,15,27,0.04);
+    }
+    .status{margin-left:8px;font-size:13px;color:var(--muted)}
+    .msg{margin-top:12px;padding:10px;border-radius:8px;font-size:14px;display:none}
+    .msg.ok{background:#ecfdf5;color:var(--success);display:block}
+    .msg.err{background:#fff5f5;color:var(--danger);display:block}
+    .footer{margin-top:14px;font-size:12px;color:var(--muted)}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    .icon-bell{width:18px;height:18px;display:inline-block}
+
+    /* Toggle + color input UI */
+    .theme-row{display:flex;align-items:center;gap:8px;margin-top:14px}
+    .toggle{
+      --w:44px;--h:24px;position:relative;width:var(--w);height:var(--h);background:#e6e9ef;border-radius:999px;cursor:pointer;
+      box-shadow:inset 0 0 0 1px rgba(0,0,0,0.03);
+    }
+    .toggle .knob{position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:all .18s ease;box-shadow:0 2px 6px rgba(11,15,27,0.08)}
+    .toggle.on{background:linear-gradient(90deg, var(--accent), #6fb0ff)}
+    .toggle.on .knob{left:calc(var(--w) - 3px - 18px)}
+    .color-input{width:110px;padding:8px;border-radius:8px;border:1px solid #e6e9ef;font-size:13px}
+    .color-preview{width:28px;height:28px;border-radius:6px;border:1px solid #e6e9ef;background:var(--accent);box-shadow:0 1px 3px rgba(11,15,27,0.06)}
+    .small{font-size:13px;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <main class="card" role="main">
+    <h1>Prayer App</h1>
+    <p class="lead">Type a prayer, press Enter to send it (server not hooked up yet).</p>
+
+    <label for="prayer" class="sr-only">Prayer text</label>
+    <textarea id="prayer" placeholder="Type your prayer here..." aria-label="Prayer text"></textarea>
+
+    <div class="row">
+      <button id="enterBtn" class="btn" title="Send prayer">Enter</button>
+
+      <button id="bellBtn" class="bell" title="Bell (jingle on submit)" aria-pressed="true">
+        <svg class="icon-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M15 17H9a3 3 0 0 1-3-3V10a6 6 0 0 1 12 0v4a3 3 0 0 1-3 3z"></path>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+        </svg>
+      </button>
+
+      <div class="status" id="status">Ready</div>
+    </div>
+
+    <div class="theme-row" aria-label="Theme color control">
+      <div style="display:flex;flex-direction:column;">
+        <span class="small">Enable theme color</span>
+        <div id="themeToggle" class="toggle on" role="switch" aria-checked="true" tabindex="0" title="Toggle theme color">
+          <div class="knob" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;">
+        <label for="colorInput" class="small">Color (name, hex, rgb...)</label>
+        <input id="colorInput" class="color-input" type="text" placeholder="e.g. red or #0077ff" aria-label="Theme color input" value="blue">
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:flex-start;">
+        <span class="small">Preview</span>
+        <div id="colorPreview" class="color-preview" title="Color preview"></div>
+      </div>
+    </div>
+
+    <div id="msgOk" class="msg ok" role="status" aria-live="polite" style="display:none"></div>
+    <div id="msgErr" class="msg err" role="alert" aria-live="assertive" style="display:none"></div>
+
+    <div class="footer">
+      POST URL: <strong id="postUrl">https://example.com/prayers</strong>
+    </div>
+  </main>
+
+  <script>
+    // Configuration: change this to your server endpoint when ready
+    const POST_URL = "https://example.com/prayers";
+
+    const prayerEl = document.getElementById('prayer');
+    const enterBtn = document.getElementById('enterBtn');
+    const bellBtn = document.getElementById('bellBtn');
+    const statusEl = document.getElementById('status');
+    const msgOk = document.getElementById('msgOk');
+    const msgErr = document.getElementById('msgErr');
+    document.getElementById('postUrl').textContent = POST_URL;
+
+    // Theme controls
+    const themeToggle = document.getElementById('themeToggle');
+    const colorInput = document.getElementById('colorInput');
+    const colorPreview = document.getElementById('colorPreview');
+    let themeEnabled = true;
+
+    // Initialize accent from input
+    function applyAccent(color) {
+      // Validate color by trying to set on a dummy element
+      const s = new Option().style;
+      s.color = '';
+      s.color = color;
+      const valid = !!s.color;
+      if (valid && themeEnabled) {
+        document.documentElement.style.setProperty('--accent', color);
+        // update preview and toggle appearance
+        colorPreview.style.background = color;
+        themeToggle.classList.add('on');
+      } else {
+        // if not valid, do not apply but update preview as invalid indicator (light border)
+        colorPreview.style.background = valid ? color : 'transparent';
+        colorPreview.style.borderColor = valid ? '#e6e9ef' : '#f3c6c6';
+      }
+      // keep toggle visual regardless
+      themeToggle.style.setProperty('--accent', color);
+      colorPreview.setAttribute('data-valid', String(valid));
+      return valid;
+    }
+
+    // Event: toggle on/off
+    function setThemeEnabled(enabled) {
+      themeEnabled = enabled;
+      themeToggle.setAttribute('aria-checked', String(enabled));
+      themeToggle.classList.toggle('on', enabled);
+      colorInput.disabled = !enabled;
+      if (!enabled) {
+        // revert to default accent when disabled
+        document.documentElement.style.setProperty('--accent', '#2b6cb0');
+        colorPreview.style.background = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+      } else {
+        applyAccent(colorInput.value);
+      }
+    }
+
+    // Toggle click & keyboard
+    themeToggle.addEventListener('click', () => setThemeEnabled(!themeEnabled));
+    themeToggle.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setThemeEnabled(!themeEnabled); }
+    });
+
+    // When color input changes, try to apply
+    colorInput.addEventListener('input', () => {
+      const val = colorInput.value.trim();
+      applyAccent(val);
+    });
+
+    // Initialize UI state
+    colorInput.value = 'blue';
+    colorPreview.style.background = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+    applyAccent(colorInput.value);
+    setThemeEnabled(true);
+
+    // Web Audio bell jingle
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playBellOnce() {
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+
+      const fm = audioCtx.createOscillator();
+      fm.type = 'sine';
+      fm.frequency.setValueAtTime(880, now);
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(440, now);
+
+      const master = audioCtx.createGain();
+      master.gain.setValueAtTime(0.0001, now);
+      master.gain.exponentialRampToValueAtTime(0.6, now + 0.001);
+      master.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
+
+      const modGain = audioCtx.createGain();
+      modGain.gain.setValueAtTime(30, now);
+      fm.connect(modGain);
+      modGain.connect(osc.frequency);
+
+      osc.connect(master);
+      master.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      gain.gain.setValueAtTime(1, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
+
+      osc.start(now);
+      fm.start(now);
+
+      osc.stop(now + 0.7);
+      fm.stop(now + 0.7);
+    }
+
+    // Toggle whether the bell is enabled for the enter action; visual state toggles aria-pressed.
+    let bellEnabled = true;
+    bellBtn.addEventListener('click', () => {
+      bellEnabled = !bellEnabled;
+      bellBtn.style.opacity = bellEnabled ? '1' : '0.5';
+      bellBtn.setAttribute('aria-pressed', String(bellEnabled));
+      statusEl.textContent = bellEnabled ? 'Bell on' : 'Bell off';
+    });
+
+    // Send POST request with the prayer text.
+    async function sendPrayer(text) {
+      if (!text || !text.trim()) { showError('Please enter a prayer before sending.'); return; }
+      enterBtn.disabled = true;
+      statusEl.textContent = 'Sending...';
+      hideMessages();
+
+      if (bellEnabled) {
+        try { playBellOnce(); } catch (e) { /* ignore audio errors */ }
+      }
+
+      try {
+        const resp = await fetch(POST_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prayer: text, timestamp: new Date().toISOString() })
+        });
+
+        if (!resp.ok) {
+          const txt = await safeText(resp);
+          showError(`Server responded: ${resp.status} ${resp.statusText}${txt ? ' — ' + txt : ''}`);
+        } else {
+          const data = await safeJson(resp);
+          showOk('Prayer sent' + (data && data.message ? (': ' + data.message) : '.'));
+          prayerEl.value = '';
+        }
+      } catch (err) {
+        showError('Could not send prayer (server may be unreachable).');
+      } finally {
+        enterBtn.disabled = false;
+        statusEl.textContent = 'Ready';
+      }
+    }
+
+    // Helpers
+    function safeJson(resp) { return resp.text().then(t => { try { return JSON.parse(t); } catch { return null; } }); }
+    function safeText(resp) { return resp.text().catch(()=>''); }
+    function showOk(msg){ msgOk.textContent = msg; msgOk.style.display = 'block'; msgErr.style.display = 'none'; }
+    function showError(msg){ msgErr.textContent = msg; msgErr.style.display = 'block'; msgOk.style.display = 'none'; }
+    function hideMessages(){ msgOk.style.display = 'none'; msgErr.style.display = 'none'; }
+
+    // Button click or Enter key: send
+    enterBtn.addEventListener('click', () => sendPrayer(prayerEl.value));
+    prayerEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        sendPrayer(prayerEl.value);
+      }
+    });
+
+    // Accessibility: focus textarea on load
+    window.addEventListener('load', () => prayerEl.focus());
+  </script>
+</body>
+</html>
