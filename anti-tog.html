@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sunday Love ❤️ — A Tiny Happy App</title>
+  <style>
+    :root{
+      --bg1: #fff7ed; --bg2:#fffbeb; --accent:#ff6b81; --accent2:#6ee7b7; --muted:#6b7280;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--bg1),var(--bg2));}
+    .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px}
+    .card{width:100%;max-width:920px;background:rgba(255,255,255,0.9);backdrop-filter:blur(6px);border-radius:18px;box-shadow:0 12px 40px rgba(16,24,40,0.08);padding:22px}
+    header{display:flex;gap:16px;align-items:center}
+    .logo{width:68px;height:68px;border-radius:18px;background:linear-gradient(135deg,var(--accent),#ff9aa2);display:flex;align-items:center;justify-content:center;color:white;font-weight:800;font-size:22px}
+    h1{margin:0;font-size:22px}
+    p.lead{margin:6px 0;color:var(--muted)}
+    .grid{display:grid;grid-template-columns:1fr 340px;gap:18px;margin-top:16px}
+    .big-quote{font-size:28px;font-weight:700;color:#111827;line-height:1.05}
+    .heart-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+    .heart{width:46px;height:46px;border-radius:12px;background:linear-gradient(135deg,#ffd7e0,#ffd1f0);display:flex;align-items:center;justify-content:center;font-size:20px}
+    button{background:var(--accent);color:white;border:none;padding:10px 14px;border-radius:12px;cursor:pointer;font-weight:700}
+    button.ghost{background:transparent;color:var(--accent);border:1px solid rgba(255,107,129,0.12)}
+    .muted{color:var(--muted)}
+    .center{text-align:center}
+    .hug{font-size:42px}
+    .kind-list{margin-top:10px}
+    .kind-item{padding:8px;border-radius:8px;background:linear-gradient(180deg,#fff,#fff8fb);margin-bottom:8px}
+    .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    .bubble{font-size:15px;padding:10px 12px;border-radius:999px;background:linear-gradient(90deg,#fff,#fff);box-shadow:0 6px 14px rgba(16,24,40,0.04)}
+    footer{margin-top:14px;color:var(--muted);font-size:13px}
+    /* floating hearts animation */
+    .float-wrap{position:relative;height:220px;overflow:hidden}
+    .float-heart{position:absolute;opacity:0.9;filter:drop-shadow(0 6px 18px rgba(255,107,129,0.12));}
+    @keyframes floaty{0%{transform:translateY(40px) scale(0.8); opacity:0}20%{opacity:1}100%{transform:translateY(-260px) scale(1.15); opacity:0}}
+    @media (max-width:920px){.grid{grid-template-columns:1fr} .logo{width:58px;height:58px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card" role="main" aria-labelledby="title">
+      <header>
+        <div class="logo">💌</div>
+        <div>
+          <h1 id="title">Sunday Love — a tiny app to cheer you up</h1>
+          <p class="lead">Gentle animations, friendly prompts, and little kindness actions for you and others. Tap anything you like — it's safe, soft, and non-scary.</p>
+        </div>
+      </header>
+
+      <div class="grid">
+        <section>
+          <div class="big-quote" id="quote">"You are enough. Today and always."</div>
+          <div class="heart-row" aria-hidden="true">
+            <div class="heart">🌈</div>
+            <div class="heart">🌞</div>
+            <div class="heart">☕</div>
+            <div class="heart">🌿</div>
+            <div class="heart">🎶</div>
+          </div>
+
+          <div class="float-wrap" id="floatWrap" aria-hidden="true"></div>
+
+          <div class="controls">
+            <button id="confettiBtn">Send confetti</button>
+            <button id="hugBtn" class="ghost">Send a virtual hug</button>
+            <button id="songBtn" class="ghost">Play calm song</button>
+            <button id="kindBtn" class="ghost">Kindness idea</button>
+          </div>
+
+          <div style="margin-top:12px">
+            <div class="muted small">Today's kindness ideas</div>
+            <div id="kindList" class="kind-list" aria-live="polite"></div>
+          </div>
+
+          <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+            <input id="personalMsg" placeholder="Write a short kind message..." style="flex:1;padding:10px;border-radius:10px;border:1px solid #f3e8ff" />
+            <button id="shareBtn">Share</button>
+          </div>
+
+          <div style="margin-top:12px;font-size:13px;color:var(--muted)">No sign-in. Everything runs in this page. Be kind to yourself — take a breath, smile, sip something nice.</div>
+        </section>
+
+        <aside>
+          <div style="text-align:center">
+            <div class="hug">🤗</div>
+            <div style="margin-top:8px;font-weight:700">Need a hug? You got one.</div>
+            <p class="muted">Press the hug button for a soft animation and an encouraging line.</p>
+          </div>
+
+          <div style="margin-top:12px">
+            <div class="muted small">Playlists</div>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+              <button class="bubble" data-track="calm">Slow afternoon — 10m</button>
+              <button class="bubble" data-track="bright">Sunny boost — 6m</button>
+              <button class="bubble" data-track="cozy">Cozy coffee — 8m</button>
+            </div>
+          </div>
+
+          <div style="margin-top:12px">
+            <div class="muted small">Affirmations</div>
+            <div style="margin-top:8px">
+              <div class="muted">Tap to cycle</div>
+              <div style="margin-top:8px;font-weight:700" id="affirm">I am worthy of care.</div>
+            </div>
+          </div>
+
+          <footer>
+            <div style="margin-top:12px;color:var(--muted);font-size:13px;text-align:center">Made with a tiny bit of love ❤️ — share with someone who needs it.</div>
+          </footer>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+  <!-- confetti lib (cdn) -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <script>
+    // gentle uplifting app
+    const quotes = [
+      "You are enough. Today and always.",
+      "Small joys add up — notice one now.",
+      "Breathe in kindness, breathe out worry.",
+      "A tiny act of love matters more than you know.",
+      "Sunday softness: permission to rest."
+    ];
+    const kindness = [
+      "Send a short message to someone telling them you appreciate them.",
+      "Make yourself a warm drink and sit by a window for 5 minutes.",
+      "Write down one thing you did well this week.",
+      "Take a 3-minute walk and notice three things you like.",
+      "Give a genuine compliment to a friend or stranger."
+    ];
+
+    const quoteEl = document.getElementById('quote');
+    const kindList = document.getElementById('kindList');
+    const floatWrap = document.getElementById('floatWrap');
+    const affirm = document.getElementById('affirm');
+
+    function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+    // initial
+    quoteEl.textContent = pick(quotes);
+    populateKindList();
+
+    // floating hearts
+    function spawnHeart(x){
+      const el = document.createElement('div');
+      el.className = 'float-heart';
+      el.style.left = (x||Math.random()*80+10) + '%';
+      el.style.bottom = '-20px';
+      const size = Math.random()*28 + 24; el.style.width = size + 'px'; el.style.height = size + 'px';
+      el.style.fontSize = (size*0.6) + 'px';
+      el.style.animation = 'floaty ' + (Math.random()*5 + 5) + 's linear forwards';
+      el.textContent = ['❤','💛','💚','💙'][Math.floor(Math.random()*4)];
+      floatWrap.appendChild(el);
+      setTimeout(()=>el.remove(),12000);
+    }
+    // gentle auto spawn
+    setInterval(()=>spawnHeart(),1400);
+
+    // confetti
+    document.getElementById('confettiBtn').addEventListener('click', ()=>{
+      confetti({particleCount:80, spread:80, origin:{y:0.6}});
+    });
+
+    // hug button (soft animation + quote)
+    document.getElementById('hugBtn').addEventListener('click', ()=>{
+      for(let i=0;i<8;i++) setTimeout(()=>spawnHeart(40+Math.random()*20), i*120);
+      const next = pick(quotes);
+      quoteEl.textContent = next;
+      speak(next);
+    });
+
+    // kindness idea
+    document.getElementById('kindBtn').addEventListener('click', ()=>{
+      const k = pick(kindness);
+      prependKind(k);
+      speak(k);
+    });
+
+    // play simple mellow track using WebAudio (small synth loop)
+    let audioCtx, loopNode;
+    document.getElementById('songBtn').addEventListener('click', async ()=>{
+      if(!audioCtx){ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+      if(loopNode){ loopNode.stop(); loopNode = null; document.getElementById('songBtn').textContent = 'Play calm song'; return; }
+      document.getElementById('songBtn').textContent = 'Stop song';
+      // create a gentle synth loop
+      const gain = audioCtx.createGain(); gain.gain.value = 0.06; gain.connect(audioCtx.destination);
+      const osc = () => { const o = audioCtx.createOscillator(); o.type='sine'; o.frequency.value = 220; const g = audioCtx.createGain(); g.gain.value = 0.0015; o.connect(g); g.connect(gain); return {o,g}; };
+      loopNode = audioCtx.createBufferSource ? {} : {};
+      // simple sequence
+      const notes = [220, 246.94, 196, 174.61];
+      let idx = 0;
+      const playNote = ()=>{
+        const o = audioCtx.createOscillator(); o.type='sine'; o.frequency.value = notes[idx%notes.length];
+        const ga = audioCtx.createGain(); ga.gain.value = 0.0001;
+        o.connect(ga); ga.connect(gain);
+        o.start();
+        ga.gain.exponentialRampToValueAtTime(0.02, audioCtx.currentTime + 1.6);
+        ga.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 3.4);
+        setTimeout(()=>o.stop(), 3400);
+        idx++;
+      };
+      playNote();
+      const iv = setInterval(playNote, 1600);
+      loopNode = { stop: ()=> clearInterval(iv) };
+    });
+
+    // playlist soft buttons (they just show a kindness item)
+    document.querySelectorAll('[data-track]').forEach(b=>b.addEventListener('click', ()=>{
+      const t = b.getAttribute('data-track');
+      const msg = t==='calm' ? 'Take a slow 5-minute walk.' : t==='bright' ? 'Open a window and smile at the sky.' : 'Make yourself a warm drink and savor it.';
+      prependKind(msg);
+      speak(msg);
+    }));
+
+    // affirmations cycle
+    const affs = [
+      'I am worthy of care.', 'I am allowed to rest.', 'My small steps matter.', 'I bring light to my world.'
+    ];
+    affirm.addEventListener('click', ()=>{ affirm.textContent = pick(affs); speak(affirm.textContent); });
+
+    // share button
+    document.getElementById('shareBtn').addEventListener('click', ()=>{
+      const msg = document.getElementById('personalMsg').value.trim();
+      if(!msg) { prependKind('You sent a smile!'); showTiny('Shared a smile.'); return; }
+      prependKind('You wrote: "' + msg + '"'); document.getElementById('personalMsg').value=''; showTiny('Message saved locally.');
+    });
+
+    function populateKindList(){
+      kindList.innerHTML='';
+      kindness.slice(0,5).forEach(k=>{
+        const el = document.createElement('div'); el.className='kind-item'; el.textContent = k; kindList.appendChild(el);
+      });
+    }
+    function prependKind(k){
+      const el = document.createElement('div'); el.className='kind-item'; el.textContent = k;
+      kindList.insertBefore(el, kindList.firstChild);
+    }
+
+    // small accessible speak
+    function speak(text){
+      if('speechSynthesis' in window){ const u = new SpeechSynthesisUtterance(text); u.rate=1; u.pitch=1; speechSynthesis.speak(u); }
+    }
+
+    function showTiny(text){ const d=document.createElement('div'); d.textContent=text; d.style.position='fixed'; d.style.left='12px'; d.style.bottom='12px'; d.style.background='white'; d.style.padding='10px 12px'; d.style.borderRadius='10px'; d.style.boxShadow='0 8px 20px rgba(2,6,23,0.12)'; document.body.appendChild(d); setTimeout(()=>{ d.style.opacity=0; setTimeout(()=>d.remove(),500); },2500); }
+
+    // small welcome
+    setTimeout(()=>{ showTiny('Happy Sunday — sending a little love.'); },700);
+  </script>
+</body>
+</html>
