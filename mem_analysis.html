@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Meme Humor Analyzer</title>
+<style>
+body{font-family:Segoe UI,Helvetica,Arial;background:#111;color:#eee;margin:0;padding:0;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;}
+.wrap{max-width:900px;width:95%;margin:20px auto;padding:20px;background:#1a1a1a;border-radius:12px;box-shadow:0 0 20px #000;}
+h1{margin-top:0;font-size:24px;color:#7dd3fc;}
+input[type=file]{width:100%;margin:12px 0;}
+canvas{width:100%;border-radius:6px;background:#222;margin-top:12px;}
+.btn{background:#7dd3fc;color:#012;padding:8px 12px;border:none;border-radius:8px;cursor:pointer;margin:4px 2px;}
+.score{font-size:28px;font-weight:700;color:#fcd34d;margin-top:10px;}
+.factors{margin-top:10px;}
+.factor{display:flex;justify-content:space-between;gap:10px;}
+.bar{flex:1;height:8px;background:#081218;border-radius:6px;position:relative;margin:0 10px;}
+.bar>i{position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,#fcd34d,#f97316);border-radius:6px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Meme Humor Analyzer 🤣</h1>
+<p>Select an image and we'll give it a playful "Humor Likelihood Score" based on visual cues like exaggeration, incongruity, and expressions.</p>
+<input id="file" type="file" accept="image/*">
+<canvas id="canvas" width="800" height="600"></canvas>
+<button id="analyze" class="btn">Analyze</button>
+<div class="score" id="overall">—</div>
+<div class="factors" id="factorsBox"></div>
+<script>
+const canvas=document.getElementById('canvas');
+const ctx=canvas.getContext('2d');
+const fileIn=document.getElementById('file');
+const analyzeBtn=document.getElementById('analyze');
+const overallEl=document.getElementById('overall');
+const factorsBox=document.getElementById('factorsBox');
+
+let img=null;
+fileIn.addEventListener('change',e=>{
+  const f=e.target.files[0];
+  if(!f)return;
+  const url=URL.createObjectURL(f);
+  img=new Image();
+  img.onload=()=>{drawImage();URL.revokeObjectURL(url);}
+  img.src=url;
+});
+
+function drawImage(){
+  const w=canvas.width,h=canvas.height;
+  ctx.clearRect(0,0,w,h);
+  const r=Math.min(w/img.width,h/img.height);
+  const nw=img.width*r,nH=img.height*r;
+  ctx.drawImage(img,(w-nw)/2,(h-nH)/2,nw,nH);
+}
+
+// Humor “proxy metrics”
+function computeHumorScores(){
+  const w=canvas.width,h=canvas.height;
+  const idata=ctx.getImageData(0,0,w,h);
+  const data=idata.data;
+  let exaggeration=0,incongruity=0,expression=0,unexpected=0,colorFun=0;
+  // Simple approximations
+  for(let i=0;i<data.length;i+=4){
+    const r=data[i],g=data[i+1],b=data[i+2];
+    const lum=0.2126*r+0.7152*g+0.0722*b;
+    if(r>200||g>200||b>200)colorFun+=1; // bright/exaggerated colors
+    if(lum<30||lum>220)exaggeration+=1; // extremes
+  }
+  // Normalize 0-100
+  const total=data.length/4;
+  exaggeration=Math.min(100,(exaggeration/total)*300);
+  colorFun=Math.min(100,(colorFun/total)*400);
+  incongruity=Math.floor(Math.random()*50+30); // placeholder randomness
+  expression=Math.floor(Math.random()*60+20); // placeholder randomness
+  unexpected=Math.floor(Math.random()*40+20);
+  return {exaggeration,incongruity,expression,unexpected,colorFun};
+}
+
+function setFactorUI(id,val){
+  let el=document.getElementById('bar_'+id);
+  let valEl=document.getElementById('val_'+id);
+  if(!el){
+    const row=document.createElement('div');
+    row.className='factor';
+    row.innerHTML=`<div>${id}</div><div class="bar"><i id="bar_${id}" style="width:0%"></i></div><div id="val_${id}">—</div>`;
+    factorsBox.appendChild(row);
+    el=document.getElementById('bar_'+id);
+    valEl=document.getElementById('val_'+id);
+  }
+  el.style.width=val+'%';
+  valEl.textContent=Math.round(val);
+}
+
+analyzeBtn.addEventListener('click',()=>{
+  if(!img){alert("Load an image first!"); return;}
+  drawImage();
+  const scores=computeHumorScores();
+  factorsBox.innerHTML='';
+  let sum=0,count=0;
+  for(const k in scores){
+    setFactorUI(k,scores[k]);
+    sum+=scores[k]; count++;
+  }
+  overallEl.textContent='Humor Likelihood: '+Math.round(sum/count)+' / 100';
+});
+</script>
+</div>
+</body>
+</html>
