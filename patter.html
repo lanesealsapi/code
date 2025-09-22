@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Patience — 8s Breathing Ripple</title>
+<style>
+  :root{
+    --accent-1: #1E90FF; --accent-2: #0B61C6; --accent-pale:#E6F2FF;
+    --bg1:#071430; --bg2:#032341;
+  }
+  body.theme-green { --accent-1:#2DBE8A; --accent-2:#158C5A; --accent-pale:#E9FBF1; --bg1:#062717; --bg2:#083827; }
+
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Arial;color:var(--accent-pale);background:
+    radial-gradient(1200px 600px at 10% 10%, rgba(0,0,0,0.12) 0%, transparent 20%),
+    linear-gradient(180deg,var(--bg1) 0%, var(--bg2) 100%);}
+  .container{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px}
+  .card{width:100%;max-width:720px;border-radius:18px;padding:22px;background:linear-gradient(135deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));box-shadow: 0 10px 36px rgba(2,10,30,0.55);backdrop-filter: blur(8px);border:1px solid rgba(255,255,255,0.03)}
+  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+  h1{margin:0;font-size:28px;color:var(--accent-pale);font-weight:600}
+  .sub{color:rgba(230,242,255,0.72);font-size:13px}
+  .main{display:flex;gap:22px;align-items:center;justify-content:space-between}
+  .circleWrap{width:220px;height:220px;display:grid;place-items:center;position:relative}
+  .pulseCanvas{position:absolute;inset:0;border-radius:50%;pointer-events:none}
+  .circle{
+    width:140px;height:140px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(180deg,var(--accent-1),var(--accent-2));
+    box-shadow: 0 8px 30px rgba(0,0,0,0.45), inset 0 -6px 18px rgba(255,255,255,0.03);
+    transform-origin:center;will-change:transform,filter;
+  }
+  .circle .num{font-size:36px;color:white;font-weight:700;letter-spacing:0.6px}
+  .hintBlock{flex:1;padding-left:18px;display:flex;flex-direction:column;justify-content:center;gap:10px}
+  .hint{color:rgba(230,242,255,0.86);font-size:16px}
+  .muted{color:rgba(230,242,255,0.5);font-size:13px}
+  .controls{display:flex;gap:10px;align-items:center}
+  button{background:linear-gradient(180deg,var(--accent-1),var(--accent-2));border:none;color:white;padding:10px 14px;border-radius:12px;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,0.2)}
+  button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--accent-pale);padding:8px 12px}
+  .switch{display:inline-flex;align-items:center;gap:10px}
+  .toggle{width:46px;height:26px;background:#ffffff12;border-radius:20px;position:relative;cursor:pointer;border:1px solid rgba(255,255,255,0.04)}
+  .knob{width:20px;height:20px;background:white;border-radius:50%;position:absolute;top:3px;left:3px;transition:all 220ms cubic-bezier(.2,.9,.3,1);box-shadow:0 4px 12px rgba(0,0,0,0.35)}
+  .toggle.on{background:linear-gradient(90deg,var(--accent-1),var(--accent-2));}
+  .toggle.on .knob{left:23px; background: #fff;}
+  footer{display:flex;justify-content:space-between;align-items:center;margin-top:16px;color:rgba(230,242,255,0.6);font-size:13px}
+  @media(max-width:700px){.main{flex-direction:column;gap:14px;align-items:center}.hintBlock{padding-left:0;text-align:center}}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="card" role="application" aria-label="Patience app">
+    <header>
+      <div>
+        <h1>Patience</h1>
+        <div class="sub">Patience. Feel each ripple.</div>
+      </div>
+
+      <div class="controls">
+        <div class="switch" title="Toggle theme">
+          <div id="themeLabel" style="font-size:13px;color:rgba(230,242,255,0.8)">Blue</div>
+          <div id="toggle" class="toggle" role="switch" aria-checked="false" tabindex="0">
+            <div class="knob"></div>
+          </div>
+        </div>
+        <button id="start" style="margin-left:6px">Start 8s</button>
+      </div>
+    </header>
+
+    <div class="main">
+      <div class="circleWrap" aria-hidden="false">
+        <canvas class="pulseCanvas" id="pulseCanvas" width="220" height="220" aria-hidden="true"></canvas>
+        <div class="circle" id="circle" aria-live="polite">
+          <div class="num" id="timeDisplay">8s</div>
+        </div>
+      </div>
+
+      <div class="hintBlock">
+        <div class="hint" id="hint"></div>
+        <div class="muted"></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
+      <button id="pause" class="ghost">Pause</button>
+      <button id="cancel" class="ghost">Cancel</button>
+      <button id="surprise" class="ghost">Surprise</button>
+    </div>
+
+    <footer>
+      <div>Made with calm</div>
+      <div style="opacity:0.7;font-size:12px">Blue/Green theme • No external assets</div>
+    </footer>
+  </div>
+</div>
+
+<script>
+(() => {
+  let total = 8, remaining = 8, timer = null;
+  const timeDisplay = document.getElementById('timeDisplay');
+  const circle = document.getElementById('circle');
+
+  // canvas ripples
+  const c = document.getElementById('pulseCanvas');
+  const ctx = c.getContext('2d');
+  const w = c.width, h = c.height;
+  function clearCanvas(){ ctx.clearRect(0,0,w,h); }
+
+  function getRGBFromAccent(){
+    const style = getComputedStyle(document.documentElement);
+    const c = style.getPropertyValue('--accent-1').trim() || '#1E90FF';
+    const hex = c.replace('#','');
+    const r = parseInt(hex.substring(0,2),16);
+    const g = parseInt(hex.substring(2,4),16);
+    const b = parseInt(hex.substring(4,6),16);
+    return `${r}, ${g}, ${b}`;
+  }
+
+  function drawRipple(progress, alpha=0.18){
+    const cx = w/2, cy = h/2;
+    const maxR = Math.min(w,h)/2 - 8;
+    const r = 8 + progress * (maxR - 8);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI*2);
+    ctx.strokeStyle = `rgba(${getRGBFromAccent()}, ${alpha * (1 - progress)})`;
+    ctx.lineWidth = 2 + (1 - progress) * 2;
+    ctx.stroke();
+  }
+
+  let rippleSlots = [];
+  function startRipplesForSecond(){
+    rippleSlots.push({start: performance.now(), duration: 900});
+  }
+
+  function renderRipples(){
+    clearCanvas();
+    const now = performance.now();
+    rippleSlots = rippleSlots.filter(s => now - s.start < s.duration);
+    rippleSlots.forEach(s => {
+      const t = (now - s.start)/s.duration;
+      drawRipple(t, 0.22);
+      drawRipple(Math.max(0, t-0.12), 0.12);
+      drawRipple(Math.max(0, t-0.28), 0.06);
+    });
+    requestAnimationFrame(renderRipples);
+  }
+  requestAnimationFrame(renderRipples);
+
+  function pulseCircle(){
+    circle.animate([
+      { transform: 'scale(1)', boxShadow: '0 8px 30px rgba(0,0,0,0.45), inset 0 -6px 18px rgba(255,255,255,0.03)' },
+      { transform: 'scale(1.07)', boxShadow: '0 18px 42px rgba(0,0,0,0.6), inset 0 -6px 26px rgba(255,255,255,0.06)' },
+      { transform: 'scale(1)' }
+    ], { duration: 900, easing: 'cubic-bezier(.2,.9,.3,1)' });
+  }
+
+  function updateDisplay(){
+    timeDisplay.textContent = remaining + 's';
+    const pct = (1 - remaining/total) * 360;
+    circle.style.background = `conic-gradient(var(--accent-1) ${pct}deg, rgba(255,255,255,0.05) ${pct}deg)`;
+  }
+
+  function tick(){
+    if(remaining<=0){ clearInterval(timer); timer=null; finish(); return; }
+    remaining--;
+    updateDisplay();
+    startRipplesForSecond();
+    pulseCircle();
+  }
+
+  function start(){
+    total = 8; remaining = total; updateDisplay();
+    if(timer) clearInterval(timer);
+    startRipplesForSecond(); pulseCircle();
+    timer = setInterval(tick,1000);
+  }
+
+  function pause(){
+    if(timer){ clearInterval(timer); timer=null; }
+  }
+
+  function cancel(){
+    pause(); remaining = total; updateDisplay(); rippleSlots = [];
+    clearCanvas();
+  }
+
+  function finish(){
+    // final gentle chime
+    try{
+      const ctxA = new (window.AudioContext || window.webkitAudioContext)();
+      const now = ctxA.currentTime;
+      const o = ctxA.createOscillator();
+      const g = ctxA.createGain();
+      o.type = 'sine'; o.frequency.value = 520;
+      g.gain.value = 0.0001;
+      o.connect(g); g.connect(ctxA.destination);
+      o.start(now);
+      g.gain.exponentialRampToValueAtTime(0.03, now + 0.06);
+      g.gain.exponentialRampToValueAtTime(0.00001, now + 0.48);
+      o.stop(now + 0.52);
+    }catch(e){}
+  }
+
+  // controls
+  document.getElementById('start').onclick = start;
+  document.getElementById('pause').onclick = pause;
+  document.getElementById('cancel').onclick = cancel;
+  document.getElementById('surprise').onclick = ()=> {
+    // subtle visual variation: animate a quick extra ripple
+    startRipplesForSecond();
+  };
+
+  // theme toggle
+  const toggle = document.getElementById('toggle');
+  const themeLabel = document.getElementById('themeLabel');
+  function setThemeGreen(on){
+    document.body.classList.toggle('theme-green', on);
+    toggle.classList.toggle('on', on);
+    toggle.setAttribute('aria-checked', on ? 'true' : 'false');
+    themeLabel.textContent = on ? 'Green' : 'Blue';
+  }
+  toggle.addEventListener('click', ()=> setThemeGreen(!document.body.classList.contains('theme-green')));
+  toggle.addEventListener('keydown', (e) => { if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle.click(); } });
+
+  // init
+  updateDisplay();
+})();
+</script>
+</body>
+</html>
