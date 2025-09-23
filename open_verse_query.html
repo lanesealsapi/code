@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Happy Particles</title>
+<style>
+  body, html {
+    margin: 0;
+    padding: 0;
+    font-family: 'Comic Sans MS', sans-serif;
+    overflow: hidden;
+    background: green;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  h1 {
+    color: white;
+    margin: 20px;
+    text-align: center;
+  }
+  canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+</style>
+</head>
+<body>
+
+<h1>😄Happy Particles 😄</h1>
+<canvas id="canvas"></canvas>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let particles = [];
+const emojis = ['😄','😊','😎'];
+
+// Create some initial particles
+for(let i=0;i<50;i++){
+  particles.push({
+    x: Math.random()*canvas.width,
+    y: Math.random()*canvas.height,
+    vx: (Math.random()-0.5)*2,
+    vy: (Math.random()-0.5)*2,
+    size: 4 + Math.random()*4,
+    char: emojis[Math.floor(Math.random()*emojis.length)]
+  });
+}
+
+// Animate function
+function animate(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  particles.forEach(p=>{
+    p.x += p.vx;
+    p.y += p.vy;
+
+    // bounce off edges
+    if(p.x < 0 || p.x > canvas.width) p.vx *= -1;
+    if(p.y < 0 || p.y > canvas.height) p.vy *= -1;
+
+    ctx.font = p.size + "px serif";
+    ctx.fillText(p.char, p.x, p.y);
+  });
+
+  requestAnimationFrame(animate);
+}
+
+animate();
+
+// Add new particle on click
+canvas.addEventListener('click', e=>{
+  for(let i=0;i<10;i++){
+    particles.push({
+      x: e.clientX,
+      y: e.clientY,
+      vx: (Math.random()-0.5)*4,
+      vy: (Math.random()-0.5)*4,
+      size: 24 + Math.random()*16,
+      char: emojis[Math.floor(Math.random()*emojis.length)]
+    });
+  }
+});
+
+// Resize handler
+window.addEventListener('resize', ()=>{
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+});
+</script>
+
+</body>
+</html>
