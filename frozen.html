@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>BreezeUI — Mini</title>
+<style>
+:root{--bg:#f7fafc;--surface:#fff;--text:#0f172a;--primary:#2563eb;--gap:12px;--r:8px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,Segoe UI,Roboto;background:var(--bg);color:var(--text);padding:12px}
+.shell{display:grid;grid-template-columns:160px 1fr 220px;gap:12px}
+.panel{background:var(--surface);padding:10px;border-radius:var(--r);box-shadow:0 6px 18px rgba(2,6,23,.06)}
+.palette .item{padding:8px;border:1px dashed #e6eefc;border-radius:6px;margin-bottom:8px;cursor:grab}
+.canvas{min-height:360px;padding:12px;border:2px dashed #e6eefc;border-radius:6px;background:#fff;overflow:auto}
+.bz-card{padding:10px;border-radius:6px;border:1px solid #eef3ff;margin-bottom:8px}
+.bz-btn{padding:8px 10px;border-radius:6px;background:var(--primary);color:#fff;border:none;cursor:pointer}
+.selected{outline:2px dashed #60a5fa;outline-offset:4px}
+.small{font-size:13px;color:#475569}
+.code{height:260px;overflow:auto;background:#091224;color:#e6f0ff;padding:8px;border-radius:6px;font-family:monospace;font-size:12px}
+@media (max-width:900px){.shell{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="panel palette">
+    <div class="small" style="margin-bottom:8px;font-weight:600">Palette</div>
+    <div class="item" draggable="true" data-type="card">Card</div>
+    <div class="item" draggable="true" data-type="button">Button</div>
+    <div class="item" draggable="true" data-type="text">Text</div>
+    <div style="margin-top:12px" class="small">Actions</div>
+    <div style="margin-top:8px;display:flex;gap:8px">
+      <button id="undo" class="bz-btn" style="background:#e6eefc;color:#0f172a">Undo</button>
+      <button id="export" class="bz-btn">Export</button>
+    </div>
+  </aside>
+
+  <main class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div class="small" style="font-weight:600">Canvas</div>
+      <div class="small">Tip: drag items in</div>
+    </div>
+    <div id="canvas" class="canvas" tabindex="0">
+      <div class="bz-card" data-id="c1"><strong>Welcome</strong><div class="small">Drag items from left.</div></div>
+    </div>
+  </main>
+
+  <aside class="panel" id="inspector">
+    <div class="small" style="font-weight:600;margin-bottom:8px">Inspector</div>
+    <div id="ins" class="small">Select an element</div>
+  </aside>
+</div>
+
+<!-- export modal -->
+<div id="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);align-items:center;justify-content:center">
+  <div style="background:#fff;padding:10px;border-radius:8px;width:90%;max-width:800px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div class="small" style="font-weight:600">Exported HTML</div>
+      <div><button id="close" class="bz-btn" style="background:#e6eefc;color:#0f172a">Close</button></div>
+    </div>
+    <pre id="code" class="code"></pre>
+  </div>
+</div>
+
+<script>
+const paletteItems = document.querySelectorAll('[draggable="true"]');
+paletteItems.forEach(it=>{
+  it.addEventListener('dragstart', e=> e.dataTransfer.setData('text/plain', it.dataset.type));
+});
+const canvas = document.getElementById('canvas');
+canvas.addEventListener('dragover', e=> e.preventDefault());
+canvas.addEventListener('drop', e=>{
+  e.preventDefault();
+  const type = e.dataTransfer.getData('text/plain');
+  if(!type) return;
+  const el = make(type);
+  canvas.appendChild(el);
+  snap();
+  bind(el);
+});
+
+function make(type){
+  const id = 'n'+Math.random().toString(36).slice(2,8);
+  if(type==='card'){
+    const d=document.createElement('div'); d.className='bz-card'; d.setAttribute('data-id',id);
+    d.innerHTML='<strong>Card</strong><div class="small">Description</div>';
+    return d;
+  }
+  if(type==='button'){
+    const b=document.createElement('button'); b.className='bz-btn'; b.setAttribute('data-id',id); b.textContent='Click';
+    return b;
+  }
+  const p=document.createElement('p'); p.textContent='Paragraph text'; p.setAttribute('data-id',id); return p;
+}
+
+/* selection + inspector */
+let selected=null;
+function clearSel(){ if(selected){ selected.classList.remove('selected'); selected=null; document.getElementById('ins').textContent='Select an element'; } }
+function select(el){
+  clearSel();
+  selected=el; el.classList.add('selected');
+  const ins = document.getElementById('ins');
+  ins.innerHTML = `<div>Tag: ${el.tagName.toLowerCase()}</div>
+  <div style="margin-top:8px"><button id="del" class="bz-btn" style="background:#e6eefc;color:#0f172a">Delete</button></div>`;
+  document.getElementById('del').onclick = ()=>{ el.remove(); clearSel(); snap(); };
+}
+
+/* bind click to node */
+function bind(node){
+  node.addEventListener('click', e=>{ e.stopPropagation(); select(node); });
+}
+
+/* initial bind */
+document.querySelectorAll('[data-id]').forEach(bind);
+
+/* deselect on background */
+canvas.addEventListener('click', e=> { if(e.target===canvas) clearSel(); });
+
+/* simple history (snapshots of innerHTML) */
+let history=[canvas.innerHTML], idx=0;
+function snap(){ history=history.slice(0,idx+1); history.push(canvas.innerHTML); idx=history.length-1; }
+document.getElementById('undo').addEventListener('click', ()=>{ if(idx>0){ idx--; canvas.innerHTML = history[idx]; rebindAll(); clearSel(); } });
+
+function rebindAll(){ document.querySelectorAll('[data-id]').forEach(bind); }
+
+/* export */
+document.getElementById('export').addEventListener('click', ()=>{
+  const css = Array.from(document.querySelectorAll('style')).map(s=>s.textContent).join('\n');
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body><div style="padding:12px">${canvas.innerHTML}</div></body></html>`;
+  document.getElementById('code').textContent = html;
+  document.getElementById('modal').style.display = 'flex';
+});
+document.getElementById('close').addEventListener('click', ()=> document.getElementById('modal').style.display='none');
+
+/* make palette items focusable for accessibility */
+paletteItems.forEach(p=> p.addEventListener('keydown', e=>{ if(e.key==='Enter') canvas.appendChild(make(p.dataset.type)); snap(); rebindAll(); }));
+
+</script>
+</body>
+</html>
