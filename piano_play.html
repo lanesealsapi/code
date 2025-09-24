@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Browser Piano — Multiple Types</title>
+<style>
+  :root{--white:#fff;--black:#222;--accent:#4f46e5;--kbd-w:880px;--kbd-h:220px;}
+  body{font-family:system-ui,Arial;display:flex;gap:20px;padding:24px;background:#f6f7fb;color:#111;}
+  .left{max-width:var(--kbd-w);}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center;}
+  button,select,input[type=range]{padding:8px 10px;border-radius:6px;border:1px solid #ddd;background:#fff;}
+  button.play{background:var(--accent);color:#fff;border:0;}
+  .keyboard{position:relative;width:var(--kbd-w);height:var(--kbd-h);user-select:none;box-shadow:0 6px 20px rgba(20,20,60,0.08);border-radius:8px;background:linear-gradient(#fff,#f3f5ff);}
+  .white-keys{display:flex;height:100%;}
+  .white{flex:1;border-right:1px solid #eee;position:relative;display:flex;align-items:flex-end;justify-content:center;font-size:12px;color:#333;}
+  .white.pressed{background:linear-gradient(#e8eefc,#dbe7ff);}
+  .black{position:absolute;height:60%;width:calc(var(--kbd-w)/20);background:var(--black);top:0;z-index:2;border-radius:4px;transform:translateX(-50%);box-shadow:0 6px 14px rgba(0,0,0,0.3);}
+  .black.pressed{background:#111;box-shadow:0 6px 20px rgba(0,0,0,0.5);}
+  .key-label{padding:6px 8px;background:rgba(255,255,255,0.7);border-radius:6px;margin:8px;font-size:11px;}
+  .sidebar{min-width:320px;background:#fff;padding:16px;border-radius:8px;box-shadow:0 6px 20px rgba(20,20,60,0.06);}
+  h2{margin:0 0 8px 0;font-size:18px;}
+  .section{margin-bottom:12px;}
+  .preset-list{display:flex;flex-direction:column;gap:6px;}
+  .note-pill{padding:6px 8px;background:#f3f4ff;border-radius:999px;font-size:12px;display:inline-block;}
+  footer{margin-top:18px;font-size:12px;color:#666;}
+</style>
+</head>
+<body>
+  <div class="left">
+    <div class="controls">
+      <button id="playBtn" class="play">Play</button>
+      <button id="stopBtn">Stop</button>
+      <label>Tempo <input id="tempo" type="range" min="40" max="200" value="100"></label>
+      <label>Volume <input id="volume" type="range" min="0" max="1" step="0.01" value="0.6"></label>
+      <label>Type
+        <select id="pianoType">
+          <option value="warm">Warm Sine</option>
+          <option value="bright">Bright Saw</option>
+          <option value="fm">Electric FM</option>
+        </select>
+      </label>
+      <label><input id="autoGen" type="checkbox"> Auto-generate</label>
+      <button id="saveSeed">Save Seed</button>
+    </div>
+    <div class="keyboard" id="keyboard"></div>
+  </div>
+
+  <aside class="sidebar">
+    <h2>Smart Player</h2>
+    <div class="section">
+      <div><strong>Seed:</strong></div>
+      <div id="seedDisplay" class="preset-list"></div>
+    </div>
+    <div class="section">
+      <div><strong>Progress</strong></div>
+      <div class="prog"><div id="nowPlaying">—</div><div id="nextPlaying">—</div></div>
+    </div>
+    <div class="section">
+      <div><strong>Controls</strong></div>
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <button id="genOne">Generate One</button>
+        <button id="mutate">Mutate</button>
+        <button id="clearSeed">Clear Seed</button>
+      </div>
+    </div>
+    <div class="section">
+      <div><strong>About</strong></div>
+      <div style="font-size:13px;color:#555;margin-top:6px;">
+        Click keys or use keyboard mappings. Toggle piano type to change timbre (Warm Sine, Bright Saw, Electric FM). Uses WebAudio.
+      </div>
+    </div>
+    <footer>Address me as L.A.x.</footer>
+  </aside>
+
+<script>
+/* --- Audio context & master chain --- */
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+const ctx = new AudioCtx();
+const masterGain = ctx.createGain();
+masterGain.gain.value = 0.6;
+masterGain.connect(ctx.destination);
+
+/* small stereo delay + subtle chorus for richness */
+function createStereoEffects() {
+  const merger = ctx.createChannelMerger(2);
+  const splitter = ctx.createChannelSplitter(2);
+  const delayL = ctx.createDelay(0.5);
+  const delayR = ctx.createDelay(0.5);
+  const feedbackL = ctx.createGain();
+  const feedbackR = ctx.createGain();
+  const wet = ctx.createGain();
+  wet.gain.value = 0.08; // subtle
+  feedbackL.gain.value = feedbackR.gain.value = 0.2;
+  delayL.delayTime.value = 0.012;
+  delayR.delayTime.value = 0.018;
+  // simple chorus via LFO modulating small delay
+  const lfo = ctx.createOscillator();
+  const lfoGain = ctx.createGain();
+  lfo.type = 'sine'; lfo.frequency.value = 0.25; lfoGain.gain.value = 0.003;
+  lfo.connect(lfoGain);
+  lfoGain.connect(delayL.delayTime);
+  // another LFO inverted for right
+  const lfo2 = ctx.createOscillator();
+  const lfoGain2 = ctx.createGain();
+  lfo2.type = 'sine'; lfo2.frequency.value = 0.27; lfoGain2.gain.value = 0.003;
+  lfo2.connect(lfoGain2);
+  lfoGain2.connect(delayR.delayTime);
+  lfo.start(); lfo2.start();
+  // routing will be: node -> [delayL->feedback->wet->merger left], [delayR->...->merger right]
+  delayL.connect(feedbackL); feedbackL.connect(delayL); delayL.connect(merger,0,0); 
+  delayR.connect(feedbackR); feedbackR.connect(delayR); delayR.connect(merger,0,1);
+  wet.connect(merger);
+  return {delayL,delayR,feedbackL,feedbackR,wet,merger,splitter};
+}
+const effects = createStereoEffects();
+effects.merger.connect(masterGain);
+
+/* piano type presets */
+const pianoPresets = {
+  warm: {
+    osc: [{type:'sine', gain:1}],
+    filter: {type:'lowpass', freqFactor:0.9, q:0.9},
+    ampEnvelope: {attack:0.01, decay:0.15, sustain:0.85, release:0.6},
+    spread: 0.01
+  },
+  bright: {
+    osc: [{type:'sawtooth', gain:0.7},{type:'triangle',gain:0.35}],
+    filter: {type:'lowpass', freqFactor:1.1, q:0.7},
+    ampEnvelope: {attack:0.008, decay:0.12, sustain:0.8, release:0.45},
+    spread: 0.02
+  },
+  fm: {
+    fm: {car: {type:'sine', gain:1}, mod: {type:'sine', ratio:2.0, index:120}},
+    filter: {type:'lowpass', freqFactor:1.0, q:0.8},
+    ampEnvelope: {attack:0.003, decay:0.18, sustain:0.7, release:0.5},
+    spread: 0.015
+  }
+};
+
+/* helpers */
+const A4 = 440;
+function midiToFreq(m) { return A4 * Math.pow(2, (m - 69)/12); }
+function midiToName(m){
+  const names = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const name = names[m%12];
+  const octave = Math.floor(m/12)-1;
+  return name + octave;
+}
+
+/* active voices to allow overlapping notes */
+const activeVoices = new Map();
+
+function playNoteTyped(midi, time=0, {dur=0.6, vel=1, typePreset='warm'} = {}) {
+  const preset = pianoPresets[typePreset] || pianoPresets.warm;
+  const t0 = ctx.currentTime + time;
+  const freq = midiToFreq(midi);
+
+  // stereo panner via slight detune & separate gain nodes
+  const leftGain = ctx.createGain();
+  const rightGain = ctx.createGain();
+  leftGain.gain.value = 0.5; rightGain.gain.value = 0.5;
+
+  // per-voice filter
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = Math.max(800, freq * 8 * (preset.filter.freqFactor || 1));
+  filter.Q.value = preset.filter.q || 0.8;
+
+  // voice output merger
+  const voiceMerger = ctx.createChannelMerger(2);
+
+  // amplitude envelope
+  const ampL = ctx.createGain();
+  const ampR = ctx.createGain();
+  ampL.gain.setValueAtTime(0.0001, t0);
+  ampR.gain.setValueAtTime(0.0001, t0);
+
+  // connect envelope to left/right through filter to effects
+  ampL.connect(filter); ampR.connect(filter);
+  filter.connect(effects.delayL);
+  filter.connect(effects.delayR);
+  filter.connect(masterGain);
+
+  // simple spread: detune slightly for left/right
+  const detuneCents = (preset.spread || 0.01) * 100;
+  // oscillator-based voices
+  if (preset.fm) {
+    // FM voice: create modulator -> apply to carrier frequency
+    const modOsc = ctx.createOscillator();
+    const modGain = ctx.createGain();
+    const carOsc = ctx.createOscillator();
+
+    modOsc.type = preset.fm.mod.type;
+    modOsc.frequency.value = freq * preset.fm.mod.ratio;
+    modGain.gain.value = preset.fm.index || 100;
+
+    carOsc.type = preset.fm.car.type;
+    carOsc.frequency.value = freq;
+
+    modOsc.connect(modGain);
+    modGain.connect(carOsc.frequency);
+
+    const merger = ctx.createGain();
+    carOsc.connect(merger);
+    merger.connect(ampL);
+    // clone for right channel with tiny detune
+    const carOscR = ctx.createOscillator();
+    carOscR.type = carOsc.type;
+    carOscR.frequency.value = freq * Math.pow(2, detuneCents/1200);
+    modOsc.connect(modGain); // shared modulator
+    carOscR.connect(ampR);
+
+    // start/stop
+    modOsc.start(t0);
+    carOsc.start(t0);
+    carOscR.start(t0);
+
+    // envelope scheduling
+    const env = preset.ampEnvelope;
+    const peak = Math.max(0.0001, vel);
+    ampL.gain.exponentialRampToValueAtTime(Math.max(0.001, peak), t0 + env.attack);
+    ampR.gain.exponentialRampToValueAtTime(Math.max(0.001, peak), t0 + env.attack);
+    ampL.gain.exponentialRampToValueAtTime(Math.max(0.001, peak * env.sustain), t0 + env.attack + env.decay);
+    ampR.gain.exponentialRampToValueAtTime(Math.max(0.001, peak * env.sustain), t0 + env.attack + env.decay);
+    ampL.gain.exponentialRampToValueAtTime(0.0001, t0 + dur + env.release);
+    ampR.gain.exponentialRampToValueAtTime(0.0001, t0 + dur + env.release);
+
+    // schedule stops
+    setTimeout(()=> { try{ carOsc.stop(); carOscR.stop(); modOsc.stop(); }catch(e){} }, (dur + env.release + 0.1)*1000);
+
+  } else {
+    // additive/multi-osc voice
+    preset.osc.forEach((oscSpec, idx) => {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = oscSpec.type || 'sine';
+      osc.frequency.value = freq * (oscSpec.mul || 1);
+      g.gain.value = (oscSpec.gain || 1) * (vel * 0.9);
+      // small detune left/right for stereo width
+      const detuneLeft = (idx === 0) ? -detuneCents : detuneCents * 0.4;
+      const detuneRight = -detuneLeft;
+      const oscR = ctx.createOscillator();
+      oscR.type = osc.type;
+      oscR.frequency.value = osc.frequency.value * Math.pow(2, detuneRight/1200);
+      // left path
+      osc.connect(g);
+      g.connect(ampL);
+      // right path clone
+      const gR = ctx.createGain();
+      gR.gain.value = g.gain.value * 0.98;
+      oscR.connect(gR);
+      gR.connect(ampR);
+
+      osc.start(t0); oscR.start(t0);
+      // stop later
+      setTimeout(()=> { try{ osc.stop(); oscR.stop(); }catch(e){} }, (dur + 1.0)*1000);
+    });
+
+    // envelope scheduling
+    const env = preset.ampEnvelope;
+    const peak = Math.max(0.0001, vel);
+    ampL.gain.exponentialRampToValueAtTime(Math.max(0.001, peak), t0 + env.attack);
+    ampR.gain.exponentialRampToValueAtTime(Math.max(0.001, peak), t0 + env.attack);
+    ampL.gain.exponentialRampToValueAtTime(Math.max(0.001, peak * env.sustain), t0 + env.attack + env.decay);
+    ampR.gain.exponentialRampToValueAtTime(Math.max(0.001, peak * env.sustain), t0 + env.attack + env.decay);
+    ampL.gain.exponentialRampToValueAtTime(0.0001, t0 + dur + env.release);
+    ampR.gain.exponentialRampToValueAtTime(0.0001, t0 + dur + env.release);
+  }
+
+  // connect amps to master/left-right routing
+  ampL.connect(effects.delayL);
+  ampR.connect(effects.delayR);
+  ampL.connect(masterGain);
+  ampR.connect(masterGain);
+
+  // record voice reference to allow manual stopping if needed
+  activeVoices.set(midi + ':' + t0, {midi, t0});
+}
+
+/* --- UI keyboard (same as original) --- */
+const keyboard = document.getElementById('keyboard');
+const startMidi = 60;
+const numKeys = 24;
+const keyWidth = (880 / 14);
+const whiteContainer = document.createElement('div');
+whiteContainer.className = 'white-keys';
+keyboard.appendChild(whiteContainer);
+
+let whiteIndex = 0;
+const keyMap = [];
+for (let i=0;i<numKeys;i++){
+  const midi = startMidi + i;
+  const noteName = midiToName(midi);
+  const isBlack = [1,3,6,8,10].includes((midi)%12);
+  if (!isBlack) {
+    const w = document.createElement('div');
+    w.className = 'white';
+    w.style.width = `${keyWidth}px`;
+    w.dataset.midi = midi;
+    w.innerHTML = `<div class="key-label">${noteName}</div>`;
+    whiteContainer.appendChild(w);
+  } else {
+    const b = document.createElement('div');
+    b.className = 'black';
+    b.style.left = `${(whiteIndex * keyWidth) + keyWidth * 0.75}px`;
+    b.dataset.midi = midi;
+    b.innerHTML = `<div style="position:absolute;bottom:6px;left:6px;color:#fff;font-size:11px;">${noteName}</div>`;
+    keyboard.appendChild(b);
+  }
+  if (!isBlack) whiteIndex++;
+  keyMap.push({midi,note: midiToName(midi)});
+}
+function highlightKey(midi, on=true){
+  const sel = document.querySelectorAll(`[data-midi='${midi}']`);
+  sel.forEach(el => el.classList.toggle('pressed', on));
+}
+keyboard.addEventListener('mousedown', (ev)=> {
+  const el = ev.target.closest('[data-midi]');
+  if (!el) return;
+  const midi = +el.dataset.midi;
+  triggerNote(midi);
+});
+keyboard.addEventListener('touchstart', (ev)=> {
+  const t = ev.touches[0];
+  const el = document.elementFromPoint(t.clientX, t.clientY).closest('[data-midi]');
+  if (!el) return;
+  const midi = +el.dataset.midi;
+  triggerNote(midi);
+});
+
+const keyBindings = {
+  'z':60,'s':61,'x':62,'d':63,'c':64,'v':65,'g':66,'b':67,'h':68,'n':69,'j':70,'m':71,
+  'q':72,'2':73,'w':74,'3':75,'e':76,'r':77,'5':78,'t':79,'6':80,'y':81,'7':82,'u':83
+};
+window.addEventListener('keydown', (ev)=>{
+  if(ev.repeat) return;
+  const midi = keyBindings[ev.key];
+  if (midi) { triggerNote(midi); }
+});
+
+let isRecording = false;
+let seed = [];
+const seedDisplay = document.getElementById('seedDisplay');
+function renderSeed(){ seedDisplay.innerHTML=''; seed.slice(0,32).forEach(n=>{ const p=document.createElement('div'); p.className='note-pill'; p.textContent=`${midiToName(n.midi)}`; seedDisplay.appendChild(p); }); }
+
+/* preserve built-in seed */
+const builtIn = [60,60,67,67,69,69,67,65,65,64,64,62,62,60];
+function loadBuiltIn(){ seed = builtIn.map(m=>({midi:m,dur:0.6,t:0})); renderSeed(); }
+loadBuiltIn();
+
+/* trigger note wrapper uses selected piano type */
+const pianoTypeSelect = document.getElementById('pianoType');
+function triggerNote(midi, opts={}) {
+  const type = pianoTypeSelect.value || 'warm';
+  const dur = opts.dur || 0.6;
+  const vel = opts.vel || 0.8;
+  highlightKey(midi, true);
+  playNoteTyped(midi, 0, {dur, vel, typePreset: type});
+  setTimeout(()=> highlightKey(midi,false), dur*1000);
+  if (isRecording) { seed.push({midi,dur,t:Date.now()}); renderSeed(); }
+}
+
+/* --- Player/Sequencer (kept from original, simplified) --- */
+let schedulerTimer = null;
+let isPlaying = false;
+let tempo = 100;
+let volume = 0.6;
+let mode = 'seed';
+let autoGen = false;
+
+const playBtn = document.getElementById('playBtn');
+const stopBtn = document.getElementById('stopBtn');
+const tempoEl = document.getElementById('tempo');
+const volumeElUI = document.getElementById('volume');
+const autoGenEl = document.getElementById('autoGen');
+
+tempoEl.addEventListener('input', ()=> tempo = +tempoEl.value);
+volumeElUI.addEventListener('input', ()=> { volume = +volumeElUI.value; masterGain.gain.value = volume; });
+autoGenEl.addEventListener('change', ()=> autoGen = autoGenEl.checked);
+
+playBtn.addEventListener('click', ()=> startPlaying());
+stopBtn.addEventListener('click', ()=> stopPlaying());
+document.getElementById('saveSeed').addEventListener('click', ()=> { isRecording = !isRecording; document.getElementById('saveSeed').textContent = isRecording ? 'Recording...' : 'Save Seed'; });
+document.getElementById('genOne').addEventListener('click', ()=> generateOne());
+document.getElementById('mutate').addEventListener('click', ()=> mutateSeed());
+document.getElementById('clearSeed').addEventListener('click', ()=> { seed=[]; renderSeed(); });
+
+function scheduleStep(playQueue, stepIndex, startTime){
+  if (stepIndex >= playQueue.length) return;
+  const item = playQueue[stepIndex];
+  playNoteTyped(item.midi, startTime - ctx.currentTime, {dur: item.dur, vel: item.vel || 0.9, typePreset: pianoTypeSelect.value});
+  document.getElementById('nowPlaying').textContent = midiToName(item.midi);
+  document.getElementById('nextPlaying').textContent = (playQueue[stepIndex+1] ? midiToName(playQueue[stepIndex+1].midi) : '—');
+  const nextTime = startTime + item.dur * 0.95;
+  schedulerTimer = setTimeout(()=> scheduleStep(playQueue, stepIndex+1, nextTime), (item.dur * 1000) * 0.95);
+}
+
+function startPlaying(){
+  if (isPlaying) return;
+  if (ctx.state === 'suspended') ctx.resume();
+  isPlaying = true; playBtn.disabled = true;
+  let playQueue = [];
+  if (seed.length) playQueue = seed.map(s=>({...s,vel:0.9}));
+  else playQueue = builtIn.map(m=>({midi:m,dur:0.6,vel:0.9}));
+  const start = ctx.currentTime + 0.05;
+  scheduleStep(playQueue, 0, start);
+  if (autoGen) {
+    const totalDur = playQueue.reduce((s,i)=>s+(i.dur||0),0);
+    setTimeout(()=> { if (!isPlaying) return; generateOne(); if (isPlaying) startPlaying(); }, totalDur*1000 + 120);
+  }
+}
+
+function stopPlaying(){
+  isPlaying = false; playBtn.disabled = false; clearTimeout(schedulerTimer);
+  document.getElementById('nowPlaying').textContent='—'; document.getElementById('nextPlaying').textContent='—';
+}
+
+/* simple generation helpers (same as before) */
+function buildMarkov(seq, order=1){
+  const transitions = {}; const arr = seq.map(s=>s.midi);
+  for (let i=0;i<arr.length - order;i++){
+    const key = arr.slice(i,i+order).join(',');
+    const next = arr[i+order];
+    transitions[key] = transitions[key] || {};
+    transitions[key][next] = (transitions[key][next]||0)+1;
+  }
+  return {order, transitions};
+}
+function markovNext(model, recent){
+  const key = recent.slice(-model.order).join(',');
+  const map = model.transitions[key];
+  if (!map) { const pool = Object.keys(model.transitions).flatMap(k=>Object.keys(model.transitions[k])); return +pool[Math.floor(Math.random()*pool.length)]; }
+  const items = Object.entries(map); const total = items.reduce((s,[_,c])=>s+c,0);
+  let r = Math.random()*total;
+  for (const [val,count] of items){ r -= count; if (r<=0) return +val; }
+  return +items[items.length-1][0];
+}
+function generateOne(){ if (!seed.length) loadBuiltIn(); const model = buildMarkov(seed); const recent = seed.slice(-model.order).map(s=>s.midi); const next = markovNext(model, recent.length?recent:[seed[0].midi]); seed.push({midi:next,dur:0.5,t:Date.now()}); renderSeed(); }
+function mutateSeed(){ if (!seed.length) loadBuiltIn(); const out = seed.map(s=>({...s})); const start = Math.floor(Math.random()*out.length); const len = Math.max(1, Math.floor(Math.random()*4)); const trans = Math.floor(Math.random()*5)-2; for (let i=start;i<Math.min(out.length,start+len);i++){ out[i].midi = Math.max(48,Math.min(84,out[i].midi+trans)); if (Math.random()<0.3) out[i].dur = Math.max(0.15,out[i].dur*(Math.random()*0.8+0.6)); } seed = out; renderSeed(); }
+
+/* save/load */
+window.addEventListener('beforeunload', ()=> localStorage.setItem('piano_seed', JSON.stringify(seed)));
+const saved = localStorage.getItem('piano_seed'); if (saved) { try{ seed = JSON.parse(saved); renderSeed(); }catch(e){} }
+
+/* visibility handling */
+document.addEventListener('visibilitychange', ()=> { if (document.hidden) ctx.suspend(); });
+
+</script>
+</body>
+</html>
