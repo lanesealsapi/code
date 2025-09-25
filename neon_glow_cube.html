@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebGL Neon Cube Game with Particles</title>
+<style>
+body { margin:0; overflow:hidden; background:#0a0a1f; font-family: 'Segoe UI', sans-serif;}
+canvas { display:block; }
+#overlay {
+  position:absolute; top:10px; left:10px; color:#55ffff;
+  background:rgba(0,0,0,0.3); padding:10px; border-radius:8px;
+}
+button { margin-top:5px; background:#27293d; color:#55ffff; border:none; padding:5px 10px; border-radius:6px; cursor:pointer; }
+</style>
+</head>
+<body>
+<div id="overlay">
+  <div>Use arrow keys to move cube</div>
+  <div>Current Direction: <span id="dir">None</span></div>
+  <button id="pulseBtn">Toggle Glow Pulse</button>
+</div>
+<canvas id="glCanvas"></canvas>
+<script>
+// === WebGL Setup ===
+const canvas = document.getElementById('glCanvas');
+const gl = canvas.getContext('webgl',{alpha:true});
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+gl.viewport(0,0,gl.drawingBufferWidth, gl.drawingBufferHeight);
+gl.clearColor(0.05,0.05,0.12,0.3);
+gl.enable(gl.DEPTH_TEST);
+gl.enable(gl.BLEND);
+gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+
+// === Shaders ===
+const vsSource = `
+attribute vec3 aPosition;
+uniform mat4 uModelViewMatrix;
+uniform mat4 uProjectionMatrix;
+void main(void){ gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(aPosition,1.0);}
+`;
+
+const fsSource = `
+precision mediump float;
+uniform vec3 uColor;
+uniform float uGlow;
+void main(void){ gl_FragColor = vec4(uColor*uGlow,1.0);}
+`;
+
+// Compile shaders
+function createShader(gl,type,source){
+  const shader = gl.createShader(type);
+  gl.shaderSource(shader,source);
+  gl.compileShader(shader);
+  if(!gl.getShaderParameter(shader, gl.COMPILE_STATUS)){
+    console.error(gl.getShaderInfoLog(shader));
+    return null;
+  }
+  return shader;
+}
+const vertexShader = createShader(gl, gl.VERTEX_SHADER, vsSource);
+const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+
+// Program
+function createProgram(gl,vShader,fShader){
+  const program = gl.createProgram();
+  gl.attachShader(program,vShader);
+  gl.attachShader(program,fShader);
+  gl.linkProgram(program);
+  if(!gl.getProgramParameter(program,gl.LINK_STATUS)){
+    console.error(gl.getProgramInfoLog(program));
+    return null;
+  }
+  return program;
+}
+const program = createProgram(gl,vertexShader,fragmentShader);
+gl.useProgram(program);
+
+// Cube geometry
+const cubeVertices = new Float32Array([
+ -1,-1,-1,  1,-1,-1,  1,1,-1, -1,1,-1,
+ -1,-1,1,   1,-1,1,   1,1,1,   -1,1,1
+]);
+const cubeEdges = new Uint16Array([
+ 0,1,1,2,2,3,3,0,
+ 4,5,5,6,6,7,7,4,
+ 0,4,1,5,2,6,3,7
+]);
+
+const vertexBuffer = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER,vertexBuffer);
+gl.bufferData(gl.ARRAY_BUFFER,cubeVertices,gl.STATIC_DRAW);
+
+const indexBuffer = gl.createBuffer();
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,indexBuffer);
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,cubeEdges,gl.STATIC_DRAW);
+
+const aPosition = gl.getAttribLocation(program,'aPosition');
+gl.enableVertexAttribArray(aPosition);
+gl.vertexAttribPointer(aPosition,3,gl.FLOAT,false,0,0);
+
+// Uniforms
+const uColor = gl.getUniformLocation(program,'uColor');
+const uGlow = gl.getUniformLocation(program,'uGlow');
+const uModelViewMatrix = gl.getUniformLocation(program,'uModelViewMatrix');
+const uProjectionMatrix = gl.getUniformLocation(program,'uProjectionMatrix');
+
+// Perspective
+function perspectiveMatrix(fovy, aspect, near, far){
+  const f = 1.0/Math.tan(fovy/2);
+  return [
+    f/aspect,0,0,0,
+    0,f,0,0,
+    0,0,(far+near)/(near-far),-1,
+    0,0,(2*far*near)/(near-far),0
+  ];
+}
+
+// === Rotation & Movement ===
+let rotX=0, rotY=0;
+let cubeX=0, cubeY=0;
+const moveSpeed = 0.05;
+const dirDisplay = document.getElementById('dir');
+
+const keys = {ArrowUp:false, ArrowDown:false, ArrowLeft:false, ArrowRight:false};
+window.addEventListener('keydown', e=>{
+  if(keys.hasOwnProperty(e.key)){keys[e.key]=true;}
+});
+window.addEventListener('keyup', e=>{
+  if(keys.hasOwnProperty(e.key)){keys[e.key]=false;}
+});
+
+// Colors and pulse
+const penColors = [[1,0,1],[0,1,1],[0.53,0.81,1]]; // magenta, cyan, baby blue
+let colorIndex = 0;
+let glowPulse = 1.0, pulseDir=0.02, pulseEnabled=true;
+document.getElementById('pulseBtn').addEventListener('click', ()=>{pulseEnabled=!pulseEnabled;});
+
+// === Particles ===
+const particleCount = 100;
+const particles = [];
+for(let i=0;i<particleCount;i++){
+  particles.push({x:(Math.random()-0.5)*4, y:(Math.random()-0.5)*4, z:(Math.random()-0.5)*4});
+}
+
+// Multiply matrices
+function multiplyMatrices(a,b){
+  const out = new Float32Array(16);
+  for(let i=0;i<4;i++){
+    for(let j=0;j<4;j++){
+      out[j*4+i]=0;
+      for(let k=0;k<4;k++) out[j*4+i]+=a[k*4+i]*b[j*4+k];
+    }
+  }
+  return out;
+}
+function rotationMatrixX(a){
+  const c=Math.cos(a), s=Math.sin(a);
+  return [1,0,0,0, 0,c,-s,0, 0,s,c,0, 0,0,0,1];
+}
+function rotationMatrixY(a){
+  const c=Math.cos(a), s=Math.sin(a);
+  return [c,0,s,0, 0,1,0,0, -s,0,c,0, 0,0,0,1];
+}
+
+// Model-View
+function modelViewMatrix(){
+  let rx=rotationMatrixX(rotX);
+  let ry=rotationMatrixY(rotY);
+  const trans = [1,0,0,0, 0,1,0,0, 0,0,1,0, cubeX,cubeY,-6,1];
+  return multiplyMatrices(trans,multiplyMatrices(ry,rx));
+}
+
+// === Render Loop ===
+function render(){
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+
+  // Movement
+  let dir='None';
+  if(keys.ArrowUp){cubeY+=moveSpeed; dir='Up';}
+  if(keys.ArrowDown){cubeY-=moveSpeed; dir='Down';}
+  if(keys.ArrowLeft){cubeX-=moveSpeed; dir='Left';}
+  if(keys.ArrowRight){cubeX+=moveSpeed; dir='Right';}
+  dirDisplay.textContent = dir;
+
+  // Pulse glow
+  if(pulseEnabled){ glowPulse+=pulseDir; if(glowPulse>2||glowPulse<0.5)pulseDir*=-1; }
+
+  gl.uniform1f(uGlow,glowPulse);
+  gl.uniform3fv(uColor, penColors[colorIndex]);
+
+  // Projection
+  const aspect = canvas.width/canvas.height;
+  const proj = perspectiveMatrix(Math.PI/4,aspect,0.1,100);
+  gl.uniformMatrix4fv(uProjectionMatrix,false,new Float32Array(proj));
+  gl.uniformMatrix4fv(uModelViewMatrix,false,modelViewMatrix());
+
+  // Draw cube edges
+  gl.drawElements(gl.LINES,cubeEdges.length,gl.UNSIGNED_SHORT,0);
+
+  // Draw particles
+  particles.forEach(p=>{
+    const modelMat = multiplyMatrices(modelViewMatrix(),[1,0,0,0,0,1,0,0,0,0,1,0,p.x,p.y,p.z,1]);
+    gl.uniformMatrix4fv(uModelViewMatrix,false,modelMat);
+    gl.drawElements(gl.LINES,cubeEdges.length,gl.UNSIGNED_SHORT,0);
+  });
+
+  requestAnimationFrame(render);
+}
+
+// Auto color cycle
+setInterval(()=>{colorIndex=(colorIndex+1)%penColors.length;},5000);
+
+render();
+</script>
+</body>
+</html>
