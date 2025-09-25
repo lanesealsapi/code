@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Touchless Dodge Game</title>
+<style>
+body { margin:0; overflow:hidden; background:#111; }
+#pointer {
+  position: absolute;
+  width: 20px; height: 20px;
+  background: radial-gradient(circle, #ff0 0%, #ff0 60%, transparent 100%);
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 20px #ff0, 0 0 40px #ff0 inset;
+}
+#gameCanvas {
+  position:absolute; top:0; left:0;
+}
+video { display:none; }
+</style>
+</head>
+<body>
+
+<div id="pointer"></div>
+<canvas id="trail"></canvas>
+<video id="video" autoplay></video>
+<canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+
+<script>
+// --- Setup ---
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const pointer = document.getElementById('pointer');
+const trailCanvas = document.getElementById('trail');
+const trailCtx = trailCanvas.getContext('2d');
+trailCanvas.width = window.innerWidth;
+trailCanvas.height = window.innerHeight;
+
+// Player pos and vel
+let pos = {x: window.innerWidth/2, y: window.innerHeight/2};
+let vel = {x:0, y:0};
+const thresholdPos = 4;
+const thresholdVel = 1.5;
+const alpha = 0.1;
+
+// --- Tiny NN ---
+class TinyNN {
+  constructor(){
+    this.inputSize = 3;
+    this.hiddenSize = 5;
+    this.outputSize = 2;
+    this.lr = 0.01;
+    this.W1 = Array.from({length:this.hiddenSize}, ()=>Array.from({length:this.inputSize}, ()=>Math.random()*0.2-0.1));
+    this.b1 = Array.from({length:this.hiddenSize}, ()=>0);
+    this.W2 = Array.from({length:this.outputSize}, ()=>Array.from({length:this.hiddenSize}, ()=>Math.random()*0.2-0.1));
+    this.b2 = Array.from({length:this.outputSize}, ()=>0);
+  }
+  forward(x){
+    this.x = x;
+    this.h = this.W1.map((row,i)=>row.reduce((sum,w,j)=>sum + w*x[j],0)+this.b1[i]).map(v=>Math.tanh(v));
+    this.y = this.W2.map((row,i)=>row.reduce((sum,w,j)=>sum + w*this.h[j],0)+this.b2[i]);
+    return this.y;
+  }
+  train(target){
+    this.forward(this.x);
+    let dy = this.y.map((y,i)=>y-target[i]);
+    let dW2 = this.W2.map((row,i)=>row.map((w,j)=>dy[i]*this.h[j]));
+    let db2 = dy;
+    let dh = this.W2.map((row,i)=>row.map((w,j)=>w*dy[j]));
+    dh = dh[0].map((_,i)=>this.W2.reduce((sum,row,j)=>sum+row[i]*dy[j],0));
+    let dhraw = dh.map((v,i)=>v*(1-this.h[i]*this.h[i]));
+    let dW1 = this.W1.map((row,i)=>row.map((w,j)=>dhraw[i]*this.x[j]));
+    let db1 = dhraw;
+    for(let i=0;i<this.hiddenSize;i++){
+      for(let j=0;j<this.inputSize;j++){ this.W1[i][j]-=this.lr*dW1[i][j]; }
+      this.b1[i]-=this.lr*db1[i];
+    }
+    for(let i=0;i<this.outputSize;i++){
+      for(let j=0;j<this.hiddenSize;j++){ this.W2[i][j]-=this.lr*dW2[i][j]; }
+      this.b2[i]-=this.lr*db2[i];
+    }
+  }
+}
+const nn = new TinyNN();
+let prevDx=0, prevDy=0;
+
+// --- Camera ---
+navigator.mediaDevices.getUserMedia({video:true}).then(stream => video.srcObject = stream);
+
+function blur(frame){
+  const w=frame.width,h=frame.height;
+  const data=frame.data, copy=new Uint8ClampedArray(data);
+  for(let y=1;y<h-1;y++){for(let x=1;x<w-1;x++){
+    let r=0,g=0,b=0;
+    for(let ky=-1;ky<=1;ky++){for(let kx=-1;kx<=1;kx++){
+      let i=((y+ky)*w+(x+kx))*4;
+      r+=data[i]; g+=data[i+1]; b+=data[i+2];
+    }}
+    let idx=(y*w+x)*4;
+    copy[idx]=r/9; copy[idx+1]=g/9; copy[idx+2]=b/9;
+  }}
+  frame.data.set(copy); return frame;
+}
+
+function getBrightest(frame){
+  frame = blur(frame);
+  const data=frame.data;
+  let max=50,xMax=0,yMax=0;
+  for(let y=0;y<frame.height;y+=2){for(let x=0;x<frame.width;x+=2){
+    let i=(y*frame.width+x)*4; let b=data[i]+data[i+1]+data[i+2];
+    if(b>max){ max=b; xMax=x; yMax=y; }
+  }}
+  return {x:xMax, y:yMax};
+}
+
+// --- Game Elements ---
+let enemies = [];
+let powerUps = [];
+let score = 0;
+let spawnTimer=0;
+
+// --- Helper Functions ---
+function spawnEnemy(){ enemies.push({x:Math.random()*window.innerWidth, y:-20, r:15+Math.random()*10, speed:2+Math.random()*2}); }
+function spawnPowerUp(){ powerUps.push({x:Math.random()*window.innerWidth, y:-20, r:12, speed:1.5+Math.random()*1.5}); }
+
+function checkCollision(a,b){ const dx=a.x-b.x; const dy=a.y-b.y; return Math.sqrt(dx*dx+dy*dy)<(a.r+b.r); }
+
+// --- Main Loop ---
+function loop(){
+  ctx.drawImage(video,0,0,canvas.width,canvas.height);
+  let frame = ctx.getImageData(0,0,canvas.width,canvas.height);
+  const bright = getBrightest(frame);
+
+  const targetX = bright.x / canvas.width * window.innerWidth;
+  const targetY = bright.y / canvas.height * window.innerHeight;
+
+  let dxRaw = targetX-pos.x;
+  let dyRaw = targetY-pos.y;
+
+  let dx = Math.abs(dxRaw)>thresholdPos?dxRaw:0;
+  let dy = Math.abs(dyRaw)>thresholdPos?dyRaw:0;
+
+  let nnInput = [prevDx, prevDy, dx];
+  let nnOutput = nn.forward(nnInput);
+
+  let dxPred = Math.abs(nnOutput[0])>thresholdVel?nnOutput[0]:0;
+  let dyPred = Math.abs(nnOutput[1])>thresholdVel?nnOutput[1]:0;
+
+  pos.x += dxPred*alpha; pos.y += dyPred*alpha;
+  pointer.style.left = pos.x+'px';
+  pointer.style.top = pos.y+'px';
+
+  // train NN online
+  nn.train([dx,dy]);
+  prevDx = dx; prevDy = dy;
+
+  // Trail
+  trailCtx.fillStyle='rgba(0,0,0,0.2)'; trailCtx.fillRect(0,0,trailCanvas.width,trailCanvas.height);
+  trailCtx.fillStyle='rgba(255,255,0,0.5)'; trailCtx.beginPath(); trailCtx.arc(pos.x,pos.y,15,0,Math.PI*2); trailCtx.fill();
+
+  // --- Spawn enemies & power-ups ---
+  spawnTimer++;
+  if(spawnTimer%60==0) spawnEnemy();
+  if(spawnTimer%300==0) spawnPowerUp();
+
+  // Update enemies
+  for(let i=enemies.length-1;i>=0;i--){
+    enemies[i].y += enemies[i].speed;
+    trailCtx.fillStyle='rgba(255,0,0,0.6)';
+    trailCtx.beginPath();
+    trailCtx.arc(enemies[i].x,enemies[i].y,enemies[i].r,0,Math.PI*2); trailCtx.fill();
+    if(checkCollision(enemies[i], {x:pos.x,y:pos.y,r:15})){
+      alert("Game Over! Score: "+score); location.reload();
+    }
+    if(enemies[i].y>window.innerHeight+20) enemies.splice(i,1), score+=1;
+  }
+
+  // Update power-ups
+  for(let i=powerUps.length-1;i>=0;i--){
+    powerUps[i].y += powerUps[i].speed;
+    trailCtx.fillStyle='rgba(0,255,255,0.7)';
+    trailCtx.beginPath();
+    trailCtx.arc(powerUps[i].x,powerUps[i].y,powerUps[i].r,0,Math.PI*2); trailCtx.fill();
+    if(checkCollision(powerUps[i], {x:pos.x,y:pos.y,r:15})){
+      score+=5; powerUps.splice(i,1);
+    }
+    if(powerUps[i].y>window.innerHeight+20) powerUps.splice(i,1);
+  }
+
+  // Draw score
+  trailCtx.fillStyle='white'; trailCtx.font='20px sans-serif';
+  trailCtx.fillText("Score: "+score,20,30);
+
+  requestAnimationFrame(loop);
+}
+
+video.addEventListener('loadeddata', loop);
+</script>
+
+</body>
+</html>
