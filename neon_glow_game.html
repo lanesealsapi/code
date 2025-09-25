@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Final Neon Etch-A-Sketch</title>
+<style>
+body {
+  margin: 0;
+  background: #0a0a1f;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  color: #fff;
+  font-family: 'Segoe UI', sans-serif;
+  user-select: none;
+}
+canvas {
+  border: 2px solid #55ffff;
+  cursor: crosshair;
+  box-shadow: 0 0 20px #55ffff;
+}
+.controls {
+  margin: 15px;
+}
+button, label {
+  background: #27293d;
+  color: #55ffff;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 8px;
+  margin: 0 5px;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 0 5px #55ffff;
+  transition: all 0.2s;
+}
+button:hover, label:hover {
+  background: #55ffff;
+  color: #111128;
+  box-shadow: 0 0 20px #55ffff;
+}
+input[type=checkbox] {
+  margin-left: 10px;
+}
+</style>
+</head>
+<body>
+
+<h1>Final Neon Etch-A-Sketch</h1>
+<canvas id="etchCanvas" width="800" height="600"></canvas>
+<div class="controls">
+  <button onclick="clearCanvas()">Clear</button>
+  <button onclick="nextColor()">Next Pen Color</button>
+  <label>Glow Pulse <input type="checkbox" id="pulseToggle" checked></label>
+</div>
+<p>Magenta, Cyan, Baby Blue neon with complementary glow!</p>
+
+<script>
+const canvas = document.getElementById('etchCanvas');
+const ctx = canvas.getContext('2d');
+
+// Primary neon colors
+const penColors = ['#ff00ff', '#00ffff', '#89CFF0']; // magenta, cyan, baby blue
+
+// Function to calculate complementary color
+function getComplementary(hex){
+  hex = hex.replace('#','');
+  let r = 255 - parseInt(hex.substr(0,2),16);
+  let g = 255 - parseInt(hex.substr(2,2),16);
+  let b = 255 - parseInt(hex.substr(4,2),16);
+  return `rgb(${r},${g},${b})`;
+}
+
+// Build color palette with pen, glow, and background
+const colorPalette = penColors.map(pen=>{
+  return { pen: pen, glow: getComplementary(pen), bg: '#0a0a1f' };
+});
+
+let colorIndex = 0;
+let penColor = colorPalette[colorIndex].pen;
+let glowColor = colorPalette[colorIndex].glow;
+let bgColor = colorPalette[colorIndex].bg;
+
+// Pen position
+let x = canvas.width/2;
+let y = canvas.height/2;
+
+ctx.lineCap = 'round';
+ctx.lineJoin = 'round';
+ctx.lineWidth = 4;
+
+let mouseX = x;
+let mouseY = y;
+let glowPulse = 15;
+let pulseDir = 1;
+
+// Mouse tracking
+canvas.addEventListener('mousemove', e => { mouseX = e.offsetX; mouseY = e.offsetY; });
+
+// Draw line
+function drawLine(nx, ny){
+  ctx.strokeStyle = penColor;       // visible pen color
+  ctx.shadowColor = glowColor;      // complementary glow
+  ctx.shadowBlur = glowPulse;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(nx, ny);
+  ctx.stroke();
+  x = nx;
+  y = ny;
+}
+
+// Clear canvas
+function clearCanvas(){
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+}
+
+// Next pen color
+function nextColor(){
+  colorIndex = (colorIndex+1)%colorPalette.length;
+  penColor = colorPalette[colorIndex].pen;
+  glowColor = colorPalette[colorIndex].glow;
+  bgColor = colorPalette[colorIndex].bg;
+  clearCanvas();
+}
+
+// Initialize background
+clearCanvas();
+
+// Animation loop
+function animate(){
+  requestAnimationFrame(animate);
+
+  // Glow pulse
+  if(document.getElementById('pulseToggle').checked){
+    glowPulse += pulseDir*0.5;
+    if(glowPulse > 25 || glowPulse < 5) pulseDir *= -1;
+  }
+
+  // Smooth follow
+  const dx = mouseX - x;
+  const dy = mouseY - y;
+  const dist = Math.hypot(dx, dy);
+  if(dist > 1){
+    const speed = Math.min(25, dist);
+    drawLine(x + dx/dist*speed, y + dy/dist*speed);
+  } else {
+    // idle wiggle
+    drawLine(x + (Math.random()-0.5)*2, y + (Math.random()-0.5)*2);
+  }
+
+  // Dim overlay for old trails, very subtle, trails remain visible
+  ctx.fillStyle = 'rgba(10,10,31,0.02)'; 
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+}
+
+animate();
+</script>
+
+</body>
+</html>
