@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Emoji Flower Launcher</title>
+<style>
+  body {
+    margin: 0;
+    height: 100vh;
+    background: #1e1e2f;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    font-family: sans-serif;
+  }
+
+  #circle {
+    width: 100px;
+    height: 100px;
+    background: radial-gradient(circle at center, blue, blue);
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    user-select: none;
+    box-shadow: 0 0 20px rgba(100,100, 255, 0.6);
+    transition: transform 0.1s;
+  }
+
+  .flower {
+    position: absolute;
+    font-size: 24px;
+    pointer-events: none;
+    animation: floatUp 2s ease-out forwards;
+  }
+
+  @keyframes floatUp {
+    0% {
+      opacity: 1;
+      transform: translate(0, 0) scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(var(--x), var(--y)) scale(1.5);
+    }
+  }
+</style>
+</head>
+<body>
+
+<div id="circle">🌸</div>
+
+<script>
+const circle = document.getElementById('circle');
+const flowers = ["🌹","🌷","🌼","🌻","💐"];
+
+function launchFlower() {
+  const flower = document.createElement('div');
+  flower.className = 'flower';
+  flower.textContent = flowers[Math.floor(Math.random() * flowers.length)];
+  
+  const rect = circle.getBoundingClientRect();
+  flower.style.left = rect.left + rect.width / 2 + 'px';
+  flower.style.top = rect.top + rect.height / 2 + 'px';
+
+  // random float direction
+  const x = (Math.random() - 0.5) * 200 + 'px';
+  const y = (-Math.random() * 200 - 50) + 'px';
+  flower.style.setProperty('--x', x);
+  flower.style.setProperty('--y', y);
+
+  document.body.appendChild(flower);
+
+  // Remove element after animation
+  flower.addEventListener('animationend', () => flower.remove());
+}
+
+// Trigger flower on Enter key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    circle.style.transform = 'scale(1.2)';
+    launchFlower();
+    setTimeout(() => circle.style.transform = 'scale(1)', 100);
+  }
+});
+
+// Also allow clicking the circle
+circle.addEventListener('click', () => {
+  circle.style.transform = 'scale(1.2)';
+  launchFlower();
+  setTimeout(() => circle.style.transform = 'scale(1)', 100);
+});
+</script>
+
+</body>
+</html>
