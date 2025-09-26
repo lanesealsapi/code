@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Market Dashboard — VIX / BTC / Gold / DJIA vs NASDAQ / Economic Output Forecast</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: Arial, sans-serif; margin: 16px; background:#f7f9fc; color:#111; }
+    h1 { font-size:20px; margin-bottom:6px; }
+    .row { display:flex; gap:16px; margin-bottom:12px; flex-wrap:wrap; }
+    .card { background:white; padding:12px; border-radius:8px; box-shadow:0 1px 4px rgba(16,24,40,0.06); flex:1 1 480px; }
+    canvas { background:#fff; border-radius:6px; }
+    .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    label { font-size:13px; margin-right:6px; }
+    .toggle { display:inline-flex; gap:8px; align-items:center; }
+    .small { font-size:13px; color:#444; }
+    .forecast-box { background:#fff; padding:10px; border-radius:8px; width:320px; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
+    input[type="range"] { width:160px; }
+    table { border-collapse:collapse; width:100%; }
+    td,th { padding:6px; border-bottom:1px solid #eee; text-align:left; font-size:13px; }
+    .muted { color:#666; font-size:13px; }
+    .footer { margin-top:12px; font-size:12px; color:#666; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <h1>Market Dashboard — last 24 months (static sample data)</h1>
+
+  <div class="row">
+    <div class="card">
+      <div class="controls">
+        <div class="toggle">
+          <input type="checkbox" id="showVix" checked><label for="showVix">VIX</label>
+        </div>
+        <div class="toggle">
+          <input type="checkbox" id="showBtc" checked><label for="showBtc">Bitcoin (BTC)</label>
+        </div>
+        <div class="toggle">
+          <input type="checkbox" id="showGold" checked><label for="showGold">Gold</label>
+        </div>
+        <div style="flex:1"></div>
+        <div class="muted">Monthly points — synthetic sample data</div>
+      </div>
+      <canvas id="marketChart" height="220"></canvas>
+    </div>
+
+    <div class="card">
+      <div class="controls" style="margin-bottom:8px;">
+        <div class="toggle"><input type="checkbox" id="showDjia" checked><label for="showDjia">DJIA</label></div>
+        <div class="toggle"><input type="checkbox" id="showNasdaq" checked><label for="showNasdaq">NASDAQ</label></div>
+        <div style="flex:1"></div>
+        <div class="muted">Overlay with dual axis</div>
+      </div>
+      <canvas id="indicesChart" height="220"></canvas>
+    </div>
+  </div>
+
+  <hr />
+
+  <div class="row">
+    <div class="card" style="flex:1 1 640px;">
+      <h3 style="margin-top:0;margin-bottom:8px;">Economic output forecast (2 months)</h3>
+      <div style="display:flex; gap:12px; align-items:flex-start;">
+        <div style="flex:1;">
+          <table>
+            <thead><tr><th>Month</th><th>Oregon Lumber</th><th>Unemployment</th><th>CPI</th><th>DJIA/NASDAQ</th><th>Predicted Output</th></tr></thead>
+            <tbody id="forecastTable"></tbody>
+          </table>
+          <div class="muted" style="margin-top:8px;">Adjust sliders to change input assumptions for the next two months. Model: multivariate OLS trained on the 24-month sample.</div>
+        </div>
+
+        <div class="forecast-box">
+          <div style="margin-bottom:8px;"><strong>Model coefficients (OLS)</strong></div>
+          <div id="coeffs" class="small"></div>
+          <hr />
+          <div style="margin-bottom:8px;"><strong>Forecast controls</strong></div>
+          <div style="margin-bottom:6px;"><label class="small">Oregon lumber (next month): <span id="l1v">100</span></label><input id="l1" type="range" min="40" max="180" value="100"></div>
+          <div style="margin-bottom:6px;"><label class="small">Oregon lumber (month+2): <span id="l2v">98</span></label><input id="l2" type="range" min="40" max="180" value="98"></div>
+          <div style="margin-bottom:6px;"><label class="small">Unemployment % (next): <span id="u1v">5.0</span></label><input id="u1" type="range" min="2" max="12" step="0.1" value="5"></div>
+          <div style="margin-bottom:6px;"><label class="small">CPI (index next): <span id="c1v">120</span></label><input id="c1" type="range" min="90" max="160" value="120"></div>
+          <div style="margin-bottom:6px;"><label class="small">DJIA/NASDAQ ratio (next): <span id="r1v">0.9</span></label><input id="r1" type="range" min="0.6" max="1.4" step="0.01" value="0.9"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="max-width:420px;">
+      <div style="margin-bottom:8px;"><strong>Data preview (last 24 months)</strong></div>
+      <canvas id="dataPreview" height="260"></canvas>
+      <div class="footer">Synthetic monthly sample data embedded in this file. Replace arrays in script for real data.</div>
+    </div>
+  </div>
+
+  <script>
+  // --- synthetic sample monthly data for last 24 months (most recent last) ---
+  const months = (function(){
+    // generate last 24 month labels from current (static for repeatability)
+    const base = new Date('2024-09-01'); // anchor so 24 months ends Aug 2026-ish; adjust as you like
+    const arr = [];
+    for(let i=0;i<24;i++){
+      const d = new Date(base);
+      d.setMonth(base.getMonth()-23+i);
+      arr.push(d.toISOString().slice(0,7));
+    }
+    return arr;
+  })();
+
+  // VIX (monthly average synthetic)
+  const vix = [18.5,17.2,19.0,15.4,14.8,16.2,20.1,22.3,21.0,19.6,17.8,18.0,16.4,15.9,14.6,13.8,14.2,15.5,16.0,17.1,18.3,19.4,20.0,18.8];
+
+  // Bitcoin monthly close synthetic (USD)
+  const btc = [46000,47000,43000,48000,52000,50000,49000,54000,56000,58000,60000,59000,61000,63000,62000,64000,65000,63000,62000,61000,60000,59000,58000,60000];
+
+  // Gold monthly close synthetic (USD/oz)
+  const gold = [1850,1868,1840,1830,1810,1790,1805,1820,1835,1850,1860,1855,1848,1852,1865,1870,1862,1858,1864,1872,1880,1875,1868,1878];
+
+  // DJIA and NASDAQ synthetic index levels (monthly close)
+  const djia = [34000,34250,34120,34400,34650,35000,35200,35500,35800,36050,36200,36500,36800,37050,37200,36900,37100,37400,37650,37800,37950,38100,38300,38500];
+  const nasdaq = [13100,13250,13180,13300,13450,13500,13620,13800,13950,14080,14200,14350,14500,14650,14720,14600,14780,14900,15040,15120,15200,15280,15350,15480];
+
+  // Oregon lumber production (sample index, monthly)
+  const lumber = [98,102,100,95,96,99,110,115,112,108,105,103,101,100,98,97,99,101,104,107,106,105,103,102];
+
+  // Unemployment rate (Oregon) synthetic
+  const unemployment = [5.4,5.2,5.1,5.0,4.9,4.8,4.7,4.9,5.0,5.1,5.2,5.3,5.1,5.0,4.9,4.8,4.9,5.0,5.1,5.2,5.0,4.9,4.8,4.7];
+
+  // CPI index synthetic (base-ish)
+  const cpi = [115,115.2,115.5,116,116.3,116.7,117,117.2,117.6,118,118.3,118.5,118.8,119.0,119.2,119.5,119.8,120.0,120.2,120.5,120.8,121.0,121.3,121.6];
+
+  // Build DJIA/NASDAQ ratio (lagged ratio use previous month in regression)
+  const ratio = djia.map((d,i)=>d / nasdaq[i]);
+
+  // Chart: VIX / BTC / Gold
+  const ctx = document.getElementById('marketChart').getContext('2d');
+  const marketChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: months,
+      datasets: [
+        { label:'VIX', data:vix, borderColor:'#d9534f', backgroundColor:'rgba(217,83,79,0.06)', yAxisID:'y'},
+        { label:'Bitcoin (USD)', data:btc, borderColor:'#f0ad4e', backgroundColor:'rgba(240,173,78,0.06)', yAxisID:'y1'},
+        { label:'Gold (USD/oz)', data:gold, borderColor:'#f7dc6f', backgroundColor:'rgba(247,220,111,0.06)', yAxisID:'y1'},
+      ]
+    },
+    options: {
+      interaction:{mode:'index', intersect:false},
+      scales:{
+        y: { type:'linear', position:'left', title:{display:true,text:'VIX / index'}, min:0 },
+        y1: { type:'linear', position:'right', title:{display:true,text:'USD / index'}, grid:{drawOnChartArea:false} }
+      },
+      plugins:{legend:{display:true}}
+    }
+  });
+
+  // Chart: DJIA vs NASDAQ
+  const ctx2 = document.getElementById('indicesChart').getContext('2d');
+  const indicesChart = new Chart(ctx2, {
+    type:'line',
+    data:{
+      labels:months,
+      datasets:[
+        { label:'DJIA', data:djia, borderColor:'#337ab7', yAxisID:'y'},
+        { label:'NASDAQ', data:nasdaq, borderColor:'#5cb85c', yAxisID:'y1' }
+      ]
+    },
+    options:{
+      interaction:{mode:'index', intersect:false},
+      scales:{
+        y:{ type:'linear', position:'left', title:{display:true,text:'DJIA'} },
+        y1:{ type:'linear', position:'right', title:{display:true,text:'NASDAQ'}, grid:{drawOnChartArea:false} }
+      }
+    }
+  });
+
+  // Data preview small chart (stacked lines)
+  const ctx3 = document.getElementById('dataPreview').getContext('2d');
+  const dataPreview = new Chart(ctx3, {
+    type:'line',
+    data:{ labels:months, datasets:[
+      {label:'Lumber', data:lumber, borderColor:'#6f42c1'},
+      {label:'Unemployment', data:unemployment, borderColor:'#20c997'},
+      {label:'CPI', data:cpi, borderColor:'#fd7e14'}
+    ]},
+    options:{ plugins:{legend:{position:'bottom'}} }
+  });
+
+  // Toggle handlers
+  document.getElementById('showVix').addEventListener('change', e=>{ marketChart.data.datasets[0].hidden = !e.target.checked; marketChart.update(); });
+  document.getElementById('showBtc').addEventListener('change', e=>{ marketChart.data.datasets[1].hidden = !e.target.checked; marketChart.update(); });
+  document.getElementById('showGold').addEventListener('change', e=>{ marketChart.data.datasets[2].hidden = !e.target.checked; marketChart.update(); });
+  document.getElementById('showDjia').addEventListener('change', e=>{ indicesChart.data.datasets[0].hidden = !e.target.checked; indicesChart.update(); });
+  document.getElementById('showNasdaq').addEventListener('change', e=>{ indicesChart.data.datasets[1].hidden = !e.target.checked; indicesChart.update(); });
+
+  // --- Simple OLS utilities ---
+  function transpose(A){ return A[0].map((_,i)=>A.map(r=>r[i])); }
+  function matMul(A,B){
+    const m=A.length, n=B[0].length, p=B.length;
+    const C=Array.from({length:m},()=>Array(n).fill(0));
+    for(let i=0;i<m;i++) for(let k=0;k<p;k++) for(let j=0;j<n;j++) C[i][j]+=A[i][k]*B[k][j];
+    return C;
+  }
+  function invert2(A){
+    // general matrix inversion via Gauss-Jordan for small matrices
+    const n=A.length;
+    const M=A.map(r=>r.slice());
+    const I=Array.from({length:n},(_,i)=>Array.from({length:n},(__,j)=>(i===j?1:0)));
+    for(let i=0;i<n;i++){
+      // pivot
+      let piv=i;
+      for(let r=i+1;r<n;r++) if(Math.abs(M[r][i])>Math.abs(M[piv][i])) piv=r;
+      if(piv!==i){ [M[i],M[piv]]=[M[piv],M[i]]; [I[i],I[piv]]=[I[piv],I[i]]; }
+      const div = M[i][i] || 1e-12;
+      for(let j=0;j<n;j++){ M[i][j]/=div; I[i][j]/=div; }
+      for(let r=0;r<n;r++) if(r!==i){
+        const factor=M[r][i];
+        for(let c=0;c<n;c++){ M[r][c]-=factor*M[i][c]; I[r][c]-=factor*I[i][c]; }
+      }
+    }
+    return I;
+  }
+
+  function ols(X,y){
+    // X: matrix n x p, y: vector n
+    const Xt = transpose(X);
+    const XtX = matMul(Xt,X);
+    const XtXinv = invert2(XtX);
+    const Xty = matMul(Xt, y.map(v=>[v]));
+    const beta = matMul(XtXinv, Xty).map(r=>r[0]);
+    return beta;
+  }
+
+  // prepare regression dataset
+  // Predictors: [const, lumber(t), unemployment(t), cpi(t), ratio(t-1)]
+  const n = months.length;
+  const X = [];
+  const y = []; // economic output proxy: we'll create as function of lumber + noise
+  for(let i=0;i<n;i++){
+    const lagRatio = i>0 ? ratio[i-1] : ratio[i];
+    const out = 0.8*lumber[i] - 1.5*unemployment[i] + 0.6*(cpi[i]-110) + 5*(lagRatio-0.9) + (Math.random()-0.5)*3 + 20;
+    // out is synthetic "economic output" index
+    y.push(out);
+    X.push([1, lumber[i], unemployment[i], cpi[i], lagRatio]);
+  }
+
+  // Compute coefficients
+  const beta = ols(X,y); // length 5
+  function formatCoeffs(b){
+    return `<table><tr><td>Intercept</td><td>${b[0].toFixed(3)}</td></tr>
+            <tr><td>lumber</td><td>${b[1].toFixed(3)}</td></tr>
+            <tr><td>unemployment</td><td>${b[2].toFixed(3)}</td></tr>
+            <tr><td>CPI</td><td>${b[3].toFixed(3)}</td></tr>
+            <tr><td>lag ratio</td><td>${b[4].toFixed(3)}</td></tr></table>`;
+  }
+  document.getElementById('coeffs').innerHTML = formatCoeffs(beta);
+
+  // Forecast months labels (next two months)
+  function nextMonthsLabels(){
+    const last = months[months.length-1];
+    const [y,m] = last.split('-').map(Number);
+    const d1 = new Date(y,m-1,1);
+    d1.setMonth(d1.getMonth()+1);
+    const d2 = new Date(y,m-1,1);
+    d2.setMonth(d2.getMonth()+2);
+    return [d1.toISOString().slice(0,7), d2.toISOString().slice(0,7)];
+  }
+  const nextLabels = nextMonthsLabels();
+
+  // UI slider wiring
+  const l1 = document.getElementById('l1'), l2 = document.getElementById('l2');
+  const u1 = document.getElementById('u1'), c1 = document.getElementById('c1'), r1 = document.getElementById('r1');
+  const l1v = document.getElementById('l1v'), l2v = document.getElementById('l2v'), u1v = document.getElementById('u1v'), c1v = document.getElementById('c1v'), r1v = document.getElementById('r1v');
+
+  function updateLabels(){ l1v.textContent = l1.value; l2v.textContent = l2.value; u1v.textContent = parseFloat(u1.value).toFixed(1); c1v.textContent = c1.value; r1v.textContent = r1.value; }
+
+  [l1,l2,u1,c1,r1].forEach(el=>el.addEventListener('input', ()=>{ updateLabels(); computeForecast(); }));
+
+  updateLabels();
+
+  function computeForecast(){
+    const in1 = [1, parseFloat(l1.value), parseFloat(u1.value), parseFloat(c1.value), parseFloat(r1.value)];
+    // for month+2, use l2, unemployment same, cpi small uptick, ratio same
+    const in2 = [1, parseFloat(l2.value), parseFloat(u1.value), parseFloat(c1.value)+0.2, parseFloat(r1.value)];
+    function dot(a,b){ return a.reduce((s,x,i)=>s+x*b[i],0); }
+    const p1 = dot(beta, in1);
+    const p2 = dot(beta, in2);
+    // update table
+    const tbody = document.getElementById('forecastTable');
+    tbody.innerHTML = `<tr><td>${nextLabels[0]}</td><td>${in1[1]}</td><td>${in1[2].toFixed(1)}</td><td>${in1[3].toFixed(1)}</td><td>${in1[4].toFixed(2)}</td><td><strong>${p1.toFixed(2)}</strong></td></tr>
+                       <tr><td>${nextLabels[1]}</td><td>${in2[1]}</td><td>${in2[2].toFixed(1)}</td><td>${in2[3].toFixed(1)}</td><td>${in2[4].toFixed(2)}</td><td><strong>${p2.toFixed(2)}</strong></td></tr>`;
+  }
+
+  computeForecast();
+
+  // expose a function to replace data arrays easily (commented example)
+  window.replaceData = function(newData){
+    // expected keys: months, vix, btc, gold, djia, nasdaq, lumber, unemployment, cpi
+    // update arrays and charts, re-run regression
+    // (left as an exercise — this file uses embedded static arrays)
+    console.log('replaceData called', newData);
+  };
+
+  </script>
+</body>
+</html>

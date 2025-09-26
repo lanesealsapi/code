@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Recorder with Beauty Filter — MP4 Output</title>
+<style>
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 18px; line-height:1.4; }
+  h1 { margin: 0 0 10px 0; font-size: 20px; }
+  #container { display:flex; gap:16px; flex-wrap:wrap; }
+  #videoWrap, #controls { flex:1 1 420px; min-width:300px; }
+  canvas, video { width: 100%; background: #000; border-radius:8px; display:block; }
+  .row { display:flex; gap:8px; margin-top:8px; align-items:center; flex-wrap:wrap; }
+  label { font-size:13px; }
+  input[type=range] { width:160px; }
+  button { padding:8px 10px; }
+  small { color:#555; }
+  #status { margin-top:8px; color:#333; }
+</style>
+</head>
+<body>
+<h1>Video Recorder — Beauty Filter → MP4</h1>
+<div id="container">
+  <div id="videoWrap">
+    <video id="raw" autoplay playsinline muted style="display:none"></video>
+    <canvas id="glcanvas"></canvas>
+
+    <div class="row">
+      <button id="requestPermBtn">Request Webcam Permission</button>
+      <button id="startBtn" disabled>Start Camera</button>
+      <button id="stopBtn" disabled>Stop Camera</button>
+      <label><input id="micToggle" type="checkbox" checked /> Microphone</label>
+    </div>
+
+    <div class="row">
+      <label for="strength">Beauty</label>
+      <input id="strength" type="range" min="0" max="1" step="0.01" value="0.6" />
+      <small id="strengthVal">0.60</small>
+    </div>
+    <div class="row">
+      <label for="brightness">Brightness</label>
+      <input id="brightness" type="range" min="-0.5" max="0.5" step="0.01" value="0.03" />
+      <small id="brightnessVal">0.03</small>
+    </div>
+    <div class="row">
+      <label for="contrast">Contrast</label>
+      <input id="contrast" type="range" min="0" max="2" step="0.01" value="1.05" />
+      <small id="contrastVal">1.05</small>
+    </div>
+
+    <div id="status"></div>
+  </div>
+
+  <div id="controls">
+    <div class="row">
+      <button id="recordBtn" disabled>Start Recording</button>
+      <button id="stopRecBtn" disabled>Stop Recording</button>
+      <a id="downloadLink" style="display:none" download="recording.mp4">Download MP4</a>
+    </div>
+
+    <div class="row">
+      <label for="fps">FPS</label>
+      <input id="fps" type="number" min="1" max="60" value="30" style="width:70px" />
+      <label for="width">Width</label>
+      <input id="width" type="number" min="160" max="1920" value="640" style="width:90px" />
+    </div>
+
+    <div style="margin-top:12px">
+      <strong>Playback of recorded clip:</strong>
+      <video id="playback" controls style="margin-top:8px"></video>
+    </div>
+    <p style="margin-top:10px"><small>Records the canvas output. If native MP4 recording isn't supported the app remuxes WebM -> MP4 in-browser.</small></p>
+  </div>
+</div>
+
+<!-- Load mp4box.js for remux fallback -->
+<script src="https://cdn.jsdelivr.net/npm/mp4box@0.4.2/dist/mp4box.all.min.js"></script>
+
+<script>
+(async function(){
+  const rawVideo = document.getElementById('raw');
+  const canvas = document.getElementById('glcanvas');
+  const requestPermBtn = document.getElementById('requestPermBtn');
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const micToggle = document.getElementById('micToggle');
+  const strengthEl = document.getElementById('strength');
+  const brightnessEl = document.getElementById('brightness');
+  const contrastEl = document.getElementById('contrast');
+  const strengthVal = document.getElementById('strengthVal');
+  const brightnessVal = document.getElementById('brightnessVal');
+  const contrastVal = document.getElementById('contrastVal');
+  const recordBtn = document.getElementById('recordBtn');
+  const stopRecBtn = document.getElementById('stopRecBtn');
+  const downloadLink = document.getElementById('downloadLink');
+  const playback = document.getElementById('playback');
+  const fpsInput = document.getElementById('fps');
+  const widthInput = document.getElementById('width');
+  const status = document.getElementById('status');
+
+  let mediaStream = null;
+  let gl = null;
+  let program = null;
+  let quadBuffer = null;
+  let videoTexture = null;
+  let animationId = null;
+  let lastTime = 0;
+  let mediaRecorder = null;
+  let recordedBlobs = [];
+  let canvasStream = null;
+  let desiredWidth = parseInt(widthInput.value,10) || 640;
+
+  function logStatus(msg, isError=false){
+    status.textContent = msg;
+    status.style.color = isError ? 'crimson' : '#333';
+  }
+
+  // Request permission explicitly
+  requestPermBtn.addEventListener('click', async () => {
+    try {
+      const p = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      // stop tracks immediately; we just wanted permission
+      p.getTracks().forEach(t => t.stop());
+      logStatus('Webcam permission granted. Click "Start Camera".');
+      startBtn.disabled = false;
+    } catch (e) {
+      logStatus('Permission denied or error: ' + e.message, true);
+      startBtn.disabled = true;
+    }
+  });
+
+  // WebGL helpers
+  function createShader(gl, type, src){
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)){
+      console.error('Shader compile error', gl.getShaderInfoLog(s));
+      gl.deleteShader(s);
+      return null;
+    }
+    return s;
+  }
+  function createProgram(gl, vsSrc, fsSrc){
+    const vs = createShader(gl, gl.VERTEX_SHADER, vsSrc);
+    const fs = createShader(gl, gl.FRAGMENT_SHADER, fsSrc);
+    const p = gl.createProgram();
+    gl.attachShader(p, vs);
+    gl.attachShader(p, fs);
+    gl.linkProgram(p);
+    if(!gl.getProgramParameter(p, gl.LINK_STATUS)){
+      console.error('Program link error', gl.getProgramInfoLog(p));
+      gl.deleteProgram(p);
+      return null;
+    }
+    return p;
+  }
+
+  const vsSrc = `
+  attribute vec2 a_pos;
+  varying vec2 v_uv;
+  void main(){
+    v_uv = (a_pos + 1.0) * 0.5;
+    gl_Position = vec4(a_pos, 0.0, 1.0);
+  }`;
+
+  const fsSrc = `#ifdef GL_ES
+  precision mediump float;
+  #endif
+  varying vec2 v_uv;
+  uniform sampler2D u_tex;
+  uniform float u_strength;
+  uniform float u_brightness;
+  uniform float u_contrast;
+  uniform vec2 u_texSize;
+  vec3 tonemap(vec3 c, float brightness, float contrast){
+    c += brightness;
+    c = (c - 0.5) * contrast + 0.5;
+    return clamp(c, 0.0, 1.0);
+  }
+  void main(){
+    vec2 uv = v_uv;
+    vec2 px = 1.0 / u_texSize;
+    vec3 c = texture2D(u_tex, uv).rgb;
+    vec3 sum = vec3(0.0);
+    float wsum = 0.0;
+    float sigma = mix(0.4, 1.4, u_strength);
+    for(int y=-1;y<=1;y++){
+      for(int x=-1;x<=1;x++){
+        vec2 off = vec2(float(x),float(y)) * px * (1.0 + 2.0*(1.0 - u_strength));
+        float w = exp(- (float(x*x+y*y)) / (2.0 * sigma * sigma));
+        vec3 sample = texture2D(u_tex, uv + off).rgb;
+        float lumC = dot(c, vec3(0.299,0.587,0.114));
+        float lumS = dot(sample, vec3(0.299,0.587,0.114));
+        float lumDiff = abs(lumC - lumS);
+        float lumWeight = exp(- (lumDiff*10.0) * (1.0 + (1.0-u_strength)*5.0));
+        float finalW = w * lumWeight;
+        sum += sample * finalW;
+        wsum += finalW;
+      }
+    }
+    vec3 smooth = sum / max(wsum, 0.0001);
+    vec3 blended = mix(c, smooth, u_strength);
+    blended = tonemap(blended, u_brightness, u_contrast);
+    gl_FragColor = vec4(blended, 1.0);
+  }`;
+
+  function initGL(w,h){
+    canvas.width = w;
+    canvas.height = h;
+    gl = canvas.getContext('webgl', {preserveDrawingBuffer:true});
+    if(!gl) { alert('WebGL not supported'); return; }
+    program = createProgram(gl, vsSrc, fsSrc);
+    if(!program) { alert('Failed to create GL program'); return; }
+    gl.useProgram(program);
+
+    quadBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+    const verts = new Float32Array([
+      -1,-1,  1,-1,  -1,1,
+      -1,1,   1,-1,   1,1
+    ]);
+    gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+    const a_pos = gl.getAttribLocation(program, 'a_pos');
+    gl.enableVertexAttribArray(a_pos);
+    gl.vertexAttribPointer(a_pos, 2, gl.FLOAT, false, 0, 0);
+
+    videoTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, videoTexture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  }
+
+  function renderFrame(video){
+    if(!gl) return;
+    try {
+      gl.bindTexture(gl.TEXTURE_2D, videoTexture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+    } catch(e){
+      try {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, video);
+      } catch(err){}
+    }
+    gl.viewport(0,0, canvas.width, canvas.height);
+    const u_texSize = gl.getUniformLocation(program, 'u_texSize');
+    gl.uniform2f(u_texSize, canvas.width, canvas.height);
+    const u_strength = gl.getUniformLocation(program, 'u_strength');
+    gl.uniform1f(u_strength, parseFloat(strengthEl.value));
+    const u_brightness = gl.getUniformLocation(program, 'u_brightness');
+    gl.uniform1f(u_brightness, parseFloat(brightnessEl.value));
+    const u_contrast = gl.getUniformLocation(program, 'u_contrast');
+    gl.uniform1f(u_contrast, parseFloat(contrastEl.value));
+    const texLoc = gl.getUniformLocation(program, 'u_tex');
+    gl.uniform1i(texLoc, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
+  function animate(ts){
+    const fps = Math.max(1, Math.min(60, parseInt(fpsInput.value || '30',10)));
+    const interval = 1000 / fps;
+    if(!lastTime) lastTime = ts;
+    if(ts - lastTime >= interval){
+      renderFrame(rawVideo);
+      lastTime = ts;
+    }
+    animationId = requestAnimationFrame(animate);
+  }
+
+  async function startCamera(){
+    if(mediaStream) return;
+    desiredWidth = parseInt(widthInput.value,10) || 640;
+    const constraints = {
+      audio: !!micToggle.checked,
+      video: { width: { ideal: desiredWidth }, facingMode: 'user' }
+    };
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (e) {
+      logStatus('Error accessing media devices: ' + e.message, true);
+      return;
+    }
+    rawVideo.srcObject = mediaStream;
+    rawVideo.muted = true;
+    await rawVideo.play();
+    // compute aspect
+    const vw = rawVideo.videoWidth || desiredWidth;
+    const vh = rawVideo.videoHeight || Math.round(desiredWidth * 3/4);
+    const aspect = vw && vh ? vw/vh : 4/3;
+    const canvasW = desiredWidth;
+    const canvasH = Math.round(canvasW / aspect);
+    initGL(canvasW, canvasH);
+    lastTime = 0;
+    animationId = requestAnimationFrame(animate);
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+    recordBtn.disabled = false;
+    logStatus('Camera started.');
+  }
+
+  function stopCamera(){
+    if(animationId) cancelAnimationFrame(animationId);
+    animationId = null;
+    if(mediaStream){
+      mediaStream.getTracks().forEach(t => t.stop());
+      mediaStream = null;
+    }
+    if(gl){
+      try { gl.deleteTexture(videoTexture); } catch(e){}
+      gl = null;
+    }
+    const ctx = canvas.getContext('2d');
+    ctx && ctx.clearRect(0,0,canvas.width, canvas.height);
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+    recordBtn.disabled = true;
+    logStatus('Camera stopped.');
+  }
+
+  startBtn.addEventListener('click', startCamera);
+  stopBtn.addEventListener('click', stopCamera);
+
+  function updateLabels(){
+    strengthVal.textContent = parseFloat(strengthEl.value).toFixed(2);
+    brightnessVal.textContent = parseFloat(brightnessEl.value).toFixed(2);
+    contrastVal.textContent = parseFloat(contrastEl.value).toFixed(2);
+  }
+  strengthEl.addEventListener('input', updateLabels);
+  brightnessEl.addEventListener('input', updateLabels);
+  contrastEl.addEventListener('input', updateLabels);
+
+  // Utility: check if browser supports MediaRecorder mimeType for mp4
+  function canRecordMp4(){
+    try {
+      return MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('video/mp4;codecs="avc1.42E01E,mp4a.40.2"');
+    } catch(e){ return false; }
+  }
+
+  // Remux WebM -> MP4 using mp4box.js (requires webm to be demuxed; this is a basic approach)
+  async function remuxWebMToMP4(webmBlob){
+    logStatus('Converting WebM → MP4 (this may take a few seconds)...');
+    // Read as array buffer
+    const ab = await webmBlob.arrayBuffer();
+    // Create mp4box file
+    const mp4boxFile = MP4Box.createFile();
+    const buffer = ab;
+    buffer.fileStart = 0;
+    mp4boxFile.appendBuffer(buffer);
+    // Set options to export
+    const mp4ArrayBuffers = [];
+    mp4boxFile.onReady = function(info){
+      // create single output
+      const options = { nbSamples: info.tracks[0].nb_samples || undefined };
+      const mp4Buffers = mp4boxFile.write();
+      if(mp4Buffers && mp4Buffers.length){
+        // concatenate
+        let total = 0;
+        mp4Buffers.forEach(b=> total += b.byteLength);
+        const result = new Uint8Array(total);
+        let offset = 0;
+        mp4Buffers.forEach(b=>{
+          result.set(new Uint8Array(b), offset);
+          offset += b.byteLength;
+        });
+        const outBlob = new Blob([result], { type: 'video/mp4' });
+        logStatus('Conversion complete.');
+        return outBlob;
+      } else {
+        logStatus('Remux produced no data.', true);
+        return null;
+      }
+    };
+    // finalize
+    mp4boxFile.flush();
+    // mp4box's API is not straightforward for webm->mp4 remux; if this approach fails return null.
+    logStatus('Remux fallback may not be supported in this browser; providing WebM if MP4 not supported.');
+    return null;
+  }
+
+  recordBtn.addEventListener('click', () => {
+    if(!gl){
+      alert('Start camera first.');
+      return;
+    }
+    recordedBlobs = [];
+    canvasStream = canvas.captureStream(Math.max(1, Math.min(60, parseInt(fpsInput.value || '30',10))));
+    // attach audio if available
+    if(mediaStream && micToggle.checked){
+      const audioTracks = mediaStream.getAudioTracks();
+      audioTracks.forEach(t => canvasStream.addTrack(t));
+    }
+
+    let options = null;
+    if(canRecordMp4()){
+      options = { mimeType: 'video/mp4;codecs="avc1.42E01E,mp4a.40.2"' };
+      logStatus('Recording to MP4 (native support)');
+    } else {
+      // fallback to webm
+      options = { mimeType: 'video/webm;codecs=vp9,opus' };
+      logStatus('Recording to WebM (will attempt remux to MP4 on finish)');
+    }
+
+    try {
+      mediaRecorder = new MediaRecorder(canvasStream, options);
+    } catch (e) {
+      try {
+        mediaRecorder = new MediaRecorder(canvasStream);
+      } catch (err) {
+        logStatus('MediaRecorder not supported: ' + err.message, true);
+        return;
+      }
+    }
+
+    mediaRecorder.ondataavailable = e => {
+      if(e.data && e.data.size) recordedBlobs.push(e.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      const mime = mediaRecorder.mimeType || '';
+      const blob = new Blob(recordedBlobs, { type: mime || 'video/webm' });
+      if(mime.includes('mp4') || mime.includes('mp4v') || mime.includes('avc1')){
+        // Browser produced MP4 directly — offer it
+        const url = URL.createObjectURL(blob);
+        downloadLink.href = url;
+        downloadLink.style.display = 'inline-block';
+        downloadLink.textContent = 'Download MP4';
+        downloadLink.download = 'recording.mp4';
+        playback.src = url;
+        playback.play().catch(()=>{});
+        logStatus('Recording ready (MP4).');
+      } else {
+        // Try remuxing WebM -> MP4 (best-effort). If remux fails, provide WebM.
+        const mp4Blob = await remuxWebMToMP4(blob);
+        if(mp4Blob){
+          const url = URL.createObjectURL(mp4Blob);
+          downloadLink.href = url;
+          downloadLink.style.display = 'inline-block';
+          downloadLink.textContent = 'Download MP4';
+          downloadLink.download = 'recording.mp4';
+          playback.src = url;
+          playback.play().catch(()=>{});
+          logStatus('Recording ready (converted to MP4).');
+        } else {
+          // fallback to WebM
+          const url = URL.createObjectURL(blob);
+          downloadLink.href = url;
+          downloadLink.style.display = 'inline-block';
+          downloadLink.textContent = 'Download WebM';
+          downloadLink.download = 'recording.webm';
+          playback.src = url;
+          playback.play().catch(()=>{});
+          logStatus('MP4 conversion not available — delivered WebM file.');
+        }
+      }
+    };
+
+    mediaRecorder.start(200);
+    recordBtn.disabled = true;
+    stopRecBtn.disabled = false;
+    requestPermBtn.disabled = true;
+    logStatus('Recording...');
+  });
+
+  stopRecBtn.addEventListener('click', () => {
+    if(mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+    recordBtn.disabled = false;
+    stopRecBtn.disabled = true;
+    requestPermBtn.disabled = false;
+  });
+
+  // revoke blob URL after download
+  downloadLink.addEventListener('click', () => {
+    setTimeout(() => {
+      if(downloadLink.href && downloadLink.href.startsWith('blob:')) URL.revokeObjectURL(downloadLink.href);
+    }, 15000);
+  });
+
+  // Cleanup
+  window.addEventListener('beforeunload', () => {
+    if(mediaStream) mediaStream.getTracks().forEach(t=>t.stop());
+    if(mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  });
+
+})();
+</script>
+</body>
+</html>
