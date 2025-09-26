@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bricker 9000</title>
+  <style>
+    body { margin:0; background:#0b0c0f; color:#e9eef2; font-family:sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; }
+    .game-container { display:flex; gap:20px; }
+    canvas { background:#111; display:block; border-radius:12px; }
+    .info { margin-top:10px; color:#9aa0a6; font-size:14px; }
+    #preview { position: fixed; bottom: 10px; right: 10px; width: 160px; border-radius: 8px; }
+    .toggle { margin:15px; }
+    .switch {position:relative; display:inline-block; width:60px; height:34px;}
+    .switch input {opacity:0;width:0;height:0;}
+    .slider {position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#555;transition:.4s;border-radius:34px;}
+    .slider:before {position:absolute;content:"";height:26px;width:26px;left:4px;bottom:4px;background:white;transition:.4s;border-radius:50%;}
+    input:checked + .slider {background:#4ade80;}
+    input:checked + .slider:before {transform:translateX(26px);}
+  </style>
+</head>
+<body>
+  <h1>Bricker 9000</h1>
+  <div class="toggle">
+    <label class="switch">
+      <input type="checkbox" id="controlToggle">
+      <span class="slider"></span>
+    </label>
+    <span id="controlLabel">Face Control</span>
+  </div>
+  <div class="game-container">
+    <canvas id="game" width="480" height="640"></canvas>
+    <video id="preview" autoplay muted playsinline></video>
+  </div>
+  <div id="scoreboard">Score: 0 | Bricks Remaining: 0</div>
+
+  <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
+
+  <script>
+  const video = document.getElementById('preview');
+  let facemesh, predictions=[];
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+
+  let paddleW=160, paddleH=12; // doubled width
+  let paddleX = canvas.width/2 - paddleW/2;
+  let paddleY = canvas.height-30;
+  let balls=[];
+  let score=0;
+
+  let bricks=[];
+  const brickRowCount=5, brickColumnCount=7;
+  const brickWidth=60, brickHeight=20, brickPadding=8;
+  const brickOffsetTop=40, brickOffsetLeft=30;
+
+  let useKeyboard=false;
+
+  document.getElementById('controlToggle').addEventListener('change', e=>{
+    useKeyboard = e.target.checked;
+    document.getElementById('controlLabel').innerText = useKeyboard ? 'Keyboard Control' : 'Face Control';
+  });
+
+  function initBricks(){
+    bricks=[];
+    for(let c=0;c<brickColumnCount;c++){
+      for(let r=0;r<brickRowCount;r++){
+        let isMega = (c===Math.floor(Math.random()*brickColumnCount) && r===0);
+        bricks.push({x:0,y:0,status:1,mega:isMega});
+      }
+    }
+  }
+
+  function resetGame(){
+    score=0;
+    balls=[{x:canvas.width/2,y:canvas.height-60,dx:3,dy:-3,r:8}];
+    initBricks();
+  }
+
+  resetGame();
+
+  async function start(){
+    const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'}});
+    video.srcObject = stream;
+    await video.play();
+    facemesh = ml5.facemesh(video, ()=>console.log('Model ready'));
+    facemesh.on('predict', results=>{ predictions=results; });
+    loop();
+  }
+
+  function updatePaddle(){
+    if(useKeyboard){
+      document.onkeydown=(e)=>{
+        if(e.key==='ArrowLeft' || e.key==='a') paddleX-=20;
+        if(e.key==='ArrowRight' || e.key==='d') paddleX+=20;
+      };
+    } else {
+      if(predictions.length>0){
+        const nose=predictions[0].scaledMesh[1];
+        const nx = nose[0];
+        const norm = 1 - (nx / video.videoWidth);
+        paddleX = norm * (canvas.width - paddleW);
+      }
+    }
+    if(paddleX<0) paddleX=0;
+    if(paddleX+ paddleW>canvas.width) paddleX=canvas.width-paddleW;
+  }
+
+  function drawBricks(){
+    let remaining=0;
+    bricks.forEach((b,i)=>{
+      if(b.status==1){
+        const col=i%brickColumnCount;
+        const row=Math.floor(i/brickColumnCount);
+        const bx=(col*(brickWidth+brickPadding))+brickOffsetLeft;
+        const by=(row*(brickHeight+brickPadding))+brickOffsetTop;
+        b.x=bx; b.y=by;
+        ctx.fillStyle=b.mega? '#ff00ff':'#0ff';
+        ctx.globalAlpha=b.mega?1:0.5;
+        ctx.fillRect(bx,by,brickWidth,brickHeight);
+        ctx.globalAlpha=1;
+        remaining++;
+      }
+    });
+    return remaining;
+  }
+
+  function drawPaddle(){
+    ctx.fillStyle='#ff1493';
+    ctx.fillRect(paddleX,paddleY,paddleW,paddleH);
+  }
+
+  function drawBalls(){
+    balls.forEach(b=>{
+      ctx.beginPath();
+      ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
+      ctx.fillStyle='#60a5fa';
+      ctx.fill();
+    });
+  }
+
+  function updateBalls(){
+    balls.forEach((b,i)=>{
+      b.x+=b.dx; b.y+=b.dy;
+      if(b.x<b.r || b.x>canvas.width-b.r) b.dx*=-1;
+      if(b.y<b.r) b.dy*=-1;
+      if(b.y>canvas.height){ resetGame(); }
+
+      if(b.y+b.r>=paddleY && b.x>paddleX && b.x<paddleX+paddleW){
+        let hitPos = (b.x - (paddleX+paddleW/2))/(paddleW/2);
+        b.dy=-Math.abs(b.dy);
+        b.dx=4*hitPos;
+      }
+
+      bricks.forEach(br=>{
+        if(br.status==1){
+          if(b.x>br.x && b.x<br.x+brickWidth && b.y>br.y && b.y<br.y+brickHeight){
+            br.status=0;
+            b.dy*=-1;
+            score+=10;
+            if(br.mega){ resetGame(); score+=100; }
+            else if(Math.random()<0.1){ balls.push({x:b.x,y:b.y,dx:-b.dx,dy:b.dy,r:8}); }
+          }
+        }
+      });
+    });
+  }
+
+  function drawScoreboard(rem){
+    document.getElementById('scoreboard').innerText = `Score: ${score} | Bricks Remaining: ${rem}`;
+  }
+
+  function loop(){
+    requestAnimationFrame(loop);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    updatePaddle();
+    updateBalls();
+    let rem=drawBricks();
+    drawPaddle();
+    drawBalls();
+    drawScoreboard(rem);
+    if(rem===0){ ctx.fillStyle='#4ade80'; ctx.font='32px sans-serif'; ctx.fillText('GAME WON!',canvas.width/2-80,canvas.height/2); }
+  }
+
+  start();
+  </script>
+</body>
+</html>

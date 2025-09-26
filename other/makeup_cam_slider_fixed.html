@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Makeup Cam — Styles</title>
+  <style>
+    :root { --panel: 140px; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: #222; color: #eee; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      height: 100vh; display: grid; grid-template-columns: 1fr var(--panel);
+    }
+    .stage {
+      display:flex; align-items:center; justify-content:center; overflow:hidden; position: relative;
+    }
+    canvas {
+      max-width: calc(100vw - var(--panel) - 20px);
+      max-height: 95vh;
+      width: auto; height: auto;
+      border-radius: 14px; box-shadow: 0 12px 30px rgba(0,0,0,.35); background:#111;
+    }
+    video { display:none; }
+    .panel {
+      width: var(--panel); background: #2c2c2c; display:flex; flex-direction:column; align-items:center; padding:12px 10px; gap:10px;
+      border-left: 1px solid #000;
+    }
+    .panel h3 { margin: 6px 0 0; font-size: 14px; color: #bbb; font-weight: 600; letter-spacing: .3px; }
+    .slider-wrap { flex:1; display:flex; align-items:center; justify-content:center; width:100%; }
+    input[type=range] {
+      -webkit-appearance: slider-vertical;
+      writing-mode: bt-lr;
+      width: 28px; height: 70vh; max-height: 560px;
+      background: transparent;
+    }
+    .style-name {
+      font-size: 12px; color:#ddd; padding:4px 8px; border-radius: 8px; background:#1f1f1f; min-width: 90px; text-align:center;
+    }
+    .hint { font-size: 11px; color:#9aa0a6; text-align:center; opacity:.8; }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+  </div>
+  <aside class="panel">
+    <h3>Style</h3>
+    <div class="slider-wrap">
+      <input id="styleSlider" type="range" min="0" max="4" step="1" value="0"/>
+    </div>
+    <div class="style-name" id="styleName">Classic Rose</div>
+    <div class="hint">Allow camera access • Move closer if tracking is off</div>
+  </aside>
+
+  <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d', { alpha:false });
+    const slider = document.getElementById('styleSlider');
+    const styleNameEl = document.getElementById('styleName');
+
+    let facemesh, predictions = [];
+    let currentStyle = 0;
+
+    // Makeup Styles (hat + lips + brows)
+    const STYLES = [
+      { name:'Classic Rose',  lips:'#ff4081', brows:'#252525', hat:'#3b82f6', band:'#93c5fd' },
+      { name:'Coral Pop',     lips:'#ff7043', brows:'#111111', hat:'#22c55e', band:'#a7f3d0' },
+      { name:'Violet Vogue',  lips:'#c084fc', brows:'#000000', hat:'#8b5cf6', band:'#ede9fe' },
+      { name:'Ruby Night',    lips:'#ef4444', brows:'#0a0a0a', hat:'#111827', band:'#f59e0b' },
+      { name:'Sunny Peach',   lips:'#ffa07a', brows:'#141414', hat:'#f59e0b', band:'#fff7ed' },
+    ];
+    slider.max = STYLES.length - 1;
+    slider.addEventListener('input', () => {
+      currentStyle = parseInt(slider.value, 10);
+      styleNameEl.textContent = STYLES[currentStyle].name;
+    });
+
+    function resizeCanvas(){
+      if(!video.videoWidth) return;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+    }
+
+    function vx(x){ return canvas.width - (x / video.videoWidth) * canvas.width; }
+    function vy(y){ return (y / video.videoHeight) * canvas.height; }
+
+    function strokeSmooth(points, color, width){
+      if(points.length<2) return;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(points[0][0], points[0][1]);
+      for(let i=1;i<points.length-1;i++){
+        const mx = (points[i][0] + points[i+1][0]) * 0.5;
+        const my = (points[i][1] + points[i+1][1]) * 0.5;
+        ctx.quadraticCurveTo(points[i][0], points[i][1], mx, my);
+      }
+      ctx.lineTo(points[points.length-1][0], points[points.length-1][1]);
+      ctx.stroke();
+    }
+
+    async function start(){
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode:'user', width:{ideal:960}, height:{ideal:720} }
+      });
+      video.srcObject = stream;
+      await video.play();
+      resizeCanvas();
+
+      facemesh = ml5.facemesh(video, () => console.log('FaceMesh ready'));
+      facemesh.on('predict', res => predictions = res);
+
+      requestAnimationFrame(loop);
+      window.addEventListener('resize', resizeCanvas);
+    }
+
+    function drawVideoMirrored(){
+      ctx.save();
+      ctx.scale(-1,1);
+      ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+      ctx.restore();
+    }
+
+    function drawMakeup(mesh){
+      const style = STYLES[currentStyle];
+
+      // Useful landmarks
+      const lOuter = mesh[33], lInner = mesh[133];
+      const rInner = mesh[362], rOuter = mesh[263];
+      const forehead = mesh[10];
+      const noseTip = mesh[1];
+
+      // Canvas-space eye corners for scale
+      const p33 = [vx(lOuter[0]), vy(lOuter[1])];
+      const p263 = [vx(rOuter[0]), vy(rOuter[1])];
+      const eyeDist = Math.hypot(p263[0]-p33[0], p263[1]-p33[1]);
+      const scale = Math.max(0.6, Math.min(2.0, eyeDist/220)); // normalize
+
+      // --- Lips (outer fill with inner cut) ---
+      const outerIdx = [61,146,91,181,84,17,314,405,321,375,291];
+      const innerIdx = [78,95,88,178,87,14,317,402,318,324,308];
+
+      const outer = outerIdx.map(i => [vx(mesh[i][0]), vy(mesh[i][1])]);
+      const inner = innerIdx.map(i => [vx(mesh[i][0]), vy(mesh[i][1])]);
+
+      ctx.beginPath();
+      // outer
+      outer.forEach((p, i) => { if(i===0) ctx.moveTo(p[0],p[1]); else ctx.lineTo(p[0],p[1]); });
+      ctx.closePath();
+      // inner (hole)
+      ctx.moveTo(inner[0][0], inner[0][1]);
+      inner.forEach((p, i) => { if(i>0) ctx.lineTo(p[0],p[1]); });
+      ctx.closePath();
+
+      const grad = ctx.createLinearGradient(outer[0][0], outer[0][1], outer[Math.floor(outer.length/2)][0], outer[Math.floor(outer.length/2)][1]);
+      grad.addColorStop(0, style.lips);
+      grad.addColorStop(1, style.lips);
+      ctx.fillStyle = grad;
+      ctx.fill('evenodd');
+
+      // lip highlight
+      ctx.globalAlpha = 0.22;
+      strokeSmooth(outer.slice(0, Math.floor(outer.length/2)), 'white', 2*scale);
+      ctx.globalAlpha = 1;
+
+      // --- Brows (arched strokes above each eye) ---
+      const Lstart = [vx(lOuter[0]), vy(lOuter[1])];
+      const Lend   = [vx(lInner[0]), vy(lInner[1])];
+      const Rstart = [vx(rInner[0]), vy(rInner[1])];
+      const Rend   = [vx(rOuter[0]), vy(rOuter[1])];
+
+      const lift = 10 * scale;
+      const Lmid = [(Lstart[0]+Lend[0])/2, Math.min(Lstart[1], Lend[1]) - lift*1.3];
+      const Rmid = [(Rstart[0]+Rend[0])/2, Math.min(Rstart[1], Rend[1]) - lift*1.3];
+
+      strokeSmooth([ [Lstart[0], Lstart[1]-lift], Lmid, [Lend[0], Lend[1]-lift] ], style.brows, Math.max(6, 8*scale));
+      strokeSmooth([ [Rstart[0], Rstart[1]-lift], Rmid, [Rend[0], Rend[1]-lift] ], style.brows, Math.max(6, 8*scale));
+
+      ctx.globalAlpha = 0.20;
+      strokeSmooth([ [Lstart[0], Lstart[1]-lift], [Lend[0], Lend[1]-lift] ], style.brows, Math.max(12, 14*scale));
+      strokeSmooth([ [Rstart[0], Rstart[1]-lift], [Rend[0], Rend[1]-lift] ], style.brows, Math.max(12, 14*scale));
+      ctx.globalAlpha = 1;
+
+      // --- Hat ---
+      const fx = vx(forehead[0]), fy = vy(forehead[1]);
+      const nx = vx(noseTip[0]), ny = vy(noseTip[1]);
+
+      const hatW = eyeDist * 1.6;
+      const brimH = 10 * scale;
+      const topW = hatW * 0.7;
+      const topH = 60 * scale;
+
+      const hatX = fx - topW/2;
+      const hatY = fy - topH - 12*scale;
+
+      // brim
+      ctx.fillStyle = style.hat;
+      ctx.shadowColor = 'rgba(0,0,0,0.35)';
+      ctx.shadowBlur = 8;
+      ctx.fillRect(fx - hatW/2, fy - 6*scale, hatW, brimH);
+      ctx.shadowBlur = 0;
+
+      // top rounded rectangle
+      const r = 10*scale;
+      ctx.fillStyle = style.hat;
+      ctx.beginPath();
+      ctx.moveTo(hatX+r, hatY);
+      ctx.lineTo(hatX+topW-r, hatY);
+      ctx.quadraticCurveTo(hatX+topW, hatY, hatX+topW, hatY+r);
+      ctx.lineTo(hatX+topW, hatY+topH-r);
+      ctx.quadraticCurveTo(hatX+topW, hatY+topH, hatX+topW-r, hatY+topH);
+      ctx.lineTo(hatX+r, hatY+topH);
+      ctx.quadraticCurveTo(hatX, hatY+topH, hatX, hatY+topH-r);
+      ctx.lineTo(hatX, hatY+r);
+      ctx.quadraticCurveTo(hatX, hatY, hatX+r, hatY);
+      ctx.closePath();
+      ctx.fill();
+
+      // band
+      ctx.fillStyle = style.band;
+      ctx.fillRect(hatX + 8*scale, hatY + topH*0.55, topW - 16*scale, 8*scale);
+    }
+
+    function loop(){
+      requestAnimationFrame(loop);
+      if(!video.videoWidth){ return; }
+      resizeCanvas();
+      // Draw mirrored video to canvas
+      drawVideoMirrored();
+
+      if(predictions.length){
+        drawMakeup(predictions[0].scaledMesh);
+      }
+    }
+
+    start();
+  </script>
+</body>
+</html>
