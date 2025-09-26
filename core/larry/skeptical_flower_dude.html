@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Emoji Flower Explosion</title>
+<style>
+  body {
+    margin: 0;
+    height: 100vh;
+    background: #1e1e2f;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    font-family: sans-serif;
+  }
+
+  #circle {
+    width: 100px;
+    height: 100px;
+    background: radial-gradient(circle at center, #4caf50, #2e7d32); /* green default */
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-size: 68px;
+    cursor: pointer;
+    user-select: none;
+    box-shadow: 0 0 20px rgba(76, 175, 80, 0.6);
+    transition: transform 0.1s, background 0.3s, box-shadow 0.3s;
+    margin-bottom: 20px;
+  }
+
+  .emoji {
+    position: absolute;
+    font-size: 48px;
+    pointer-events: none;
+    animation: floatUp 2s ease-out forwards;
+  }
+
+  @keyframes floatUp {
+    0% {
+      opacity: 1;
+      transform: translate(0, 0) scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(var(--x), var(--y)) scale(1.5);
+    }
+  }
+
+  /* Toggle switch styles */
+  .switch {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 34px;
+  }
+
+  .switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0;
+    right: 0; bottom: 0;
+    background-color: #ccc;
+    transition: 0.4s;
+    border-radius: 34px;
+  }
+
+  .slider:before {
+    position: absolute;
+    content: "";
+    height: 26px; width: 26px;
+    left: 4px; bottom: 4px;
+    background-color: white;
+    transition: 0.4s;
+    border-radius: 50%;
+  }
+
+  input:checked + .slider {
+    background-color: #f44336; /* red when checked */
+  }
+
+  input:checked + .slider:before {
+    transform: translateX(26px);
+  }
+
+  .switch-label {
+    color: white;
+    margin-top: 10px;
+    font-size: 16px;
+  }
+</style>
+</head>
+<body>
+
+<div id="circle">🤨</div>
+
+<label class="switch-label">
+  <span>Toggle Circle Color</span>
+  <label class="switch">
+    <input type="checkbox" id="colorToggle">
+    <span class="slider"></span>
+  </label>
+</label>
+
+<script>
+const circle = document.getElementById('circle');
+const colorToggle = document.getElementById('colorToggle');
+const flowers = ["🌹","🌷","🌼","🌻","💐"];
+const doves = ["🕊️"];
+
+// Launch a single emoji
+function launchEmoji(emoji) {
+  const el = document.createElement('div');
+  el.className = 'emoji';
+  el.textContent = emoji;
+  
+  const rect = circle.getBoundingClientRect();
+  el.style.left = rect.left + rect.width / 2 + 'px';
+  el.style.top = rect.top + rect.height / 2 + 'px';
+
+  const x = (Math.random() - 0.5) * 200 + 'px';
+  const y = (-Math.random() * 200 - 50) + 'px';
+  el.style.setProperty('--x', x);
+  el.style.setProperty('--y', y);
+
+  document.body.appendChild(el);
+  el.addEventListener('animationend', () => el.remove());
+}
+
+// Flower explosion
+function flowerExplosion() {
+  const total = 8; // max emojis per explosion
+  for (let i = 0; i < total; i++) {
+    const emoji = Math.random() < 0.7 
+                  ? flowers[Math.floor(Math.random() * flowers.length)]
+                  : doves[Math.floor(Math.random() * doves.length)];
+    launchEmoji(emoji);
+  }
+}
+
+// Trigger explosion on Enter key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    circle.style.transform = 'scale(1.2)';
+    flowerExplosion();
+    setTimeout(() => circle.style.transform = 'scale(1)', 100);
+  }
+});
+
+// Single emoji launch on click
+circle.addEventListener('click', () => {
+  circle.style.transform = 'scale(1.2)';
+  const emoji = flowers[Math.floor(Math.random() * flowers.length)];
+  launchEmoji(emoji);
+  setTimeout(() => circle.style.transform = 'scale(1)', 100);
+});
+
+// Toggle circle color
+colorToggle.addEventListener('change', () => {
+  if (colorToggle.checked) {
+    circle.style.background = 'radial-gradient(circle at center, #f44336, #d32f2f)';
+    circle.style.boxShadow = '0 0 20px rgba(244, 67, 54, 0.6)';
+  } else {
+    circle.style.background = 'radial-gradient(circle at center, #4caf50, #2e7d32)';
+    circle.style.boxShadow = '0 0 20px rgba(76, 175, 80, 0.6)';
+  }
+});
+</script>
+
+</body>
+</html>
