@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fluffy OP Cat Asteroids</title>
+<style>
+body {margin:0; overflow:hidden; background:#99d9ea; font-family:sans-serif;}
+#score{position:absolute;top:10px;left:10px;font-size:18px;color:#333;}
+#gameArea{width:100%; height:100vh;}
+.cat{position:absolute;width:120px;height:120px;transform-origin:center center;}
+</style>
+</head>
+<body>
+<div id="score">Score: 0</div>
+<svg id="gameArea"></svg>
+
+<script>
+// --- setup ---
+const svg = document.getElementById("gameArea");
+const width = window.innerWidth;
+const height = window.innerHeight;
+svg.setAttribute("width", width);
+svg.setAttribute("height", height);
+
+let score = 0;
+let mousePos = {x: width/2, y: height/2};
+let keys = {};
+
+// --- cat ---
+const cat = {
+  x: width/2, y: height/2, vx:0, vy:0,
+  ax:0, ay:0, angle:0, rotation:0,
+  fluffs:[],
+  projectiles: [],
+  size: 60,
+  svg: null
+};
+
+// Draw fluffy cat SVG
+function createCatSVG(){
+  const g = document.createElementNS("http://www.w3.org/2000/svg","g");
+  g.setAttribute("transform",`translate(${cat.x},${cat.y})`);
+
+  // Body
+  const body = document.createElementNS("http://www.w3.org/2000/svg","ellipse");
+  body.setAttribute("cx",0);
+  body.setAttribute("cy",0);
+  body.setAttribute("rx",40);
+  body.setAttribute("ry",30);
+  body.setAttribute("fill","#ffd8bf");
+  body.setAttribute("stroke","#6b3b2c");
+  body.setAttribute("stroke-width",3);
+  g.appendChild(body);
+
+  // Head
+  const head = document.createElementNS("http://www.w3.org/2000/svg","circle");
+  head.setAttribute("cx",0);
+  head.setAttribute("cy",-40);
+  head.setAttribute("r",25);
+  head.setAttribute("fill","#ffd8bf");
+  head.setAttribute("stroke","#6b3b2c");
+  head.setAttribute("stroke-width",3);
+  g.appendChild(head);
+
+  // Eyes
+  const leftEye = document.createElementNS("http://www.w3.org/2000/svg","circle");
+  leftEye.setAttribute("cx",-8); leftEye.setAttribute("cy",-42); leftEye.setAttribute("r",5); leftEye.setAttribute("fill","#000");
+  const rightEye = document.createElementNS("http://www.w3.org/2000/svg","circle");
+  rightEye.setAttribute("cx",8); rightEye.setAttribute("cy",-42); rightEye.setAttribute("r",5); rightEye.setAttribute("fill","#000");
+  g.appendChild(leftEye); g.appendChild(rightEye);
+
+  // Nose
+  const nose = document.createElementNS("http://www.w3.org/2000/svg","polygon");
+  nose.setAttribute("points","-3,-35 3,-35 0,-30");
+  nose.setAttribute("fill","#ff6f61");
+  g.appendChild(nose);
+
+  // Whiskers
+  const whisker = (x1,y1,x2,y2) => {const l=document.createElementNS("http://www.w3.org/2000/svg","line"); l.setAttribute("x1",x1);l.setAttribute("y1",y1);l.setAttribute("x2",x2);l.setAttribute("y2",y2);l.setAttribute("stroke","#6b3b2c");l.setAttribute("stroke-width",1.5);return l;};
+  g.appendChild(whisker(-15,-32,-40,-35));
+  g.appendChild(whisker(-15,-28,-40,-28));
+  g.appendChild(whisker(15,-32,40,-35));
+  g.appendChild(whisker(15,-28,40,-28));
+
+  // Tail
+  const tail = document.createElementNS("http://www.w3.org/2000/svg","ellipse");
+  tail.setAttribute("cx",-45);
+  tail.setAttribute("cy",5);
+  tail.setAttribute("rx",25);
+  tail.setAttribute("ry",8);
+  tail.setAttribute("fill","#ffd8bf");
+  tail.setAttribute("stroke","#6b3b2c");
+  tail.setAttribute("stroke-width",2);
+  g.appendChild(tail);
+
+  svg.appendChild(g);
+  cat.svg = g;
+}
+createCatSVG();
+
+// --- enemies & friends ---
+let mice = [];
+let turtles = [];
+
+function spawnMouse(){
+  mice.push({x: Math.random()*width, y: Math.random()*height, r:10});
+}
+function spawnTurtle(){
+  turtles.push({x: Math.random()*width, y: Math.random()*height, r:20, hp:2});
+}
+setInterval(spawnMouse,4000);
+setInterval(spawnTurtle,6000);
+
+// --- mouse tracking ---
+window.addEventListener("mousemove",e=>{mousePos.x=e.clientX;mousePos.y=e.clientY;});
+
+// --- keyboard ---
+window.addEventListener("keydown",e=>keys[e.key]=true);
+window.addEventListener("keyup",e=>keys[e.key]=false);
+window.addEventListener("keydown",e=>{
+  if(e.key===" ") cat.projectiles.push({x:cat.x,y:cat.y,vx:Math.cos(cat.angle)*10,vy:Math.sin(cat.angle)*10});
+});
+
+// --- main loop ---
+function loop(){
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+
+// --- update ---
+function update(){
+  // rotation towards mouse
+  const dx = mousePos.x - cat.x;
+  const dy = mousePos.y - cat.y;
+  cat.angle = Math.atan2(dy,dx);
+
+  // movement
+  if(keys["ArrowUp"]){cat.vx += Math.cos(cat.angle)*0.3; cat.vy += Math.sin(cat.angle)*0.3;}
+  if(keys["ArrowDown"]){cat.vx -= Math.cos(cat.angle)*0.2; cat.vy -= Math.sin(cat.angle)*0.2;}
+  cat.x += cat.vx; cat.y += cat.vy;
+  cat.vx *=0.95; cat.vy *=0.95;
+
+  // screen wrap
+  if(cat.x<0) cat.x=width; if(cat.x>width) cat.x=0;
+  if(cat.y<0) cat.y=height; if(cat.y>height) cat.y=0;
+
+  // projectiles
+  cat.projectiles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;});
+  cat.projectiles = cat.projectiles.filter(p=>p.x>=0 && p.x<=width && p.y>=0 && p.y<=height);
+
+  // collisions mice
+  mice.forEach((m,i)=>{
+    const dist = Math.hypot(m.x-cat.x, m.y-cat.y);
+    if(dist<30){
+      score+=5; evolveCat();
+      mice.splice(i,1);
+    }
+  });
+
+  // collisions turtles
+  turtles.forEach((t,ti)=>{
+    const dist = Math.hypot(t.x-cat.x, t.y-cat.y);
+    if(dist<30){
+      score-=1;
+      t.hp-=1;
+      if(t.hp<=0) turtles.splice(ti,1);
+    }
+  });
+
+  // projectiles hit turtles
+  cat.projectiles.forEach((p,pi)=>{
+    turtles.forEach((t,ti)=>{
+      const dist = Math.hypot(p.x-t.x, p.y-t.y);
+      if(dist<t.r){
+        t.hp-=1;
+        cat.projectiles.splice(pi,1);
+        if(t.hp<=0){turtles.splice(ti,1); score+=10;}
+      }
+    });
+  });
+}
+
+// --- draw ---
+function draw(){
+  svg.innerHTML = "";
+  // draw mice
+  mice.forEach(m=>{
+    const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
+    c.setAttribute("cx",m.x); c.setAttribute("cy",m.y); c.setAttribute("r",m.r); c.setAttribute("fill","gray");
+    svg.appendChild(c);
+  });
+  // draw turtles
+  turtles.forEach(t=>{
+    const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
+    c.setAttribute("cx",t.x); c.setAttribute("cy",t.y); c.setAttribute("r",t.r); c.setAttribute("fill","green");
+    svg.appendChild(c);
+  });
+  // draw cat
+  cat.svg.setAttribute("transform",`translate(${cat.x},${cat.y}) rotate(${cat.angle*180/Math.PI})`);
+  svg.appendChild(cat.svg);
+  // draw projectiles
+  cat.projectiles.forEach(p=>{
+    const l = document.createElementNS("http://www.w3.org/2000/svg","line");
+    l.setAttribute("x1",p.x); l.setAttribute("y1",p.y);
+    l.setAttribute("x2",p.x+5); l.setAttribute("y2",p.y+Math.random()*5-2);
+    l.setAttribute("stroke","yellow"); l.setAttribute("stroke-width",2);
+    svg.appendChild(l);
+  });
+  document.getElementById("score").textContent = "Score: "+score;
+}
+
+// --- evolution ---
+function evolveCat(){
+  // add fluff pom-poms visually
+  const puff = document.createElementNS("http://www.w3.org/2000/svg","circle");
+  puff.setAttribute("cx",(Math.random()*60)-30);
+  puff.setAttribute("cy",(Math.random()*60)-30);
+  puff.setAttribute("r",5+Math.random()*5);
+  puff.setAttribute("fill","#ffe3cc"); puff.setAttribute("opacity","0.7");
+  cat.svg.appendChild(puff);
+}
+</script>
+</body>
+</html>

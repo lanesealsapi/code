@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Positive Fortunes in Haiku Form 🌸</title>
+<style>
+  body{margin:0;font-family:serif;background:linear-gradient(180deg,#fff,#fdf6f9);color:#333;display:flex;justify-content:center;align-items:center;height:100vh}
+  .card{background:#fff;padding:28px;border-radius:18px;box-shadow:0 6px 20px rgba(0,0,0,0.08);max-width:450px;text-align:center}
+  h1{margin:0 0 16px;color:#b56576;font-family:Georgia,serif}
+  .haiku{white-space:pre-wrap;font-size:20px;line-height:1.5;color:#386641;margin:20px 0;padding:16px;background:#fafafa;border-radius:12px}
+  button{padding:12px 20px;border:none;border-radius:12px;font-weight:bold;cursor:pointer;background:linear-gradient(90deg,#ffb5a7,#fcd5ce);color:#fff}
+  footer{margin-top:12px;font-size:12px;color:#999}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🌸 Positve Fortunes - Haiku</h1>
+  <div id="haiku" class="haiku">Press generate for a fortune rhyme.</div>
+  <button id="genBtn">Generate Fortune</button>
+  <footer>Random female voice each time</footer>
+</div>
+
+<script>
+// 200 positive words (trimmed for brevity but good enough for haikus)
+const words=[ "abundance","adventure","affection","afterglow","air","alive","amity","angel","aspire","aura",
+"balance","beauty","believe","benevolent","bloom","bliss","brave","bright","breeze","budding",
+"calm","candor","carefree","celestial","champion","cheer","clarity","compassion","confidence","courage",
+"crystal","dance","dazzle","delight","destiny","devotion","dream","ease","elation","embrace",
+"enchant","energy","essence","eternal","exhale","faith","fancy","festive","firefly","flame",
+"flourish","flower","freedom","fresh","friendship","fun","future","garden","gentle","gift",
+"giggle","glad","glimmer","glorious","glow","goodness","grace","gracious","gratitude","green",
+"harmony","heaven","hero","honest","hope","hug","illumined","imagine","inspire","jewel",
+"jolly","joy","jubilant","kind","kiss","laugh","learn","life","light","lively",
+"love","lucky","luminous","magic","marvel","meditate","melody","mercy","mindful","miracle",
+"motivate","nature","noble","nurture","oasis","open","optimism","orchid","paradise","patience",
+"peace","perfect","playful","pleasant","poise","positive","promise","prosper","pure","quiet",
+"radiant","rainbow","rare","refresh","rejoice","renew","resilient","reverie","rise","sacred",
+"safe","sanguine","serene","shine","smile","soar","soft","soul","spark","spirit",
+"spring","star","strength","success","sun","sunrise","sunset","sunshine","support","surprise",
+"sweet","sympathy","thankful","thrive","tranquil","treasure","trust","truth","uplift","valiant",
+"vibrant","victory","virtue","vivid","warm","welcome","wellbeing","whimsy","wonder","worthy",
+"yes","youthful","zeal","zen","zest" ];
+
+function syllables(word){
+  let m=word.match(/[aeiouy]+/g);let c=m?m.length:1;
+  if(word.endsWith("e")) c--;return c<1?1:c;
+}
+function buildLine(n,rhymeWord=null){
+  let out=[],s=0;
+  while(s<n){
+    let w=words[Math.floor(Math.random()*words.length)];
+    let syl=syllables(w);
+    if(s+syl<=n){out.push(w);s+=syl;}
+  }
+  if(rhymeWord) out[out.length-1]=rhymeWord;
+  return out.join(" ");
+}
+
+// non-repeating fortune pool
+let fortunes = [
+  "What path blooms for you?",
+  "Does joy wait at dawn?",
+  "Who holds the sunrise?",
+  "Why does hope linger?",
+  "Can laughter heal all?",
+  "Where will kindness lead?",
+  "Will your dream take flight?",
+  "Does patience unlock doors?",
+  "Who shares your hidden smile?",
+  "What song calls your soul?",
+  "Is love already here?",
+  "Can courage light the dark?",
+  "Where does wonder hide?",
+  "Why does peace follow you?",
+  "Will harmony find you soon?",
+  "Do stars whisper your name?",
+  "What secret grows in silence?",
+  "Can gratitude shape tomorrow?",
+  "Where does your spirit rest?",
+  "Will fortune find your hand?"
+];
+let fortunePool=[...fortunes];
+
+function getFortune(){
+  if(fortunePool.length===0) fortunePool=[...fortunes]; // reset cycle
+  let idx=Math.floor(Math.random()*fortunePool.length);
+  let f=fortunePool[idx];
+  fortunePool.splice(idx,1); // remove used fortune
+  return f;
+}
+
+function makeHaiku(){
+  let rhyme=words[Math.floor(Math.random()*words.length)];
+  let l1=buildLine(5,rhyme);
+  let l2=buildLine(7);
+  let l3=buildLine(5,rhyme);
+  let fortune=getFortune();
+  return [l1,l2,l3,"",fortune].join("\n");
+}
+
+// voice logic
+const synth=window.speechSynthesis;
+let voices=[];
+function getFemaleVoices(){
+  return voices.filter(v=>/female|woman|samantha|zira|google uk english female/i.test(v.name));
+}
+function pickRandomVoice(){
+  let fv=getFemaleVoices();
+  if(fv.length) return fv[Math.floor(Math.random()*fv.length)];
+  return voices.length?voices[Math.floor(Math.random()*voices.length)]:null;
+}
+function speak(text){
+  synth.cancel();
+  let u=new SpeechSynthesisUtterance(text);
+  u.voice=pickRandomVoice();
+  u.rate=0.55;
+  synth.speak(u);
+}
+const haikuEl=document.getElementById("haiku");
+document.getElementById("genBtn").onclick=()=>{
+  let h=makeHaiku();
+  haikuEl.textContent=h;
+  speak(h);
+};
+speechSynthesis.onvoiceschanged=()=>{voices=synth.getVoices();};
+voices=synth.getVoices();
+</script>
+</body>
+</html>
