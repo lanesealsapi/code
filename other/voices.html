@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Voice Playground — Speak Back Fun</title>
+<style>
+  :root{--bg:#0b1220;--card:#071426;--muted:#9aa4b2;--accent:#5be7c6;--accent2:#6f8cff;color:#e6eef6;font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,#041026,#071226);color:var(--accent2)}
+  .wrap{max-width:900px;margin:28px auto;padding:20px}
+  header{display:flex;align-items:center;gap:12px}
+  h1{margin:0;font-size:20px;color:var(--accent)}
+  p.lead{margin:0;color:var(--muted);font-size:13px}
+  .grid{display:grid;grid-template-columns:1fr 320px;gap:16px;margin-top:18px}
+  .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding:14px;border-radius:12px;box-shadow:0 10px 30px rgba(2,6,12,0.6);color:#eaf6ff}
+  textarea{width:100%;height:160px;padding:10px;border-radius:10px;background:#061026;border:1px solid rgba(255,255,255,0.03);color:inherit;font-size:15px}
+  label{display:block;margin-top:8px;color:var(--muted);font-size:13px}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  select,input[type=range]{width:100%}
+  .btn{background:linear-gradient(90deg,var(--accent2),#00d4ff);color:#021221;padding:8px 12px;border-radius:8px;border:none;font-weight:700;cursor:pointer}
+  .ghost{background:transparent;border:1px solid rgba(255,255,255,0.03);padding:8px 10px;border-radius:8px;color:var(--muted);cursor:pointer}
+  .controls{display:flex;gap:8px;flex-wrap:wrap}
+  .presets{display:flex;gap:8px;margin-top:8px}
+  .history{max-height:260px;overflow:auto;margin-top:8px;border-top:1px dashed rgba(255,255,255,0.03);padding-top:8px}
+  .hist-item{padding:8px;border-radius:8px;background:rgba(255,255,255,0.01);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .pulse{height:10px;width:100%;background:linear-gradient(90deg,#073042,#0b2940);border-radius:8px;overflow:hidden;margin-top:10px;position:relative}
+  .pulse > i{display:block;height:100%;width:20%;background:linear-gradient(90deg,#00ffd4,#00a6ff);transform-origin:left;transform:scaleX(0);transition:transform .12s linear}
+  footer{margin-top:18px;color:var(--muted);font-size:13px}
+  @media (max-width:920px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div style="width:48px;height:48px;border-radius:10px;background:linear-gradient(135deg,#6f8cff,#5be7c6);display:flex;align-items:center;justify-content:center;font-weight:800;color:#021221">V</div>
+      <div>
+        <h1>Voice Playground</h1>
+        <p class="lead">Type something, pick a voice, tune the sound, and let the browser speak back — modular & fun.</p>
+      </div>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <label for="text">Your words</label>
+        <textarea id="text" placeholder="Write something friendly, weird, or cosmic...">Hello! Welcome to Voice Playground — pick a voice and press Speak!</textarea>
+
+        <div style="display:flex;gap:10px;margin-top:12px">
+          <button id="speakBtn" class="btn">🔊 Speak</button>
+          <button id="pauseBtn" class="ghost">⏸ Pause</button>
+          <button id="resumeBtn" class="ghost">▶ Resume</button>
+          <button id="stopBtn" class="ghost">⏹ Stop</button>
+        </div>
+
+        <label>Voice</label>
+        <select id="voiceSelect"></select>
+
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <div style="flex:1">
+            <label>Rate <span id="rateVal">1.0</span></label>
+            <input id="rate" type="range" min="0.5" max="2" step="0.05" value="1">
+          </div>
+          <div style="flex:1">
+            <label>Pitch <span id="pitchVal">1.0</span></label>
+            <input id="pitch" type="range" min="0" max="2" step="0.05" value="1">
+          </div>
+        </div>
+
+        <label>Volume <span id="volVal">1.0</span></label>
+        <input id="volume" type="range" min="0" max="1" step="0.01" value="1">
+
+        <div class="presets">
+          <button class="ghost" data-preset="robot">🤖 Robot</button>
+          <button class="ghost" data-preset="whisper">🤫 Whisper</button>
+          <button class="ghost" data-preset="announcer">📣 Announcer</button>
+          <button class="ghost" id="randomize">🎲 Random</button>
+        </div>
+
+        <div class="pulse" aria-hidden="true"><i id="pulseBar"></i></div>
+
+        <div style="margin-top:12px">
+          <label>Saved history</label>
+          <div class="history" id="history"></div>
+        </div>
+      </section>
+
+      <aside class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <strong style="font-size:16px">Voice Tools</strong>
+            <div class="muted" style="color:var(--muted);font-size:13px">Browser SpeechSynthesis API — offline & instant</div>
+          </div>
+          <div style="text-align:right">
+            <button id="clearHistory" class="ghost">🗑 Clear</button>
+          </div>
+        </div>
+
+        <label style="margin-top:12px">Preview text</label>
+        <input id="preview" placeholder="Quick test phrase" style="width:100%;padding:8px;border-radius:8px;background:#061026;border:1px solid rgba(255,255,255,0.03);color:inherit" />
+
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button id="sayPreview" class="btn">Say Preview</button>
+          <button id="saveClip" class="ghost">💾 Save to History</button>
+        </div>
+
+        <label style="margin-top:12px">About</label>
+        <div style="color:var(--muted);font-size:13px">
+          This page uses the browser's built-in voices. Some browsers update voice lists only after user interaction — click the page if the voice list is empty.
+        </div>
+      </aside>
+    </div>
+
+    <footer>Made with the Web Speech API — modular functions, tiny visualizer, and playful presets. Enjoy!</footer>
+  </div>
+
+<script>
+/* Voice Playground — modular speaker using SpeechSynthesis */
+(() => {
+  const synth = window.speechSynthesis;
+  const textEl = document.getElementById('text');
+  const speakBtn = document.getElementById('speakBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const resumeBtn = document.getElementById('resumeBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const voiceSelect = document.getElementById('voiceSelect');
+  const rate = document.getElementById('rate');
+  const pitch = document.getElementById('pitch');
+  const volume = document.getElementById('volume');
+  const rateVal = document.getElementById('rateVal');
+  const pitchVal = document.getElementById('pitchVal');
+  const volVal = document.getElementById('volVal');
+  const presets = document.querySelectorAll('[data-preset]');
+  const randomize = document.getElementById('randomize');
+  const preview = document.getElementById('preview');
+  const sayPreview = document.getElementById('sayPreview');
+  const saveClip = document.getElementById('saveClip');
+  const historyEl = document.getElementById('history');
+  const clearHistory = document.getElementById('clearHistory');
+  const pulseBar = document.getElementById('pulseBar');
+
+  let voices = [];
+  let currentUtterance = null;
+
+  function populateVoices() {
+    voices = synth.getVoices().sort((a,b)=> a.name.localeCompare(b.name));
+    voiceSelect.innerHTML = '';
+    voices.forEach((v, i) => {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = `${v.name} ${v.lang ? ' — ' + v.lang : ''}`;
+      voiceSelect.appendChild(opt);
+    });
+    if(!voices.length){
+      const opt = document.createElement('option'); opt.textContent = 'No voices available — interact with the page'; voiceSelect.appendChild(opt);
+    }
+  }
+
+  // populate initially & on change (some browsers load voices asynchronously)
+  populateVoices();
+  if (speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = populateVoices;
+
+  function makeUtterance(text) {
+    if (!text) return null;
+    const u = new SpeechSynthesisUtterance(text);
+    const vIndex = parseInt(voiceSelect.value);
+    if (voices[vIndex]) u.voice = voices[vIndex];
+    u.rate = parseFloat(rate.value);
+    u.pitch = parseFloat(pitch.value);
+    u.volume = parseFloat(volume.value);
+    u.onstart = () => startPulse();
+    u.onend = () => stopPulse();
+    u.onerror = () => { stopPulse(); console.warn('Speech error'); };
+    return u;
+  }
+
+  function speakText(text, save = true) {
+    if (!text) return;
+    stopSpeaking();
+    currentUtterance = makeUtterance(text);
+    if (!currentUtterance) return;
+    synth.speak(currentUtterance);
+    if (save) addHistory(text, {rate:rate.value, pitch:pitch.value, volume:volume.value, voice:voiceSelect.value});
+  }
+
+  function stopSpeaking(){ if(synth.speaking) { synth.cancel(); currentUtterance = null; stopPulse(); } }
+  function pauseSpeaking(){ if(synth.speaking && !synth.paused) synth.pause(); }
+  function resumeSpeaking(){ if(synth.paused) synth.resume(); }
+
+  // tiny pulse visualizer (fake but responsive)
+  let pulseTimer = null;
+  function startPulse(){
+    if(pulseTimer) clearInterval(pulseTimer);
+    pulseTimer = setInterval(()=>{
+      const s = Math.min(1, Math.random()*1.0 + parseFloat(rate.value)/2);
+      pulseBar.style.transform = `scaleX(${s})`;
+      pulseBar.parentElement.firstElementChild.style.transform = `scaleX(${s})`;
+      // animate inner bar
+      pulseBar.style.width = (20 + (s*60)) + '%';
+      pulseBar.style.transition = 'width .12s linear';
+    }, 120);
+    pulseBar.parentElement.firstElementChild.style.transform = 'scaleX(0.8)';
+  }
+  function stopPulse(){ if(pulseTimer) clearInterval(pulseTimer); pulseBar.style.width = '20%'; pulseBar.parentElement.firstElementChild.style.transform = 'scaleX(0)'; }
+
+  // history (local only)
+  const saved = JSON.parse(localStorage.getItem('vp_history')||'[]');
+  function renderHistory(){
+    historyEl.innerHTML = '';
+    saved.slice().reverse().forEach((item, idx) => {
+      const div = document.createElement('div'); div.className = 'hist-item';
+      const left = document.createElement('div'); left.style.flex='1';
+      left.textContent = item.text.length>80?item.text.slice(0,77)+'…':item.text;
+      const right = document.createElement('div'); right.style.display='flex'; right.style.gap='6px';
+      const play = document.createElement('button'); play.className='ghost'; play.textContent='▶';
+      play.onclick = ()=> {
+        // set params to the saved clip and play
+        rate.value = item.rate; pitch.value = item.pitch; volume.value = item.volume; voiceSelect.value = item.voice;
+        updateLabels();
+        speakText(item.text, false);
+      };
+      const del = document.createElement('button'); del.className='ghost'; del.textContent='✖';
+      del.onclick = ()=> { const realIndex = saved.length - 1 - idx; saved.splice(realIndex,1); localStorage.setItem('vp_history', JSON.stringify(saved)); renderHistory(); };
+      right.append(play, del);
+      div.append(left, right);
+      historyEl.appendChild(div);
+    });
+  }
+  function addHistory(text, meta){
+    saved.push({text, ...meta, ts:Date.now()});
+    if(saved.length > 60) saved.shift();
+    localStorage.setItem('vp_history', JSON.stringify(saved));
+    renderHistory();
+  }
+  renderHistory();
+
+  // controls wiring
+  speakBtn.addEventListener('click', ()=> speakText(textEl.value.trim()));
+  pauseBtn.addEventListener('click', pauseSpeaking);
+  resumeBtn.addEventListener('click', resumeSpeaking);
+  stopBtn.addEventListener('click', stopSpeaking);
+
+  rate.addEventListener('input', updateLabels);
+  pitch.addEventListener('input', updateLabels);
+  volume.addEventListener('input', updateLabels);
+
+  function updateLabels(){
+    rateVal.textContent = parseFloat(rate.value).toFixed(2);
+    pitchVal.textContent = parseFloat(pitch.value).toFixed(2);
+    volVal.textContent = parseFloat(volume.value).toFixed(2);
+  }
+  updateLabels();
+
+  presets.forEach(btn=>{
+    btn.addEventListener('click', () => {
+      const p = btn.dataset.preset;
+      if(p==='robot'){ rate.value=0.9; pitch.value=0.4; volume.value=1; }
+      if(p==='whisper'){ rate.value=0.85; pitch.value=0.6; volume.value=0.6; }
+      if(p==='announcer'){ rate.value=1.05; pitch.value=1.25; volume.value=1; }
+      updateLabels();
+    });
+  });
+
+  randomize.addEventListener('click', ()=>{
+    rate.value = (0.6 + Math.random()*1.4).toFixed(2);
+    pitch.value = (0 + Math.random()*1.8).toFixed(2);
+    volume.value = (0.5 + Math.random()*0.5).toFixed(2);
+    voiceSelect.selectedIndex = Math.floor(Math.random() * Math.max(1, voiceSelect.options.length));
+    updateLabels();
+  });
+
+  sayPreview.addEventListener('click', ()=> {
+    const t = preview.value.trim() || 'Quick test of the voice system.';
+    speakText(t, false);
+  });
+
+  saveClip.addEventListener('click', ()=> {
+    const t = (preview.value || textEl.value || '').trim();
+    if(!t) return alert('Enter some text in preview or main textarea to save.');
+    addHistory(t, {rate:rate.value, pitch:pitch.value, volume:volume.value, voice:voiceSelect.value});
+  });
+
+  clearHistory.addEventListener('click', ()=> {
+    if(!confirm('Clear saved history?')) return;
+    saved.splice(0, saved.length);
+    localStorage.removeItem('vp_history');
+    renderHistory();
+  });
+
+  // a small accessibility note: some browsers only expose voices after an interaction.
+  document.body.addEventListener('click', populateVoices, {once:true});
+})();
+</script>
+</body>
+</html>
