@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Block Talk Man</title>
+<style>
+  body { margin:0; overflow:hidden; background:#111; }
+  canvas { display:block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Blocky man parameters
+const man = {
+  x: canvas.width/2,
+  y: canvas.height/2,
+  width: 60,
+  height: 120,
+  color: '#FF3DFF',
+  armAngle: 0,
+  mouthOpen: 0
+};
+
+// Animate
+let t=0;
+function animate() {
+  t += 0.05;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Body
+  ctx.fillStyle = man.color;
+  ctx.fillRect(man.x-man.width/2, man.y-man.height/2, man.width, man.height);
+
+  // Head
+  const headSize = 50;
+  ctx.fillRect(man.x-headSize/2, man.y-man.height/2-headSize, headSize, headSize);
+
+  // Arms swinging
+  const armLength = 50;
+  const armSwing = Math.sin(t*2)*20;
+  // Left arm
+  ctx.fillRect(man.x-man.width/2-armLength, man.y-10+armSwing/2, armLength, 15);
+  // Right arm
+  ctx.fillRect(man.x+man.width/2, man.y-10-armSwing/2, armLength, 15);
+
+  // Legs swinging
+  const legLength = 60;
+  const legSwing = Math.sin(t*2+Math.PI)*15;
+  // Left leg
+  ctx.fillRect(man.x-20, man.y+man.height/2, 20, legLength+legSwing);
+  // Right leg
+  ctx.fillRect(man.x+0, man.y+man.height/2, 20, legLength-legSwing);
+
+  // Mouth (talking)
+  const mouthWidth = 30;
+  const mouthHeight = 5 + Math.abs(Math.sin(t*5))*15; // simulate talking
+  ctx.fillStyle = '#000';
+  ctx.fillRect(man.x-mouthWidth/2, man.y-man.height/2-headSize/4+30, mouthWidth, mouthHeight);
+
+  requestAnimationFrame(animate);
+}
+
+animate();
+</script>
+</body>
+</html>
