@@ -3,3 +3,6 @@ tog.blend("music,"color","emotion");
 
 tog.ai("hello_there");
 #api respond;
+
+#no-api-keys-required
+tog.listen("audio-in");
