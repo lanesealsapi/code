@@ -1,4 +1,4 @@
-This code is all legal and I own it, except that which is open-source, email lanesealsmedia@proton.me for more info.
+This code is all legal and I own it, except that which is open-source AND OR MIT licensed from a 3rd party assuming some kinda of legal ninja clause, email lanesealsmedia@proton.me for more info.
 
 Regards,
 
