@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Snappy Word Tile Game AI</title>
+<style>
+body { font-family: sans-serif; background:#111; color:#eee; display:flex; flex-direction:column; align-items:center; padding:20px;}
+h1 { color:#ffdd57; }
+#board { display:grid; grid-template-columns:repeat(10,50px); grid-gap:3px; margin-top:20px; }
+.cell { width:50px; height:50px; background:#333; display:flex; align-items:center; justify-content:center; cursor:pointer; font-weight:bold; font-size:20px; color:#fff; border-radius:5px; transition:0.2s;}
+.cell:hover{background:#555;}
+.tile { display:inline-block; width:50px; height:50px; background:#444; margin:3px; text-align:center; line-height:50px; font-weight:bold; font-size:20px; cursor:pointer; border-radius:5px; transition:0.2s;}
+.tile:hover{background:#666;}
+#letters { margin-top:20px; display:flex; flex-wrap:wrap; justify-content:center; }
+#info { margin-top:15px; font-size:18px; }
+</style>
+</head>
+<body>
+
+<h1>Snappy Word Tile Game AI</h1>
+<div id="info">Current Player: <span id="currentPlayer">1</span> | Scores: Player: <span id="score1">0</span> | AI: <span id="score2">0</span></div>
+<div id="board"></div>
+<div id="letters"></div>
+
+<script>
+// -------------------- CONFIG --------------------
+const boardSize = 10;
+const letterScores = {A:1,B:3,C:3,D:2,E:1,F:4,G:2,H:4,I:1,J:8,K:5,L:1,M:3,N:1,O:1,P:3,Q:10,R:1,S:1,T:1,U:1,V:4,W:4,X:8,Y:4,Z:10};
+
+// Top 200 common English words (sample subset for brevity; fill in full 200 for real game)
+const commonWords = ["THE","BE","TO","OF","AND","A","IN","THAT","HAVE","I","IT","FOR","NOT","ON","WITH","HE","AS","YOU","DO","AT","THIS","BUT","HIS","BY","FROM","THEY","WE","SAY","HER","SHE","OR","AN","WILL","MY","ONE","ALL","WOULD","THERE","THEIR","WHAT","SO","UP","OUT","IF","ABOUT","WHO","GET","WHICH","GO","ME","WHEN","MAKE","CAN","LIKE","TIME","NO","JUST","HIM","KNOW","TAKE","PEOPLE","INTO","YEAR","YOUR","GOOD","SOME","COULD","THEM","SEE","OTHER","THAN","THEN","NOW","LOOK","ONLY","COME","ITS","OVER","THINK","ALSO","BACK","AFTER","USE","TWO","HOW","OUR","WORK","FIRST","WELL","WAY","EVEN","NEW","WANT","BECAUSE","ANY","THESE","GIVE","DAY","MOST","US"];
+
+// -------------------- BOARD --------------------
+const board = document.getElementById('board');
+const boardCells = [];
+for(let i=0;i<boardSize*boardSize;i++){
+  const cell = document.createElement('div');
+  cell.className='cell';
+  cell.dataset.index=i;
+  board.appendChild(cell);
+  boardCells.push(cell);
+}
+
+// -------------------- GAME STATE --------------------
+let currentPlayer = 1; // 1 = human, 2 = AI
+let scores = [0,0];
+let letters = generateLetters();
+let selectedTile = null;
+
+// -------------------- LETTER GENERATION --------------------
+function generateLetters(){
+  const alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  let arr=[];
+  for(let i=0;i<7;i++){
+    arr.push(alphabet[Math.floor(Math.random()*alphabet.length)]);
+  }
+  return arr;
+}
+
+// -------------------- DRAW LETTERS --------------------
+const lettersDiv = document.getElementById('letters');
+function drawLetters(){
+  lettersDiv.innerHTML='';
+  letters.forEach((l,i)=>{
+    const tile=document.createElement('div');
+    tile.className='tile';
+    tile.textContent=l;
+    tile.dataset.index=i;
+    tile.onclick=()=>{selectedTile=i;};
+    lettersDiv.appendChild(tile);
+  });
+}
+
+// -------------------- SCORE --------------------
+function calcScore(letter){ return letterScores[letter] || 0; }
+function updateInfo(){
+  document.getElementById('currentPlayer').textContent=currentPlayer===1?"You":"AI";
+  document.getElementById('score1').textContent=scores[0];
+  document.getElementById('score2').textContent=scores[1];
+}
+
+// -------------------- SIMPLE RELU MODEL FOR WORD CHECK --------------------
+function wordFeatures(word){
+  // tiny features: length, vowel ratio
+  const vowels=word.match(/[AEIOU]/gi)||[];
+  return [word.length/10, vowels.length/word.length];
+}
+
+function relu(x){ return Math.max(0,x); }
+
+function isEnglishWord(word){
+  // Simple internal model: if word in commonWords OR ReLU features score above threshold
+  const features=wordFeatures(word);
+  const score=relu(features[0]*0.5+features[1]*1.5-0.5);
+  return commonWords.includes(word.toUpperCase()) || score>0.5;
+}
+
+// -------------------- PLAYER MOVE --------------------
+boardCells.forEach(cell=>{
+  cell.onclick=()=>{
+    if(currentPlayer!==1 || selectedTile===null) return;
+    const letter=letters[selectedTile];
+    if(cell.textContent) return;
+    cell.textContent=letter;
+    scores[0]+=calcScore(letter);
+    letters.splice(selectedTile,1);
+    letters.push(generateLetters()[0]);
+    selectedTile=null;
+    drawLetters();
+    updateInfo();
+    currentPlayer=2;
+    setTimeout(aiMove,300); // small delay for AI
+  };
+});
+
+// -------------------- AI MOVE --------------------
+function aiMove(){
+  // Simple AI: choose random cell and random letter
+  const emptyCells=boardCells.filter(c=>!c.textContent);
+  if(emptyCells.length===0){ currentPlayer=1; return; }
+  const aiLetter=letters[Math.floor(Math.random()*letters.length)];
+  const targetCell=emptyCells[Math.floor(Math.random()*emptyCells.length)];
+  targetCell.textContent=aiLetter;
+  scores[1]+=calcScore(aiLetter);
+  updateInfo();
+  currentPlayer=1;
+}
+
+// -------------------- INIT --------------------
+drawLetters();
+updateInfo();
+</script>
+
+</body>
+</html>
