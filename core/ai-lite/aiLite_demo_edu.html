@@ -1,0 +1,410 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>AiLite — Tiny JS ML + Fuzzy Demo</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial;display:flex;gap:20px;padding:18px}
+    .col{width:360px}
+    pre{background:#0b1020;color:#d6f8ff;padding:12px;border-radius:8px;overflow:auto}
+    button{padding:8px 12px;border-radius:8px;border:0;background:#0ea5e9;color:white;cursor:pointer}
+    .grid{display:grid;grid-template-columns:repeat(5,20px);gap:3px}
+    .cell{width:20px;height:20px;background:#eee;border-radius:3px}
+    .on{background:#222}
+  </style>
+</head>
+<body>
+  <div class="col">
+    <h3>AiLite — tiny JS ML + fuzzy (demo only)</h3>
+    <div>
+      <button id="trainBtn">Train (quick)</button>
+      <button id="testBtn">Test predictions</button>
+      <button id="demoBtn">Random demo</button>
+    </div>
+    <div style="margin-top:10px">
+      <label>Epochs: <input id="epochs" type="number" value="150" style="width:72px"/></label>
+      <label style="margin-left:10px">LR: <input id="lr" type="number" step="0.001" value="0.25" style="width:72px"/></label>
+    </div>
+    <h4>Model status</h4>
+    <pre id="log">Ready.</pre>
+  </div>
+
+  <div class="col">
+    <h4>Dataset (toy 5×5 binary digits 0–3)</h4>
+    <div id="samples"></div>
+    <hr/>
+    <h4>Predict a pattern</h4>
+    <div id="patternGrid" class="grid"></div>
+    <div style="margin-top:8px">
+      <button id="predictBtn">Predict this pattern</button>
+      <button id="clearBtn">Clear</button>
+    </div>
+    <pre id="out">—</pre>
+  </div>
+
+<script>
+/* =========================
+   AiLite: tiny matrix + NN + fuzzy
+   Single-file, dependency-free.
+   ========================= */
+
+const AiLite = (function(){
+
+  // ---------- Matrix utilities ----------
+  function zeros(r,c){ const a=new Array(r); for(let i=0;i<r;i++){a[i]=new Float32Array(c); } return a; }
+  function randn(r,c,scale=1){ const a=zeros(r,c); for(let i=0;i<r;i++) for(let j=0;j<c;j++) a[i][j]=(Math.random()*2-1)*scale; return a; }
+  function clone(m){ return m.map(row=>Float32Array.from(row)); }
+  function transpose(m){ const r=m.length, c=m[0].length; const t=zeros(c,r); for(let i=0;i<r;i++) for(let j=0;j<c;j++) t[j][i]=m[i][j]; return t; }
+  function matMul(A,B){
+    const r=A.length, k=A[0].length, c=B[0].length;
+    const out=zeros(r,c);
+    for(let i=0;i<r;i++){
+      const Ai=A[i];
+      const outi=out[i];
+      for(let j=0;j<c;j++){
+        let s=0;
+        for(let t=0;t<k;t++) s += Ai[t]*B[t][j];
+        outi[j]=s;
+      }
+    }
+    return out;
+  }
+  function addBias(M, b){ // add bias vector b to each row
+    const R=M.length, C=M[0].length; const out=zeros(R,C);
+    for(let i=0;i<R;i++){
+      for(let j=0;j<C;j++) out[i][j]=M[i][j]+b[j];
+    }
+    return out;
+  }
+  function apply(M, fn){ const r=M.length,c=M[0].length; const o=zeros(r,c); for(let i=0;i<r;i++) for(let j=0;j<c;j++) o[i][j]=fn(M[i][j],i,j); return o; }
+  function toArrayRow(vec){ // vec is 1d typed array
+    return Array.from(vec);
+  }
+  function argMaxRow(row){ let mi=0,mv=row[0]; for(let i=1;i<row.length;i++){ if(row[i]>mv){mv=row[i];mi=i;} } return mi; }
+
+  // ---------- Activations ----------
+  function sigmoidMat(X){ return apply(X, x=>1/(1+Math.exp(-x))); }
+  function dsigmoidMat(Y){ return apply(Y, y=>y*(1-y)); } // Y already sigmoid
+  function reluMat(X){ return apply(X, x=> x>0?x:0 ); }
+  function dreluMat(X){ return apply(X, x=> x>0?1:0 ); }
+  function softmaxRow(row){
+    const max=Math.max(...row);
+    const ex=row.map(v=>Math.exp(v-max));
+    const s=ex.reduce((a,b)=>a+b,0);
+    return ex.map(v=>v/s);
+  }
+
+  // ---------- NN (simple dense feedforward) ----------
+  class TinyNet {
+    // layers: array like [inputSize, hidden1, hidden2, outSize]
+    constructor(layers, opt={}){
+      this.layers = layers.slice();
+      this.lr = opt.lr || 0.1;
+      this.activation = opt.activation || 'sigmoid'; // 'sigmoid' or 'relu'
+      // weights: between layers i->i+1 : matrix [in, out] (we store transposed style as [in][out])
+      this.weights = [];
+      this.biases = [];
+      for(let i=0;i<layers.length-1;i++){
+        const inS=layers[i], outS=layers[i+1];
+        // small random init
+        const scale = Math.sqrt(2/(inS+outS));
+        this.weights.push(randn(inS,outS,scale));
+        this.biases.push(new Float32Array(outS)); // zeros
+      }
+    }
+
+    // forward a batch X: X is array of rows (Float32Array or plain array) -> returns a list of activations per layer
+    forwardRow(xRow){
+      // convert xRow to a Float32Array row vector length input
+      let a = Float32Array.from(xRow);
+      const acts=[a];
+      for(let l=0;l<this.weights.length;l++){
+        // compute a * W  (a is 1 x in), W is in x out -> result 1 x out
+        const W = this.weights[l];
+        const outS = W[0].length;
+        const next = new Float32Array(outS);
+        for(let j=0;j<outS;j++){
+          let s=0;
+          for(let i=0;i<W.length;i++) s += a[i]*W[i][j];
+          s += this.biases[l][j];
+          next[j]=s;
+        }
+        // activation (except last layer)
+        if(l < this.weights.length-1){
+          if(this.activation==='relu') {
+            for(let i=0;i<next.length;i++) next[i]= next[i]>0?next[i]:0;
+          } else {
+            for(let i=0;i<next.length;i++) next[i]= 1/(1+Math.exp(-next[i]));
+          }
+        } else {
+          // last layer: raw logits
+        }
+        a=next;
+        acts.push(a);
+      }
+      return acts;
+    }
+
+    // predict probabilities for a single input row
+    predictProb(xRow){
+      const acts = this.forwardRow(xRow);
+      const logits = acts[acts.length-1];
+      return softmaxRow(Array.from(logits));
+    }
+
+    predictLabel(xRow){
+      const p = this.predictProb(xRow);
+      return argMaxRow(p);
+    }
+
+    // train on small dataset (arrays) using SGD, plain cross-entropy
+    // X: array of rows; Y: array of label integers; epochs, lr override
+    train(X, Y, opts={}){
+      const epochs = opts.epochs||100;
+      const lr = (opts.lr!==undefined)?opts.lr:this.lr;
+      for(let ep=0;ep<epochs;ep++){
+        // simple online SGD
+        for(let idx=0; idx < X.length; idx++){
+          const x = X[idx];
+          const y = Y[idx];
+          const acts = this.forwardRow(x);
+          const L = acts.length-1;
+          // compute softmax probs on logits
+          const logits = Array.from(acts[L]);
+          const probs = softmaxRow(logits);
+          // one-hot error vector for output
+          const outErr = new Float32Array(probs.length);
+          for(let k=0;k<probs.length;k++) outErr[k] = probs[k] - (k===y?1:0); // dL/dz
+
+          // backpropagate
+          let delta = outErr; // for last layer
+          for(let l=L-1; l>=0; l--){
+            // gradient w.r.t weights[l] : a_{l}^T * delta  (a_l is acts[l])
+            const aPrev = acts[l];
+            // update biases
+            for(let j=0;j<this.biases[l].length;j++){
+              this.biases[l][j] -= lr * delta[j];
+            }
+            // update weights
+            const W = this.weights[l];
+            for(let i=0;i<W.length;i++){
+              for(let j=0;j<W[0].length;j++){
+                W[i][j] -= lr * aPrev[i] * delta[j];
+              }
+            }
+            if(l>0){
+              // compute delta for previous layer: delta_prev = (W * delta) * f'(a_prev)
+              const Wcur = this.weights[l];
+              const prevAct = acts[l];
+              const newDelta = new Float32Array(prevAct.length);
+              for(let i=0;i<prevAct.length;i++){
+                let s=0;
+                for(let j=0;j<delta.length;j++) s += Wcur[i][j]*delta[j];
+                // f' depending on activation
+                if(this.activation==='relu') newDelta[i] = prevAct[i]>0? s : 0;
+                else newDelta[i] = (prevAct[i])*(1-prevAct[i]) * s;
+              }
+              delta = newDelta;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // ---------- Fuzzy (Hamming) classifier ----------
+  // Inputs are arrays of 0/1 bits (or numbers near those)
+  function hammingDistanceBits(a,b){
+    if(a.length!==b.length) throw new Error('len mismatch');
+    let d=0;
+    for(let i=0;i<a.length;i++){
+      d += (Math.round(Math.abs(a[i])) === Math.round(Math.abs(b[i])) )?0:1;
+    }
+    return d;
+  }
+  // score = 1 - (distance / length)
+  function hammingScore(a,b){ return 1 - hammingDistanceBits(a,b)/a.length; }
+
+  // combines NN probabilities and fuzzy Hamming scores
+  // prototypes: array of objects {x: [bits], label}
+  function fusedPredict(net, prototypes, x, alpha=0.6){
+    // alpha = weight for NN probs, (1-alpha) for fuzzy prototype match
+    const nnProbs = net.predictProb(x);
+    // build fuzzy scores per label by taking max prototype match per label
+    const labelScores = {};
+    for(const p of prototypes){
+      const s = hammingScore(x,p.x);
+      if(!(p.label in labelScores) || s>labelScores[p.label]) labelScores[p.label]=s;
+    }
+    const labels = Object.keys(labelScores).map(l=>parseInt(l,10));
+    // make proto-prob vector aligned with nnProbs length (assuming labels 0..K-1)
+    const protoProb = new Array(nnProbs.length).fill(0);
+    for(const l of labels){
+      protoProb[l] = labelScores[l] || 0;
+    }
+    // normalize protoProb
+    const sumProto = protoProb.reduce((a,b)=>a+b,0) || 1;
+    for(let i=0;i<protoProb.length;i++) protoProb[i] /= sumProto;
+    // fuse
+    const fused = nnProbs.map((p,i)=> alpha*p + (1-alpha)*protoProb[i]);
+    // normalize fused
+    const ssum = fused.reduce((a,b)=>a+b,0) || 1;
+    for(let i=0;i<fused.length;i++) fused[i]/=ssum;
+    return fused;
+  }
+
+  return { TinyNet, hammingDistanceBits, hammingScore, fusedPredict };
+})();
+
+/* =========================
+   Demo: toy 5x5 digits 0-3 (binary)
+   Represent images as flat arrays length 25 of 0/1.
+   ========================= */
+
+// toy patterns — hand-crafted 5x5 patterns resembling digits 0..3
+const dataset = [
+  // 0
+  [
+    0,1,1,1,0,
+    1,0,0,0,1,
+    1,0,0,1,1,
+    1,0,0,0,1,
+    0,1,1,1,0
+  ],
+  // 1
+  [
+    0,0,1,0,0,
+    0,1,1,0,0,
+    0,0,1,0,0,
+    0,0,1,0,0,
+    0,1,1,1,0
+  ],
+  // 2
+  [
+    0,1,1,1,0,
+    1,0,0,0,1,
+    0,0,0,1,0,
+    0,0,1,0,0,
+    1,1,1,1,1
+  ],
+  // 3
+  [
+    0,1,1,1,0,
+    1,0,0,0,1,
+    0,0,1,1,0,
+    1,0,0,0,1,
+    0,1,1,1,0
+  ]
+];
+
+const labels = [0,1,2,3];
+
+// display samples
+const samplesDiv = document.getElementById('samples');
+function showSamples(){
+  samplesDiv.innerHTML='';
+  for(let i=0;i<dataset.length;i++){
+    const d=document.createElement('div');
+    d.style.margin='8px 0';
+    d.innerHTML = `<strong>Digit ${labels[i]}</strong>`;
+    const grid=document.createElement('div'); grid.className='grid';
+    for(let j=0;j<25;j++){
+      const cell=document.createElement('div'); cell.className='cell' + (dataset[i][j]? ' on':'');
+      grid.appendChild(cell);
+    }
+    d.appendChild(grid);
+    samplesDiv.appendChild(d);
+  }
+}
+showSamples();
+
+// build network: input 25 -> hidden 18 -> out 4
+let net = new AiLite.TinyNet([25, 18, 12, 4], { activation:'sigmoid', lr:0.25 });
+
+function quickTrain(epochs, lr, logEl){
+  // prepare X,Y arrays
+  const X = dataset.map(d=>Float32Array.from(d));
+  const Y = labels.slice();
+  // train
+  const t0 = performance.now();
+  net.train(X, Y, { epochs: epochs, lr: lr });
+  const dt = performance.now()-t0;
+  logEl.textContent += `Trained ${epochs} epochs in ${Math.round(dt)} ms\n`;
+  // quick eval
+  let correct=0;
+  for(let i=0;i<X.length;i++){
+    const p = net.predictLabel(X[i]);
+    if(p===Y[i]) correct++;
+  }
+  logEl.textContent += `Accuracy on toy set: ${correct}/${X.length}\n`;
+}
+
+// UI wiring
+const logEl = document.getElementById('log');
+document.getElementById('trainBtn').onclick = ()=>{
+  logEl.textContent = 'Training...\n';
+  const epochs = parseInt(document.getElementById('epochs').value||150,10);
+  const lr = parseFloat(document.getElementById('lr').value||0.25);
+  quickTrain(epochs, lr, logEl);
+};
+
+document.getElementById('testBtn').onclick = ()=>{
+  logEl.textContent += 'Testing all samples:\n';
+  for(let i=0;i<dataset.length;i++){
+    const x = Float32Array.from(dataset[i]);
+    const probs = net.predictProb(x).map(v=>Number(v.toFixed(3)));
+    const labelNN = probs.indexOf(Math.max(...probs));
+    // fuzzy prototypes: our dataset itself
+    const fused = AiLite.fusedPredict(net, dataset.map((x,idx)=>({x:x,label:labels[idx]})), x, 0.7);
+    const fusedLabel = fused.indexOf(Math.max(...fused));
+    logEl.textContent += `True ${labels[i]} | NN: ${labelNN} ${JSON.stringify(probs)} | Fused: ${fusedLabel} ${JSON.stringify(fused)}\n`;
+  }
+};
+
+document.getElementById('demoBtn').onclick = ()=>{
+  // create a noisy variant of digit 3
+  const base = dataset[3].slice();
+  // flip a couple bits
+  for(let k=0;k<4;k++){
+    const idx = Math.floor(Math.random()*25);
+    base[idx] = base[idx]^1;
+  }
+  // show and predict
+  fillPatternGrid(base);
+  const x = Float32Array.from(base);
+  const probs = net.predictProb(x).map(v=>Number(v.toFixed(3)));
+  const fused = AiLite.fusedPredict(net, dataset.map((x,idx)=>({x:x,label:labels[idx]})), x, 0.6);
+  logEl.textContent += `Demo pattern probs: NN ${JSON.stringify(probs)} | Fused ${JSON.stringify(fused)}\n`;
+};
+
+// pattern editor
+const grid = document.getElementById('patternGrid');
+const current = new Array(25).fill(0);
+for(let i=0;i<25;i++){
+  const c = document.createElement('div'); c.className='cell'; c.dataset.idx=i;
+  c.addEventListener('click', ()=>{ current[c.dataset.idx]=1-current[c.dataset.idx]; c.classList.toggle('on'); });
+  grid.appendChild(c);
+}
+function fillPatternGrid(arr){
+  for(let i=0;i<25;i++){
+    const cell = grid.children[i];
+    current[i] = arr[i];
+    cell.classList.toggle('on', !!arr[i]);
+  }
+}
+document.getElementById('clearBtn').onclick = ()=>{ fillPatternGrid(new Array(25).fill(0)); };
+document.getElementById('predictBtn').onclick = ()=>{
+  const x = Float32Array.from(current);
+  // NN
+  const probs = net.predictProb(x).map(v=>Number(v.toFixed(4)));
+  const nnLabel = probs.indexOf(Math.max(...probs));
+  // fuzzy fused
+  const fused = AiLite.fusedPredict(net, dataset.map((x,idx)=>({x:x,label:labels[idx]})), x, 0.6);
+  const fusedLabel = fused.indexOf(Math.max(...fused));
+  document.getElementById('out').textContent = `NN -> label ${nnLabel} probs: ${JSON.stringify(probs)}\nFused -> label ${fusedLabel} probs: ${JSON.stringify(fused)}`;
+};
+
+</script>
+</body>
+</html>
