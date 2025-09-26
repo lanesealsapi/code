@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Water Pong — Keyboard Throw</title>
+  <style>
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,#e8f7ff 0%, #dff3ff 60%);font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial}
+    #game{display:block;background:#a3d7ff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.18);margin:34px auto;max-width:980px;width:92%;height:66vh}
+    .ui{max-width:980px;margin:8px auto;text-align:center;color:#06324a}
+    .title{font-weight:700;font-size:20px;margin-bottom:6px}
+    .controls{opacity:.95;font-size:13px}
+    .hint{margin-top:6px;font-size:13px;color:#084}
+    .footer{font-size:12px;color:#024}
+    canvas{display:block;border-radius:12px}
+  </style>
+</head>
+<body>
+  <div class="ui">
+    <div class="title">Water Pong — Keyboard Throw</div>
+    <div class="controls">Use ← → to aim, ↑ ↓ to change power, SPACE to throw, R to reset. Hit all 13 cups!</div>
+    <div class="hint">Quick, snappy, and standalone — no libraries. High scores are per-run.</div>
+  </div>
+  <canvas id="game"></canvas>
+  <div class="ui footer">Made for you — press space to start. Cups: 13 • Triangle layout.</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+
+  function resize(){
+    canvas.width = Math.floor(window.innerWidth * 0.92 * devicePixelRatio);
+    canvas.height = Math.floor(window.innerHeight * 0.66 * devicePixelRatio);
+    canvas.style.width = Math.min(980, window.innerWidth * 0.92) + 'px';
+    canvas.style.height = Math.floor(window.innerHeight * 0.66) + 'px';
+    ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  const BALL_RADIUS = 10;
+  const CUP_W = 38;
+  const CUP_H = 46;
+  const CUP_RADIUS = 20;
+  const GRAVITY = 0.45;
+  const FRICTION = 0.78;
+  const THROW_SPEED = 22; // Increased to reach cups
+
+  const rows = [1,2,3,4,3];
+  let cups = [];
+
+  function buildCups(){
+    cups = [];
+    const totalCols = Math.max(...rows);
+    const centerX = canvas.width / devicePixelRatio / 2;
+    const startY = Math.floor(canvas.height / devicePixelRatio * 0.22);
+    let y = startY;
+    for(let r=0;r<rows.length;r++){
+      const cols = rows[r];
+      const rowWidth = cols * (CUP_W + 10) - 10;
+      const startX = centerX - rowWidth/2;
+      for(let c=0;c<cols;c++){
+        const x = startX + c*(CUP_W+10) + CUP_W/2;
+        cups.push({x, y, hit:false, wobble:0});
+      }
+      y += CUP_H + 12;
+    }
+  }
+
+  const launchPos = ()=>({x: canvas.width/devicePixelRatio/2, y: canvas.height/devicePixelRatio - 60});
+  let aimAngle = -Math.PI/3.5; // steeper launch angle
+  let power = 0.9;
+  let ball = {x:0,y:0,vx:0,vy:0,r:BALL_RADIUS, active:false};
+  let score = 0;
+
+  function resetRun(){
+    buildCups();
+    score = 0;
+    aimAngle = -Math.PI/3.5;
+    power = 0.9;
+    ball = {x:launchPos().x, y:launchPos().y, vx:0, vy:0, r:BALL_RADIUS, active:false};
+  }
+  resetRun();
+
+  const keys = {};
+  window.addEventListener('keydown', (e)=>{
+    keys[e.code]=true;
+    if(e.code==='Space') e.preventDefault();
+    if(e.code==='Space' && !ball.active) shoot();
+    if(e.code==='KeyR') resetRun();
+  });
+  window.addEventListener('keyup', (e)=>{keys[e.code]=false});
+
+  function shoot(){
+    if(ball.active) return;
+    ball.active = true;
+    ball.x = launchPos().x;
+    ball.y = launchPos().y;
+    ball.vx = Math.cos(aimAngle) * power * THROW_SPEED;
+    ball.vy = Math.sin(aimAngle) * power * -THROW_SPEED;
+  }
+
+  function drawCup(cx,cy,wobble,alive){
+    if(!alive) return;
+    ctx.save();
+    ctx.translate(cx,cy);
+    const wob = Math.sin(wobble)*2;
+    const grd = ctx.createLinearGradient(-CUP_W/2, -CUP_H/2, CUP_W/2, CUP_H/2);
+    grd.addColorStop(0,"#ff8080");
+    grd.addColorStop(1,"#cc0000");
+    ctx.beginPath();
+    ctx.moveTo(-CUP_W/2, -CUP_H/2);
+    ctx.lineTo(CUP_W/2, -CUP_H/2 + wob);
+    ctx.lineTo(CUP_W/3, CUP_H/2);
+    ctx.lineTo(-CUP_W/3, CUP_H/2);
+    ctx.closePath();
+    ctx.fillStyle = grd;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#fff";
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawBall(x,y,r){
+    const grd = ctx.createRadialGradient(x-r/2,y-r/2,r/4, x,y,r);
+    grd.addColorStop(0,"#ffffff");
+    grd.addColorStop(1,"#88d9ff");
+    ctx.beginPath();
+    ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle = grd;
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "#004c66";
+    ctx.stroke();
+  }
+
+  function draw(){
+    const W = canvas.width/devicePixelRatio, H = canvas.height/devicePixelRatio;
+    ctx.clearRect(0,0,W,H);
+    const tableY = H - 40;
+    ctx.fillStyle = '#0a6b7a';
+    ctx.fillRect(0, tableY, W, 40);
+
+    cups.forEach(cup=>drawCup(cup.x,cup.y,cup.wobble,!cup.hit));
+
+    if(!ball.active){
+      const start = launchPos();
+      const aimLen = 70 + power*80;
+      const ax = start.x + Math.cos(aimAngle)*aimLen;
+      const ay = start.y - Math.sin(aimAngle)*aimLen;
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(ax, ay);
+      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    drawBall(ball.x, ball.y, ball.r);
+
+    ctx.fillStyle = '#012';
+    ctx.font = '16px system-ui';
+    ctx.fillText(`Score: ${score}`, W-120, 28);
+    const left = cups.filter(c=>!c.hit).length;
+    ctx.fillText(`Cups left: ${left}`, W-240, 28);
+    ctx.font = '12px system-ui';
+    ctx.fillText('← → aim • ↑ ↓ power • SPACE throw • R reset', 20, 28);
+  }
+
+  let last = performance.now();
+  function step(now){
+    const dt = Math.min(40, now - last) / 16.666;
+    last = now;
+
+    if(keys['ArrowLeft']) aimAngle -= 0.025*dt;
+    if(keys['ArrowRight']) aimAngle += 0.025*dt;
+    if(keys['ArrowUp']) power = Math.min(1, power + 0.012*dt);
+    if(keys['ArrowDown']) power = Math.max(0.15, power - 0.012*dt);
+
+    cups.forEach(c=>c.wobble+=0.08*dt);
+
+    if(ball.active){
+      ball.vy += GRAVITY * dt;
+      ball.x += ball.vx * dt;
+      ball.y += ball.vy * dt;
+
+      const groundY = canvas.height/devicePixelRatio - 40 - ball.r/2;
+      if(ball.y > groundY){
+        ball.y = groundY;
+        ball.vy *= -0.45;
+        ball.vx *= FRICTION;
+        if(Math.abs(ball.vx) < 0.5 && Math.abs(ball.vy) < 0.7){
+          ball.active = false;
+          ball.x = launchPos().x; ball.y = launchPos().y;
+          ball.vx = 0; ball.vy = 0;
+        }
+      }
+
+      if(ball.x < ball.r) { ball.x = ball.r; ball.vx *= -0.6 }
+      if(ball.x > canvas.width/devicePixelRatio - ball.r) { ball.x = canvas.width/devicePixelRatio - ball.r; ball.vx *= -0.6 }
+
+      for(const cup of cups){
+        if(cup.hit) continue;
+        const d = Math.hypot(ball.x - cup.x, ball.y - cup.y);
+        if(d < CUP_RADIUS){
+          cup.hit = true;
+          score++;
+          ball.vy *= -0.5;
+          if(cups.filter(c=>!c.hit).length === 0){
+            setTimeout(()=>resetRun(),600);
+          }
+        }
+      }
+    } else {
+      ball.x = launchPos().x;
+      ball.y = launchPos().y;
+    }
+
+    draw();
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+})();
+</script>
+</body>
+</html>
