@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Guitar Laser Tag</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #111;
+    color: #f9f9f9;
+    text-align: center;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  canvas {
+    border: 2px solid #444;
+    background: #222;
+    margin-top: 1rem;
+  }
+  .controls {
+    margin-top: 1rem;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  button, select {
+    background: #4caf50;
+    color: white;
+    padding: 0.6rem 1.2rem;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  button:hover, select:hover { background: #45a049; }
+</style>
+</head>
+<body>
+<h1>Guitar Laser Tag 🎸</h1>
+<p>Press SPACE to fire! Guitar notes replace pews!</p>
+
+<div class="controls">
+  <select id="guitarType" onchange="updateGuitarType()">
+    <option value="electric">Electric</option>
+    <option value="steel">Steel Acoustic</option>
+    <option value="nylon">Nylon Acoustic</option>
+  </select>
+</div>
+
+<canvas id="gameCanvas" width="600" height="400"></canvas>
+
+<script>
+// Guitar setup
+const stringTunings = [
+  { name: "E", freq: 82.41 }, { name: "A", freq: 110.00 }, { name: "D", freq: 146.83 },
+  { name: "G", freq: 196.00 }, { name: "B", freq: 246.94 }, { name: "E", freq: 329.63 }
+];
+const numFrets = 6;
+let currentGuitar = 'electric';
+
+function updateGuitarType(){
+  currentGuitar = document.getElementById("guitarType").value;
+}
+
+// Play guitar note
+function playGuitarNote(freq){
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
+
+  if(currentGuitar === 'electric'){
+    osc.type = 'square';
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(800, audioCtx.currentTime);
+    filter.Q.value = 2;
+    gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+  } else if(currentGuitar === 'steel'){
+    osc.type = 'square';
+    filter.type = 'highpass';
+    filter.frequency.setValueAtTime(400, audioCtx.currentTime);
+    filter.Q.value = 1;
+    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+  } else { // nylon
+    osc.type = 'triangle';
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(1200, audioCtx.currentTime);
+    filter.Q.value = 0.7;
+    gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+  }
+
+  osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  gain.gain.setValueAtTime(gain.gain.value, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6);
+
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.6);
+}
+
+// Laser tag game
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const player = { x: 300, y: 350, width: 40, height: 20 };
+let lasers = [];
+let enemies = [];
+
+// Generate enemies
+function spawnEnemies(){
+  for(let i=0;i<5;i++){
+    enemies.push({x: Math.random()*550, y: Math.random()*150, width: 30, height: 30});
+  }
+}
+
+// Draw everything
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  // player
+  ctx.fillStyle = '#4caf50';
+  ctx.fillRect(player.x, player.y, player.width, player.height);
+  // lasers
+  ctx.fillStyle = '#ff9800';
+  lasers.forEach(l=>ctx.fillRect(l.x,l.y,l.width,l.height));
+  // enemies
+  ctx.fillStyle = '#f44336';
+  enemies.forEach(e=>ctx.fillRect(e.x,e.y,e.width,e.height));
+}
+
+// Update game state
+function update(){
+  // Move lasers
+  lasers.forEach((l,i)=>{
+    l.y -= l.speed;
+    // Collision detection
+    enemies.forEach((e,j)=>{
+      if(l.x < e.x + e.width && l.x + l.width > e.x &&
+         l.y < e.y + e.height && l.y + l.height > e.y){
+        enemies.splice(j,1);
+        lasers.splice(i,1);
+      }
+    });
+  });
+  draw();
+  requestAnimationFrame(update);
+}
+
+// Fire laser with guitar note
+function fireLaser(){
+  const stringIndex = Math.floor(Math.random()*6);
+  const fret = Math.floor(Math.random()*numFrets);
+  const freq = stringTunings[stringIndex].freq*Math.pow(2,fret/12);
+  playGuitarNote(freq);
+  lasers.push({x: player.x+player.width/2-2, y: player.y, width:4, height:10, speed:5});
+}
+
+// Controls
+document.addEventListener('keydown', (e)=>{
+  if(e.code === 'ArrowLeft') player.x = Math.max(0,player.x-10);
+  if(e.code === 'ArrowRight') player.x = Math.min(canvas.width-player.width, player.x+10);
+  if(e.code === 'Space') fireLaser();
+});
+
+spawnEnemies();
+update();
+</script>
+</body>
+</html>
