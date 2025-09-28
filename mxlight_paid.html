@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Vertical Guitar Fretboard with Chords & Demo</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: linear-gradient(to bottom, #2e2e2e, #1a1a1a);
+    color: #f9f9f9;
+    text-align: center;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  header {
+    padding: 1.5rem;
+    width: 100%;
+    max-width: 800px;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+  p { color: #ddd; margin-bottom: 1rem; }
+  button, select {
+    background: #4caf50;
+    color: white;
+    padding: 0.6rem 1.2rem;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    cursor: pointer;
+    margin: 0.3rem;
+  }
+  button:hover, select:hover { background: #45a049; }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 1rem;
+    gap: 5px;
+  }
+  .fretboard-container {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+  }
+  .fretboard {
+    border: 2px solid #444;
+    border-radius: 12px;
+    background: #333;
+    display: grid;
+    grid-template-rows: repeat(6, 70px);
+    grid-template-columns: repeat(6, 70px);
+    gap: 2px;
+  }
+  .fret {
+    border: 1px solid #666;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s;
+    font-size: 0.8rem;
+  }
+  .fret:hover { background: #555; }
+  .note { font-weight: bold; color: #fefefe; }
+  .fret-num { font-size: 0.7rem; color: #bbb; }
+  .highlight { background: #ff9800 !important; }
+  footer { margin: 2rem; font-size: 0.85rem; color: #aaa; }
+  #chordMenu { margin-top: 1rem; display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Learn Guitar</h1>
+  <p>Vertical fretboard with chords, demo, and guitar type selection 🎶</p>
+  <div class="controls">
+    <button onclick="startLesson()">Show Fretboard</button>
+    <button onclick="showChordMenu()">Show Chords</button>
+    <label>
+      <input type="checkbox" id="playChordToggle"> Play Chord
+    </label>
+    <select id="guitarType" onchange="updateGuitarType()">
+      <option value="electric">Electric</option>
+      <option value="steel">Steel Acoustic</option>
+      <option value="nylon">Nylon Acoustic</option>
+    </select>
+    <button onclick="playDemoSongChord()">Play Demo (Chords)</button>
+    <button onclick="playDemoSongNotes()">Play Demo (Notes)</button>
+  </div>
+  <div id="chordMenu"></div>
+</header>
+
+<div class="fretboard-container">
+  <div class="fretboard" id="fretboard"></div>
+</div>
+
+<footer>© 2025 Learn Guitar | Play safe. Learn smart.</footer>
+
+<script>
+// Guitar setup
+const stringTunings = [
+  { name: "E", freq: 82.41 }, { name: "A", freq: 110.00 }, { name: "D", freq: 146.83 },
+  { name: "G", freq: 196.00 }, { name: "B", freq: 246.94 }, { name: "E", freq: 329.63 }
+];
+const numFrets = 6;
+const fretboard = document.getElementById("fretboard");
+const noteNames = ["C","C♯/D♭","D","D♯/E♭","E","F","F♯/G♭","G","G♯/A♭","A","A♯/B♭","B"];
+const chords = {
+  "C": [null,3,2,0,1,0], "D": [null,null,0,2,3,2], "E": [0,2,2,1,0,0],
+  "G": [3,2,0,0,0,3], "A": [null,0,2,2,2,0], "Am": [null,0,2,2,1,0],
+  "Em": [0,2,2,0,0,0], "Dm": [null,null,0,2,3,1], "F": [1,3,3,2,1,1],
+  "Bm": [null,2,4,4,3,2], "A7":[null,0,2,0,2,0], "E7":[0,2,0,1,0,0],
+  "D7":[null,null,0,2,1,2], "G7":[3,2,0,0,0,1], "Cmaj7":[null,3,2,0,0,0],
+  "Fmaj7":[1,3,3,2,0,0], "Bm7":[null,2,0,2,0,2], "Am7":[0,0,2,0,1,0],
+  "Dmin7":[null,null,0,2,1,1], "Emin7":[0,2,0,0,0,0]
+};
+let fretElements = [];
+let currentGuitar = 'electric';
+
+// Convert frequency to note name
+function freqToNoteName(baseNote, semitones){
+  const openIndex = noteNames.indexOf(baseNote);
+  const newIndex = (openIndex + semitones + 12) % 12;
+  return noteNames[newIndex];
+}
+
+// Build vertical fretboard
+function startLesson(){
+  fretboard.innerHTML="";
+  fretElements=[];
+  for(let fret=0; fret<numFrets; fret++){
+    for(let stringIndex=0; stringIndex<stringTunings.length; stringIndex++){
+      const string = stringTunings[stringIndex];
+      const freq = string.freq*Math.pow(2,fret/12);
+      const noteName = freqToNoteName(string.name,fret);
+      const fretDiv = document.createElement("div");
+      fretDiv.className="fret";
+      fretDiv.innerHTML=`<div class="note">${noteName}</div><div class="fret-num">${fret===0?'Open':'Fret '+fret}</div>`;
+      fretDiv.title=`String ${6-stringIndex}, Fret ${fret} = ${noteName}`;
+      fretDiv.onclick=()=>playSound(freq);
+      fretboard.appendChild(fretDiv);
+      if(!fretElements[stringIndex]) fretElements[stringIndex]=[];
+      fretElements[stringIndex][fret]=fretDiv;
+    }
+  }
+}
+
+// Update guitar type
+function updateGuitarType(){
+  currentGuitar = document.getElementById("guitarType").value;
+}
+
+// Play single note
+function playSound(freq){
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
+
+  if(currentGuitar === 'electric'){
+    osc.type = 'square';
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(800, audioCtx.currentTime);
+    filter.Q.value = 2;
+    gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+  } else if(currentGuitar === 'steel'){
+    osc.type = 'square';
+    filter.type = 'highpass';
+    filter.frequency.setValueAtTime(400, audioCtx.currentTime);
+    filter.Q.value = 1;
+    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+  } else { // nylon
+    osc.type = 'triangle';
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(1200, audioCtx.currentTime);
+    filter.Q.value = 0.7;
+    gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+  }
+
+  osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  gain.gain.setValueAtTime(gain.gain.value, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.2);
+
+  osc.start();
+  osc.stop(audioCtx.currentTime + 1.2);
+}
+
+// Chord menu
+function showChordMenu(){
+  const menu=document.getElementById("chordMenu");
+  menu.style.display="flex";
+  menu.innerHTML="";
+  Object.keys(chords).forEach(chordName=>{
+    const btn=document.createElement("button");
+    btn.textContent=chordName;
+    btn.onclick=()=>selectChord(chordName);
+    menu.appendChild(btn);
+  });
+}
+
+// Highlight & optionally play chord
+function selectChord(chordName){
+  fretElements.flat().forEach(f=>f.classList.remove("highlight"));
+  const chord = chords[chordName];
+  chord.forEach((fret,stringIndex)=>{
+    if(fret!==null && fretElements[stringIndex][fret]){
+      fretElements[stringIndex][fret].classList.add("highlight");
+    }
+  });
+  if(document.getElementById("playChordToggle").checked){
+    chord.forEach((fret,stringIndex)=>{
+      if(fret!==null){
+        const freq = stringTunings[stringIndex].freq*Math.pow(2,fret/12);
+        playSound(freq);
+      }
+    });
+  }
+}
+
+// Demo Song: House of the Rising Sun
+const houseChords=["Am","C","D","F","Am","E","Am"];
+const houseNotesSeq=[
+  [1,0],[1,2],[1,3],[1,2],[1,0],[0,0],[1,0]
+];
+
+function playDemoSongChord(){
+  let i=0;
+  const interval=setInterval(()=>{
+    if(i>=houseChords.length){ clearInterval(interval); return; }
+    selectChord(houseChords[i]);
+    i++;
+  },500);
+}
+
+function playDemoSongNotes(){
+  let i=0;
+  fretElements.flat().forEach(f=>f.classList.remove("highlight"));
+  const interval=setInterval(()=>{
+    if(i>=houseNotesSeq.length){ clearInterval(interval); return; }
+    const [stringIndex,fret]=houseNotesSeq[i];
+    if(fretElements[stringIndex] && fretElements[stringIndex][fret]){
+      fretElements[stringIndex][fret].classList.add("highlight");
+      const freq = stringTunings[stringIndex].freq*Math.pow(2,fret/12);
+      playSound(freq);
+    }
+    i++;
+  },500);
+}
+</script>
+</body>
+</html>
