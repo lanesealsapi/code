@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Solar System — Box Zoom, Pan, Drag</title>
+<style>
+  :root{--bg:#050511;--panel:#0b0b14;--muted:#aaa;}
+  html,body{height:100%;margin:0;background:var(--bg);color:#eee;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+  #app{display:flex;flex-direction:column;height:100%}
+  #topbar{display:flex;gap:8px;align-items:center;padding:8px;background:linear-gradient(180deg,#0b0b14, #07101a);}
+  #canvas-wrap{flex:1;position:relative;overflow:hidden}
+  canvas{display:block;width:100%;height:100%;background:radial-gradient(ellipse at center,#071227 0%, #000 70%);}
+  .btn, input[type=range], label {background:transparent;border:1px solid #1a1a2a;padding:6px 10px;border-radius:6px;color:#eee}
+  .btn:hover{border-color:#2b6eff}
+  .controls{display:flex;gap:8px;align-items:center}
+  .small{font-size:12px;color:var(--muted)}
+  #hud{position:absolute;left:8px;top:8px;background:rgba(0,0,0,0.2);padding:6px;border-radius:6px;font-size:12px}
+  #legend{position:absolute;right:8px;top:8px;background:rgba(0,0,0,0.2);padding:6px;border-radius:6px;font-size:12px}
+  .hint{color:#99a; font-size:12px}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <div class="controls">
+      <button id="playBtn" class="btn">⏸ Pause</button>
+      <label class="small">Speed
+        <input id="speed" type="range" min="0" max="4" step="0.01" value="1" style="vertical-align:middle">
+      </label>
+      <label class="small">Trails
+        <input id="trailsToggle" type="checkbox" checked>
+      </label>
+      <button id="clearTrails" class="btn">Clear Trails</button>
+      <button id="resetBtn" class="btn">Reset View (R)</button>
+    </div>
+
+    <div style="flex:1"></div>
+
+    <div class="controls small hint">
+      Pan: drag • Shift+drag: box-zoom • Wheel: zoom • Click: center • Alt+drag: move body
+    </div>
+  </div>
+
+  <div id="canvas-wrap">
+    <canvas id="c"></canvas>
+    <div id="hud"></div>
+    <div id="legend"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d', { alpha: false });
+  const playBtn = document.getElementById('playBtn');
+  const speedRange = document.getElementById('speed');
+  const trailsToggle = document.getElementById('trailsToggle');
+  const clearTrailsBtn = document.getElementById('clearTrails');
+  const resetBtn = document.getElementById('resetBtn');
+  const hud = document.getElementById('hud');
+  const legend = document.getElementById('legend');
+
+  // --- Simulation parameters (feel free to tweak) ---
+  let running = true;
+  let speed = 1.0;          // multiplier for orbital speed
+  let lastTime = performance.now();
+  let camX = 0, camY = 0;   // world coordinate that maps to canvas center (pixels)
+  let scale = 1.0;          // pixels per "unit" in our world (unit ~ 1 pixel baseline)
+  let trailsOn = true;
+  let maxTrail = 10;
+
+  // Drag & box zoom state
+  let isPanning = false;
+  let panStart = null;
+  let isBoxZoom = false;
+  let boxStart = null;
+  let boxRect = null;
+
+  // Dragging bodies
+  let draggingBody = null;
+  let draggingOffset = {x:0,y:0};
+
+  // World: Sun at (0,0). Distances are in "pixels" baseline units to be intuitive.
+  function Body(opts){
+    Object.assign(this, opts);
+    this.angle = opts.initialAngle || Math.random()*Math.PI*2;
+    this.trail = [];
+  }
+
+  // Planets + moons
+  // semiMajor = radius from parent in baseline units
+  const bodies = [];
+  const planets = [
+    new Body({name:'Mercury', color:'#bfbdb6', r:4, semiMajor:60, period:88}),
+    new Body({name:'Venus',   color:'#e0c57a', r:7, semiMajor:100, period:225}),
+    new Body({name:'Earth',   color:'#2a6f92', r:8, semiMajor:150, period:365, moons:[
+      new Body({name:'Moon', color:'#aab', r:3, semiMajor:28, period:27})
+    ]}),
+    new Body({name:'Mars',    color:'#c86432', r:6, semiMajor:200, period:687, moons:[
+      new Body({name:'Phobos', color:'#999', r:2, semiMajor:12, period:0.3},
+      ), new Body({name:'Deimos', color:'#777', r:2, semiMajor:20, period:1.2}) ]}),
+    new Body({name:'Jupiter', color:'#d9a066', r:14, semiMajor:300, period:4330, moons:[
+      new Body({name:'Io', color:'#ffcc55', r:3, semiMajor:28, period:1.77}),
+      new Body({name:'Europa', color:'#aaaaff', r:3, semiMajor:42, period:3.55}),
+      new Body({name:'Ganymede', color:'#ddd4b0', r:4, semiMajor:60, period:7.15}),
+      new Body({name:'Callisto', color:'#887', r:4, semiMajor:90, period:16.7})
+    ]}),
+    new Body({name:'Saturn', color:'#e6d5b8', r:12, semiMajor:420, period:10759, moons:[
+      new Body({name:'Titan', color:'#eebb88', r:4, semiMajor:85, period:16})
+    ]})
+  ];
+
+  // Flatten set: planets are parents of their moons
+  planets.forEach(p => {
+    bodies.push(Object.assign(p, {parent: null}));
+    if (p.moons) {
+      p.moons.forEach(m => bodies.push(Object.assign(m, {parent: p})));
+    }
+  });
+
+  // Helper: world -> screen coords
+  function worldToScreen(wx, wy){
+    const sx = (wx - camX) * scale + canvas.width/2;
+    const sy = (wy - camY) * scale + canvas.height/2;
+    return [sx, sy];
+  }
+  function screenToWorld(sx, sy){
+    const wx = (sx - canvas.width/2)/scale + camX;
+    const wy = (sy - canvas.height/2)/scale + camY;
+    return [wx, wy];
+  }
+
+  // Resize canvas to device pixels
+  function resize(){
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width = Math.floor(canvas.clientWidth * dpr);
+    canvas.height = Math.floor(canvas.clientHeight * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener('resize', () => {
+    resize();
+  });
+  resize();
+
+  // Main animation loop
+  function step(now){
+    const dt = Math.min(50, now - lastTime) / 1000; // seconds, clamp
+    lastTime = now;
+    if (running){
+      // advance angles: convert period (days) to radians/sec - but scale down for visible motion
+      const timeScale = speed * 2; // multiplier so orbits move nicely
+      bodies.forEach(b => {
+        const period = Math.max(0.1, b.period || 0.1);
+        // angle advance inversely proportional to period
+        b.angle += (2*Math.PI / (period)) * dt * timeScale;
+        if (b.angle > Math.PI*2) b.angle -= Math.PI*2;
+      });
+    }
+
+    // draw background
+    ctx.fillStyle = '#000010';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // draw Sun
+    const sunScreen = worldToScreen(0,0);
+    drawGlow(sunScreen[0], sunScreen[1], 30);
+    ctx.beginPath();
+    ctx.fillStyle = '#ffd94d';
+    ctx.arc(sunScreen[0], sunScreen[1], 12*scale, 0, Math.PI*2);
+    ctx.fill();
+
+    // draw orbits (planets around sun)
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    bodies.forEach(b => {
+      if (!b.parent){
+        const [sx,sy] = worldToScreen(0,0);
+        const a = b.semiMajor * scale;
+        ctx.beginPath();
+        ctx.ellipse(sx, sy, a, a*Math.sqrt(1-0.0), 0, 0, Math.PI*2);
+        ctx.strokeStyle = '#222844';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    });
+    ctx.restore();
+
+    // draw moons orbits (around parent)
+    bodies.forEach(b => {
+      if (b.parent){
+        const parentPos = bodyScreenPos(b.parent);
+        const a = b.semiMajor * scale;
+        ctx.save();
+        ctx.globalAlpha = 0.25;
+        ctx.beginPath();
+        ctx.ellipse(parentPos[0], parentPos[1], a, a*0.9, 0, 0, Math.PI*2);
+        ctx.strokeStyle = '#1a1a25';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+      }
+    });
+
+    // draw bodies (planets then moons so planets overlay nicely)
+    bodies.forEach(b => {
+      const [sx,sy] = bodyScreenPos(b);
+      // trail
+      if (trailsOn){
+        b.trail.push([sx,sy]);
+        if (b.trail.length > maxTrail) b.trail.shift();
+        if (b.trail.length > 1){
+          ctx.beginPath();
+          for (let i=0;i<b.trail.length-1;i++){
+            const t = i/(b.trail.length-1);
+            ctx.strokeStyle = fadeColor(b.color, t*0.9 + 0.1);
+            ctx.lineWidth = Math.max(1, (1 - (1-t))*1.6);
+            ctx.moveTo(b.trail[i][0], b.trail[i][1]);
+            ctx.lineTo(b.trail[i+1][0], b.trail[i+1][1]);
+          }
+          ctx.stroke();
+        }
+      } else {
+        b.trail.length = 0;
+      }
+
+      // body
+      ctx.beginPath();
+      ctx.fillStyle = b.color;
+      const drawR = Math.max(2, b.r * scale);
+      ctx.arc(sx, sy, drawR, 0, Math.PI*2);
+      ctx.fill();
+      // label
+      ctx.fillStyle = '#ddd';
+      ctx.font = `${10}px system-ui`;
+      ctx.fillText(b.name, sx + drawR + 4, sy + 4);
+    });
+
+    // draw selection box if active
+    if (isBoxZoom && boxStart && boxRect){
+      ctx.save();
+      ctx.setLineDash([6,4]);
+      ctx.strokeStyle = '#66aaff';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(boxRect.x, boxRect.y, boxRect.w, boxRect.h);
+      ctx.restore();
+    }
+
+    // HUD
+    hud.innerHTML = `Scale: ${scale.toFixed(2)} • Cam: ${camX.toFixed(0)}, ${camY.toFixed(0)} • Bodies: ${bodies.length}`;
+
+    requestAnimationFrame(step);
+  }
+
+  function bodyScreenPos(b){
+    // compute world position: if parent exists, position relative to parent
+    if (!b.parent) {
+      const wx = Math.cos(b.angle) * b.semiMajor;
+      const wy = Math.sin(b.angle) * b.semiMajor;
+      return worldToScreen(wx, wy);
+    } else {
+      // parent world pos
+      const px = Math.cos(b.parent.angle) * b.parent.semiMajor;
+      const py = Math.sin(b.parent.angle) * b.parent.semiMajor;
+      const wx = px + Math.cos(b.angle) * b.semiMajor;
+      const wy = py + Math.sin(b.angle) * b.semiMajor;
+      return worldToScreen(wx, wy);
+    }
+  }
+
+  function drawGlow(x,y,size){
+    const g = ctx.createRadialGradient(x,y,size*0.1,x,y,size*1.6);
+    g.addColorStop(0, 'rgba(255,220,100,0.6)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x,y,size*1.6,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  function fadeColor(hex, t){
+    // mix hex color with background for fading effect t in [0..1]
+    const c = hexToRgb(hex);
+    const br = Math.round(c.r * (1-t) + 5 * t);
+    const bg = Math.round(c.g * (1-t) + 8 * t);
+    const bb = Math.round(c.b * (1-t) + 16 * t);
+    return `rgb(${br},${bg},${bb})`;
+  }
+  function hexToRgb(hex){
+    hex = hex.replace('#','');
+    if (hex.length === 3) hex = hex.split('').map(h=>h+h).join('');
+    return {r: parseInt(hex.substr(0,2),16), g: parseInt(hex.substr(2,2),16), b: parseInt(hex.substr(4,2),16)};
+  }
+
+  // --- Input handlers ---
+  let lastMouse = null;
+  canvas.addEventListener('mousedown', e => {
+    const rect = canvas.getBoundingClientRect();
+    const sx = (e.clientX - rect.left);
+    const sy = (e.clientY - rect.top);
+
+    if (e.shiftKey){
+      // start box zoom
+      isBoxZoom = true;
+      boxStart = {x: sx, y: sy};
+      boxRect = {x: sx, y: sy, w:0, h:0};
+    } else {
+      // check if clicking a body (for dragging or centering)
+      const body = pickBodyAt(sx, sy);
+      if (body && e.altKey){
+        // start dragging body
+        draggingBody = body;
+        const [wx,wy] = screenToWorld(sx, sy);
+        draggingOffset.x = wx;
+        draggingOffset.y = wy;
+      } else if (body && !e.altKey){
+        // center on body
+        // compute world position of body and set camX, camY to it
+        const worldPos = getBodyWorldPos(body);
+        camX = worldPos.x;
+        camY = worldPos.y;
+      } else {
+        // start panning
+        isPanning = true;
+        panStart = {x: sx, y: sy, camX, camY};
+      }
+    }
+    lastMouse = {x:sx,y:sy};
+  });
+
+  canvas.addEventListener('mousemove', e => {
+    const rect = canvas.getBoundingClientRect();
+    const sx = (e.clientX - rect.left);
+    const sy = (e.clientY - rect.top);
+
+    if (isBoxZoom && boxStart){
+      boxRect.x = Math.min(boxStart.x, sx);
+      boxRect.y = Math.min(boxStart.y, sy);
+      boxRect.w = Math.abs(sx - boxStart.x);
+      boxRect.h = Math.abs(sy - boxStart.y);
+    } else if (draggingBody){
+      // move body in world coords to follow mouse; if it has parent, set its semiMajor relative to parent
+      const [wx,wy] = screenToWorld(sx, sy);
+      if (!draggingBody.parent){
+        // change its semiMajor vector (will map to x,y around sun)
+        // instead we will compute angle and semiMajor consistent with new location
+        const r = Math.hypot(wx, wy);
+        draggingBody.semiMajor = r;
+        draggingBody.angle = Math.atan2(wy, wx);
+      } else {
+        // compute parent world pos
+        const ppos = getBodyWorldPos(draggingBody.parent);
+        const dx = wx - ppos.x; const dy = wy - ppos.y;
+        draggingBody.semiMajor = Math.hypot(dx, dy);
+        draggingBody.angle = Math.atan2(dy, dx);
+      }
+    } else if (isPanning && panStart){
+      // move camera
+      const dx = (sx - panStart.x) / scale;
+      const dy = (sy - panStart.y) / scale;
+      camX = panStart.camX - dx;
+      camY = panStart.camY - dy;
+    }
+    lastMouse = {x:sx,y:sy};
+  });
+
+  window.addEventListener('mouseup', e => {
+    if (isBoxZoom && boxRect && (boxRect.w > 8 && boxRect.h > 8)){
+      // perform box zoom: zoom so that box fills canvas
+      const zoomX = canvas.width / (boxRect.w * (window.devicePixelRatio || 1));
+      const zoomY = canvas.height / (boxRect.h * (window.devicePixelRatio || 1));
+      const newScale = scale * Math.min(zoomX, zoomY) * 0.95;
+      // new center world coordinate is center of box
+      const boxCenterScreen = {x: boxRect.x + boxRect.w/2, y: boxRect.y + boxRect.h/2};
+      const [newCamX, newCamY] = screenToWorld(boxCenterScreen.x, boxCenterScreen.y);
+      scale = newScale;
+      camX = newCamX; camY = newCamY;
+    }
+    // clear states
+    isBoxZoom = false; boxStart = null; boxRect = null;
+    isPanning = false; panStart = null;
+    draggingBody = null;
+  });
+
+  // wheel zoom centered at mouse
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const sx = (e.clientX - rect.left);
+    const sy = (e.clientY - rect.top);
+    const [wxBefore, wyBefore] = screenToWorld(sx, sy);
+    const delta = - e.deltaY;
+    const zoomFactor = Math.exp(delta * 0.0016);
+    scale *= zoomFactor;
+    // after zoom, keep point under cursor stationary by adjusting camera
+    const [wxAfter, wyAfter] = screenToWorld(sx, sy);
+    camX += wxBefore - wxAfter;
+    camY += wyBefore - wyAfter;
+  }, {passive:false});
+
+  function pickBodyAt(sx, sy){
+    // return first body whose screen circle contains sx,sy
+    for (let i=bodies.length-1;i>=0;i--){
+      const b = bodies[i];
+      const [bx,by] = bodyScreenPos(b);
+      const r = Math.max(3, b.r * scale) + 3;
+      const d2 = (sx-bx)*(sx-bx)+(sy-by)*(sy-by);
+      if (d2 <= r*r) return b;
+    }
+    return null;
+  }
+
+  function getBodyWorldPos(b){
+    if (!b.parent){
+      return {x: Math.cos(b.angle)*b.semiMajor, y: Math.sin(b.angle)*b.semiMajor};
+    } else {
+      const p = getBodyWorldPos(b.parent);
+      return {x: p.x + Math.cos(b.angle)*b.semiMajor, y: p.y + Math.sin(b.angle)*b.semiMajor};
+    }
+  }
+
+  // UI controls
+  playBtn.addEventListener('click', () => {
+    running = !running;
+    playBtn.textContent = running ? '⏸ Pause' : '▶ Play';
+    lastTime = performance.now();
+  });
+  speedRange.addEventListener('input', () => { speed = Math.pow(2, Number(speedRange.value)); });
+  trailsToggle.addEventListener('change', () => { trailsOn = trailsToggle.checked; });
+  clearTrailsBtn.addEventListener('click', () => { bodies.forEach(b => b.trail=[]); });
+  resetBtn.addEventListener('click', resetView);
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'r' || e.key === 'R') resetView();
+  });
+
+  function resetView(){
+    camX = 0; camY = 0; scale = 1.0; bodies.forEach(b => b.trail=[]);
+  }
+  camX = 400;
+  camY = 400;
+
+  // initial legend
+  legend.innerHTML = `<div style="font-weight:600;margin-bottom:4px">Controls</div>
+  <div class="small">Left-drag: pan • Shift+drag: box zoom • Wheel: zoom</div>
+  <div class="small">Click planet: center • Alt+drag: move planet/moon • Reset: R</div>`;
+
+  // start
+  requestAnimationFrame(step);
+})();
+</script>
+</body>
+</html>
