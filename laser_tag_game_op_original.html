@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Laser Tag</title>
+<style>
+body { margin:0; overflow:hidden; background:#111; font-family:sans-serif; }
+#score, #lives { position:absolute; top:10px; color:#0ff; font-size:24px; text-shadow:0 0 10px #0ff; }
+#score { left:10px; }
+#lives { right:10px; }
+canvas { display:block; }
+</style>
+</head>
+<body>
+<div id="score">Score: 0</div>
+<div id="lives">Lives: 3</div>
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas=document.getElementById('gameCanvas');
+const ctx=canvas.getContext('2d');
+canvas.width=window.innerWidth;
+canvas.height=window.innerHeight;
+window.addEventListener('resize',()=>{canvas.width=window.innerWidth; canvas.height=window.innerHeight;});
+
+// Audio context for laser
+const audioCtx=new (window.AudioContext || window.webkitAudioContext)();
+function playLaser(){
+    const osc=audioCtx.createOscillator();
+    const gain=audioCtx.createGain();
+    osc.type='sawtooth';
+    osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime+0.1);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime+0.1);
+}
+
+// Player
+const player={x:canvas.width/2, y:canvas.height/2, size:20, speed:5, color:'#0ff', lives:3};
+let keys={}, lasers=[], enemies=[], powerUps=[], explosions=[];
+let score=0, rapidFire=false, lastShot=0;
+let mouse={x:player.x, y:player.y};
+
+// Enemy types
+const enemyTypes=[
+    {size:15, speed:1.5, color:'#f0f'},
+    {size:20, speed:1, color:'#f0f'},
+    {size:25, speed:0.7, color:'blue'}
+];
+
+function spawnEnemy(){
+    const type=enemyTypes[Math.floor(Math.random()*enemyTypes.length)];
+    enemies.push({
+        x:Math.random()*canvas.width,
+        y:Math.random()*canvas.height,
+        size:type.size,
+        color:type.color,
+        vx:(Math.random()-0.5)*type.speed*2,
+        vy:(Math.random()-0.5)*type.speed*2,
+        speed:type.speed
+    });
+}
+for(let i=0;i<5;i++) spawnEnemy();
+
+// Input
+document.addEventListener('keydown', e=>keys[e.key.toLowerCase()]=true);
+document.addEventListener('keyup', e=>keys[e.key.toLowerCase()]=false);
+document.addEventListener('mousemove', e=>{ mouse.x=e.clientX; mouse.y=e.clientY; });
+document.addEventListener('click', shootLaser);
+
+function shootLaser(){
+    const now=Date.now();
+    if(!rapidFire && now-lastShot<300) return; // Limit fire rate
+    lastShot=now;
+    const dx=mouse.x-player.x, dy=mouse.y-player.y;
+    const len=Math.sqrt(dx*dx+dy*dy);
+    const speed=10;
+    lasers.push({x:player.x, y:player.y, size:5, color:'#ff0', vx:dx/len*speed, vy:dy/len*speed});
+    playLaser();
+}
+
+// Power-ups
+function spawnPowerUp(){
+    powerUps.push({
+        x:Math.random()*canvas.width,
+        y:Math.random()*canvas.height,
+        size:15,
+        type:Math.random()<0.5?'speed':'rapid',
+        color:'#0f0'
+    });
+}
+setInterval(spawnPowerUp,10000);
+
+// Explosions
+function createExplosion(x,y,color){
+    explosions.push({x,y,radius:0,maxRadius:30,color,alpha:1});
+}
+
+// Game update
+function update(){
+    // Move player
+    if(keys['w']||keys['arrowup']) player.y-=player.speed;
+    if(keys['s']||keys['arrowdown']) player.y+=player.speed;
+    if(keys['a']||keys['arrowleft']) player.x-=player.speed;
+    if(keys['d']||keys['arrowright']) player.x+=player.speed;
+    player.x=Math.max(player.size, Math.min(canvas.width-player.size, player.x));
+    player.y=Math.max(player.size, Math.min(canvas.height-player.size, player.y));
+
+    // Move lasers
+    lasers.forEach(l=>{ l.x+=l.vx; l.y+=l.vy; });
+    lasers=lasers.filter(l=>l.x>0 && l.x<canvas.width && l.y>0 && l.y<canvas.height);
+
+    // Move enemies
+    enemies.forEach(e=>{
+        e.x+=e.vx;
+        e.y+=e.vy;
+        if(e.x<e.size||e.x>canvas.width-e.size) e.vx*=-1;
+        if(e.y<e.size||e.y>canvas.height-e.size) e.vy*=-1;
+
+        // Collision with player
+        const dx=player.x-e.x, dy=player.y-e.y;
+        if(Math.sqrt(dx*dx+dy*dy)<player.size+e.size){
+            player.lives--;
+            document.getElementById('lives').innerText='Lives: '+player.lives;
+            e.x=Math.random()*canvas.width;
+            e.y=Math.random()*canvas.height;
+            if(player.lives<=0){ alert('Game Over! Score: '+score); player.lives=3; score=0; document.getElementById('score').innerText='Score: 0'; document.getElementById('lives').innerText='Lives: 3'; }
+        }
+    });
+
+    // Check laser-enemy collisions
+    lasers.forEach((l,li)=>{
+        enemies.forEach((e,ei)=>{
+            const dx=l.x-e.x, dy=l.y-e.y;
+            if(Math.sqrt(dx*dx+dy*dy)<l.size+e.size){
+                createExplosion(e.x,e.y,e.color);
+                enemies.splice(ei,1); spawnEnemy();
+                lasers.splice(li,1);
+                score+=10;
+                document.getElementById('score').innerText='Score: '+score;
+            }
+        });
+    });
+
+    // Power-ups
+    powerUps.forEach((p,pi)=>{
+        const dx=player.x-p.x, dy=player.y-p.y;
+        if(Math.sqrt(dx*dx+dy*dy)<player.size+p.size){
+            if(p.type==='speed'){ player.speed+=2; setTimeout(()=>player.speed-=2,5000); }
+            if(p.type==='rapid'){ rapidFire=true; setTimeout(()=>rapidFire=false,5000); }
+            powerUps.splice(pi,1);
+        }
+    });
+
+    // Explosions animation
+    explosions.forEach((ex,i)=>{
+        ex.radius+=2;
+        ex.alpha-=0.05;
+        if(ex.alpha<=0) explosions.splice(i,1);
+    });
+
+    draw();
+    requestAnimationFrame(update);
+}
+
+// Draw everything
+function draw(){
+    ctx.fillStyle='#111';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // Grid
+    ctx.strokeStyle='#222';
+    for(let x=0;x<canvas.width;x+=50){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke(); }
+    for(let y=0;y<canvas.height;y+=50){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke(); }
+
+    // Player
+    ctx.fillStyle=player.color;
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, player.size,0,Math.PI*2);
+    ctx.fill();
+
+    // Lasers
+    lasers.forEach(l=>{
+        ctx.fillStyle=l.color;
+        ctx.fillRect(l.x-l.size/2,l.y-l.size/2,l.size,l.size*2);
+    });
+
+    // Enemies
+    enemies.forEach(e=>{
+        ctx.fillStyle=e.color;
+        ctx.beginPath();
+        ctx.arc(e.x,e.y,e.size,0,Math.PI*2);
+        ctx.fill();
+    });
+
+    // Power-ups
+    powerUps.forEach(p=>{
+        ctx.fillStyle=p.color;
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
+        ctx.fill();
+    });
+
+    // Explosions
+    explosions.forEach(ex=>{
+        ctx.fillStyle=`rgba(${hexToRgb(ex.color)},${ex.alpha})`;
+        ctx.beginPath();
+        ctx.arc(ex.x,ex.y,ex.radius,0,Math.PI*2);
+        ctx.fill();
+    });
+}
+
+// Helper
+function hexToRgb(hex){
+    hex=hex.replace('#','');
+    const bigint=parseInt(hex,16);
+    const r=(bigint>>16)&255;
+    const g=(bigint>>8)&255;
+    const b=bigint&255;
+    return r+','+g+','+b;
+}
+
+update();
+</script>
+</body>
+</html>
