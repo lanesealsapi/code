@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Solar System with Stars & Webcam</title>
+<style>
+body, html { margin:0; padding:0; height:100%; background:#000; overflow:hidden; }
+#ui { position:absolute; top:10px; left:10px; z-index:10; background:rgba(0,0,0,0.5); padding:8px; border-radius:6px; color:#fff; font-family:sans-serif; }
+#canvas { display:block; width:100%; height:100%; }
+button, label { margin-right:6px; }
+video { display:none; }
+</style>
+</head>
+<body>
+<div id="ui">
+  <button id="togglePlay">⏸ Pause</button>
+  <label>Speed <input type="range" id="speed" min="0.1" max="4" step="0.1" value="1"></label>
+  <label>Trails <input type="checkbox" id="trails" checked></label>
+  <button id="infrared">Infrared</button>
+  <button id="reset">Reset View</button>
+</div>
+<video id="webcam" autoplay playsinline></video>
+<canvas id="canvas"></canvas>
+<script>
+const canvas=document.getElementById('canvas');
+const ctx=canvas.getContext('2d');
+let width=canvas.width=window.innerWidth;
+let height=canvas.height=window.innerHeight;
+window.addEventListener('resize',()=>{ width=canvas.width=window.innerWidth; height=canvas.height=window.innerHeight; });
+
+let running=true, speed=1, trailsOn=true, infrared=false;
+
+// --- Solar system bodies ---
+function Body(name,color,radius,semiMajor,period,parent=null,cloudColor=null){
+  this.name=name; this.color=color; this.r=radius; this.semiMajor=semiMajor;
+  this.period=period; this.parent=parent; this.angle=Math.random()*Math.PI*2;
+  this.trail=[]; this.cloudAngle=0; this.cloudColor=cloudColor;
+}
+const planets=[
+  new Body("Mercury","#bfbdb6",4,60,88),
+  new Body("Venus","#e0c57a",6,100,225),
+  new Body("Earth","#2a6f92",8,150,365,"#fff"),
+  new Body("Mars","#c86432",6,200,687),
+  new Body("Jupiter","#d9a066",14,300,4330),
+  new Body("Saturn","#e6d5b8",12,420,10759)
+];
+const moons=[
+  new Body("Moon","#aaa",3,28,27,planets[2]),
+  new Body("Titan","#ebb",4,85,16,planets[5])
+];
+const bodies=[...planets,...moons];
+
+// --- Asteroids ---
+const asteroids=[];
+for(let i=0;i<20;i++){
+  asteroids.push({x:Math.random()*800-400,y:Math.random()*800-400,vx:(Math.random()-0.5)*0.5,vy:(Math.random()-0.5)*0.5,r:Math.random()*2+1,trail:[]});
+}
+
+// --- Stars ---
+const stars=[];
+for(let i=0;i<200;i++){
+  stars.push({x:Math.random()*2000-1000,y:Math.random()*2000-1000,r:Math.random()*1.5+0.5});
+}
+
+// --- Camera ---
+let camX=0, camY=0, scale=1;
+let isPanning=false, lastMouse=null;
+let zoomTarget=null;
+canvas.addEventListener('mousedown',e=>{
+  const rect=canvas.getBoundingClientRect();
+  const sx=e.clientX-rect.left;
+  const sy=e.clientY-rect.top;
+  const b=pickBodyAt(sx,sy);
+  if(b){ zoomTarget=getBodyWorldPos(b); } 
+  else { isPanning=true; lastMouse={x:e.clientX,y:e.clientY}; }
+});
+canvas.addEventListener('mousemove',e=>{ if(isPanning){ camX-=(e.clientX-lastMouse.x)/scale; camY-=(e.clientY-lastMouse.y)/scale; lastMouse={x:e.clientX,y:e.clientY}; } });
+canvas.addEventListener('mouseup',()=>{ isPanning=false; lastMouse=null; });
+canvas.addEventListener('wheel',e=>{ let factor=Math.exp(-e.deltaY*0.001); scale*=factor; });
+
+// --- UI Controls ---
+document.getElementById('togglePlay').onclick=()=>{ running=!running; document.getElementById('togglePlay').textContent=running?'⏸ Pause':'▶ Play'; };
+document.getElementById('speed').oninput=(e)=>{ speed=parseFloat(e.target.value); };
+document.getElementById('trails').onchange=(e)=>{ trailsOn=e.target.checked; };
+document.getElementById('infrared').onclick=()=>{ infrared=!infrared; };
+document.getElementById('reset').onclick=()=>{ scale=1; camX=0; camY=0; zoomTarget=null; };
+
+// --- Webcam ---
+const video=document.getElementById('webcam');
+navigator.mediaDevices.getUserMedia({video:true,audio:false}).then(stream=>{ video.srcObject=stream; });
+
+// --- Main Loop ---
+let lastTime=performance.now();
+function animate(now){
+  const dt=(now-lastTime)/1000*speed;
+  lastTime=now;
+
+  if(running){
+    bodies.forEach(b=>{ b.angle+=(2*Math.PI/dt)*(dt/b.period)*0.05; if(b.cloudColor) b.cloudAngle+=0.02; });
+    asteroids.forEach(a=>{ a.x+=a.vx*dt*60; a.y+=a.vy*dt*60; });
+  }
+
+  // Smooth zoom
+  if(zoomTarget){ camX+=(zoomTarget.x-camX)*0.05; camY+=(zoomTarget.y-camY)*0.05;
+    if(Math.abs(camX-zoomTarget.x)<0.5 && Math.abs(camY-zoomTarget.y)<0.5) zoomTarget=null; }
+
+  // Clear background
+  ctx.fillStyle=infrared?'#220000':'#000010'; ctx.fillRect(0,0,width,height);
+
+  // Draw stars
+  stars.forEach(s=>{ const sx=(s.x-camX)*scale+width/2; const sy=(s.y-camY)*scale+height/2; ctx.fillStyle='white'; ctx.beginPath(); ctx.arc(sx,sy,s.r*scale,0,Math.PI*2); ctx.fill(); });
+
+  // Draw webcam (flipped vertically)
+  if(video.readyState>=2){
+    ctx.save();
+    ctx.globalAlpha=0.0589;
+    ctx.translate(width/2, height/2);
+    ctx.scale(1,1); // normal orientation
+    ctx.drawImage(video,-width/2,-height/2,width,height);
+    ctx.restore();
+  }
+
+  // Draw Sun
+  const sunX=width/2, sunY=height/2;
+  let grad=ctx.createRadialGradient(sunX,sunY,0,sunX,sunY,40*scale);
+  grad.addColorStop(0,infrared?'#ee3300':'#ffd94d'); grad.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=grad; ctx.beginPath(); ctx.arc(sunX,sunY,40*scale,0,Math.PI*2); ctx.fill();
+
+  // Draw planets & moons
+  bodies.forEach(b=>{
+    const px=(b.parent?Math.cos(b.parent.angle)*b.parent.semiMajor:0)+Math.cos(b.angle)*b.semiMajor;
+    const py=(b.parent?Math.sin(b.parent.angle)*b.parent.semiMajor:0)+Math.sin(b.angle)*b.semiMajor;
+    const sx=(px-camX)*scale + width/2;
+    const sy=(py-camY)*scale + height/2;
+
+    if(trailsOn){ b.trail.push([sx,sy]); if(b.trail.length>100) b.trail.shift();
+      ctx.beginPath(); for(let i=1;i<b.trail.length;i++){ ctx.strokeStyle=b.color; ctx.moveTo(...b.trail[i-1]); ctx.lineTo(...b.trail[i]); } ctx.stroke(); }
+
+    ctx.fillStyle=b.color; ctx.beginPath(); ctx.arc(sx,sy,Math.max(2,b.r*scale),0,Math.PI*2); ctx.fill();
+    if(b.cloudColor){ ctx.strokeStyle=b.cloudColor; ctx.lineWidth=Math.max(1,b.r*0.4*scale);
+      ctx.beginPath(); ctx.arc(sx,sy,b.r*scale*1.2,b.cloudAngle,b.cloudAngle+Math.PI*1.8); ctx.stroke(); }
+  });
+
+  // Draw asteroids
+  asteroids.forEach(a=>{
+    const sx=(a.x-camX)*scale+width/2; const sy=(a.y-camY)*scale+height/2;
+    if(trailsOn){ a.trail.push([sx,sy]); if(a.trail.length>50) a.trail.shift();
+      ctx.beginPath(); for(let i=1;i<a.trail.length;i++){ ctx.strokeStyle='white'; ctx.moveTo(...a.trail[i-1]); ctx.lineTo(...a.trail[i]); } ctx.stroke(); }
+    ctx.fillStyle='white'; ctx.beginPath(); ctx.arc(sx,sy,a.r*scale,0,Math.PI*2); ctx.fill();
+  });
+
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+// --- Helpers ---
+function pickBodyAt(sx,sy){
+  for(let i=bodies.length-1;i>=0;i--){
+    const b=bodies[i];
+    const px=(b.parent?Math.cos(b.parent.angle)*b.parent.semiMajor:0)+Math.cos(b.angle)*b.semiMajor;
+    const py=(b.parent?Math.sin(b.parent.angle)*b.parent.semiMajor:0)+Math.sin(b.angle)*b.semiMajor;
+    const bx=(px-camX)*scale + width/2; const by=(py-camY)*scale + height/2;
+    if(Math.hypot(sx-bx,sy-by)<=b.r*scale+3) return b;
+  }
+  return null;
+}
+function getBodyWorldPos(b){ const px=(b.parent?Math.cos(b.parent.angle)*b.parent.semiMajor:0)+Math.cos(b.angle)*b.semiMajor;
+  const py=(b.parent?Math.sin(b.parent.angle)*b.parent.semiMajor:0)+Math.sin(b.angle)*b.semiMajor; return {x:px, y:py}; }
+</script>
+</body>
+</html>
