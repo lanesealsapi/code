@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ToG</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; font-family: 'Segoe UI', sans-serif; }
+body { background:#0d0d0d; color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; min-height:100vh; overflow:hidden; }
+header { margin-top:40px; text-align:center; z-index:2; position:relative; }
+header h1 { font-size:3rem; letter-spacing:3px; text-shadow: 0 0 10px, 0 0 20px, 0 0 30px; transition: color 1s, text-shadow 1s; position:relative; z-index:2; }
+header p { margin-top:10px; font-size:1.2rem; opacity:0.7; color:#ff77ff; position:relative; z-index:2; }
+.container { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:20px; width:90%; max-width:1000px; margin:50px auto; z-index:2; position:relative; }
+.square { background: rgba(255,255,255,0.05); border:2px solid rgba(255,255,255,0.2); border-radius:20px; display:flex; flex-direction:column; align-items:center; justify-content:center; aspect-ratio:1/1; cursor:pointer; transition: transform 0.3s, background 0.3s, box-shadow 0.3s; text-align:center; font-size:1.2rem; position:relative; overflow:hidden; }
+.square:hover { transform: translateY(-8px) scale(1.05); background: rgba(255,255,255,0.08); box-shadow: 0 0 15px #ffeb3b, 0 0 30px #00ffff; }
+.square span { padding:10px; display:block; color:#fff; text-shadow: 0 0 5px; }
+.emoji { font-size:3rem; margin-bottom:10px; text-shadow: 0 0 8px, 0 0 15px; transition: transform 0.3s, text-shadow 0.3s, color 0.3s; }
+
+/* Hover animations only */
+.square:hover .emoji.happy { animation: bounce 1s infinite ease-in-out; }
+.square:hover .emoji.cool { animation: sway 1s infinite ease-in-out; }
+.square:hover .emoji.thinking { animation: rotate 1.5s infinite ease-in-out; }
+.square:hover .emoji.innocent { animation: float 1.5s infinite ease-in-out; }
+.square:hover .emoji.party { animation: pulse 1s infinite ease-in-out; }
+.square:hover .emoji.smirk { animation: tilt 1.5s infinite ease-in-out; }
+.square:hover .emoji.excited { animation: shake 0.5s infinite ease-in-out; }
+.square:hover .emoji.sleepy { animation: nod 2s infinite ease-in-out; }
+
+/* Keyframes for animations */
+@keyframes bounce { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-8px) } }
+@keyframes sway { 0%,100%{ transform:translateX(0) } 50%{ transform:translateX(5px) } }
+@keyframes rotate { 0%,100%{ transform:rotate(0deg) } 50%{ transform:rotate(-15deg) } }
+@keyframes float { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-5px) } }
+@keyframes pulse { 0%,100%{ transform:scale(1) } 50%{ transform:scale(1.2) } }
+@keyframes tilt { 0%,100%{ transform:rotate(0deg) } 50%{ transform:rotate(5deg) } }
+@keyframes shake { 0%,100%{ transform:translateX(0) } 25%{ transform:translateX(-3px) } 75%{ transform:translateX(3px) } }
+@keyframes nod { 0%,100%{ transform:rotate(0deg) } 50%{ transform:rotate(10deg) } }
+
+@media(max-width:600px){ header h1 { font-size:2rem; } .square { font-size:1rem; } .emoji { font-size:2rem; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1 id="title">ToG</h1>
+  <p>(Your getaway to intERNal apps)</p>
+</header>
+
+<div class="container">
+  <div class="square" onclick="location.href='#app1'"><div class="emoji happy">😀</div><span>App 1</span></div>
+  <div class="square" onclick="location.href='#app2'"><div class="emoji cool">😎</div><span>App 2</span></div>
+  <div class="square" onclick="location.href='#app3'"><div class="emoji thinking">🤔</div><span>App 3</span></div>
+  <div class="square" onclick="location.href='#app4'"><div class="emoji innocent">😇</div><span>App 4</span></div>
+  <div class="square" onclick="location.href='#app5'"><div class="emoji party">🥳</div><span>App 5</span></div>
+  <div class="square" onclick="location.href='#app6'"><div class="emoji smirk">😏</div><span>App 6</span></div>
+  <div class="square" onclick="location.href='#app7'"><div class="emoji excited">🤩</div><span>App 7</span></div>
+  <div class="square" onclick="location.href='#app8'"><div class="emoji sleepy">😴</div><span>App 8</span></div>
+</div>
+
+<script>
+// Animate title neon mood
+const title=document.getElementById('title');
+let time=0;
+function animateMood(){
+    time+=0.02;
+    const r=0, g=Math.floor(128 + 127 * Math.sin(time)), b=Math.floor(255 - 127 * Math.sin(time));
+    const color=`rgb(${r},${g},${b})`;
+    title.style.color=color;
+    title.style.textShadow=`0 0 10px ${color}, 0 0 20px ${color}, 0 0 30px ${color}`;
+    requestAnimationFrame(animateMood);
+}
+animateMood();
+</script>
+
+</body>
+</html>
