@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Rap Discotech — Mixer (Redesign)</title>
+<style>
+  :root{
+    --slate: #2f3e46;
+    --panel: rgba(20,30,36,0.85);
+    --glass: rgba(255,255,255,0.03);
+    --accent: #8bd3ff;
+    --accent-2: #c678ff;
+    --muted: #9fb3c8;
+    --radius: 14px;
+  }
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--slate), #1d2a31);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;color:#e6f2ff; -webkit-font-smoothing:antialiased;}
+  .app{display:flex;flex-direction:column;height:100vh;gap:14px;padding:18px;box-sizing:border-box;}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .title{display:flex;align-items:center;gap:12px}
+  .logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;font-weight:700;color:#052331;box-shadow:0 8px 30px rgba(140,50,220,0.08)}
+  .h1{font-size:18px;margin:0}
+  .top-actions{display:flex;align-items:center;gap:8px}
+  .btn{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px 10px;border-radius:10px;color:inherit;cursor:pointer;backdrop-filter: blur(4px)}
+  .btn.primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#042; border:0; box-shadow:0 6px 24px rgba(120,100,255,0.08)}
+  .layout{display:grid;grid-template-columns:360px 1fr;gap:18px;flex:1;align-items:stretch}
+  .left{display:flex;flex-direction:column;gap:12px}
+  .card{background:linear-gradient(180deg,var(--panel), rgba(10,14,18,0.7));border-radius:var(--radius);padding:14px;box-shadow:0 10px 30px rgba(2,6,10,0.6);border:1px solid var(--glass)}
+  .deck-title{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+  .deck-controls{display:flex;flex-direction:column;gap:10px}
+  .row{display:flex;gap:8px;align-items:center}
+  .label{font-size:12px;color:var(--muted);min-width:72px}
+  .range{flex:1}
+  input[type=range]{width:100%}
+  .cross{display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.02));}
+  .bigfader{width:100%;height:36px;border-radius:8px;background:linear-gradient(90deg,#0b1220,#11242e);display:flex;align-items:center;padding:6px;gap:8px}
+  .fader{flex:1}
+  .pads{display:flex;gap:8px;margin-top:8px}
+  .pad{flex:1;padding:12px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));text-align:center;cursor:pointer;border:1px solid rgba(255,255,255,0.03)}
+  .pad.active{box-shadow:0 8px 30px rgba(139,211,255,0.08);border-color:rgba(139,211,255,0.18)}
+  .visual{border-radius:14px;overflow:hidden;position:relative;background:linear-gradient(180deg, rgba(10,18,22,0.4), rgba(5,8,12,0.5))}
+  canvas{display:block;width:100%;height:100%}
+  .footer{font-size:12px;color:var(--muted);margin-top:8px;text-align:center}
+  /* responsive */
+  @media (max-width:980px){ .layout{grid-template-columns:1fr} .left{order:2} .visual{order:1;height:44vh} }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="title">
+      <div class="logo">RD</div>
+      <div>
+        <div class="h1">Rap Discotech — Mixer</div>
+        <div style="font-size:12px;color:var(--muted)">Sleek deck UI — beat-synced visualizer — local-only</div>
+      </div>
+    </div>
+
+    <div class="top-actions">
+      <button id="recBtn" class="btn">Start Recording</button>
+      <a id="downloadLink" style="display:none;color:var(--accent)">Download Mix</a>
+    </div>
+  </div>
+
+  <div class="layout">
+    <!-- LEFT: Decks, Crossfader, Pads -->
+    <div class="left">
+      <!-- Deck A -->
+      <div class="card">
+        <div class="deck-title"><strong>Deck A</strong><span class="small label" id="statusA">idle</span></div>
+        <div class="deck-controls">
+          <div class="row">
+            <label class="label">Load</label>
+            <input id="fileA" type="file" accept="audio/*">
+          </div>
+          <div class="row">
+            <label class="label">Transport</label>
+            <button id="playA" class="btn">Play</button>
+            <button id="cueA" class="btn">Cue</button>
+          </div>
+          <div class="row">
+            <label class="label">Vol</label>
+            <div class="range"><input id="volA" type="range" min="0" max="1" step="0.01" value="0.9"></div>
+          </div>
+          <div class="row">
+            <label class="label">Rate</label>
+            <div class="range"><input id="rateA" type="range" min="0.5" max="1.5" step="0.01" value="1"></div>
+          </div>
+          <div class="row">
+            <label class="label">EQ</label>
+            <div style="display:flex;gap:6px;flex:1">
+              <input id="lowA" type="range" min="-12" max="12" value="0">
+              <input id="midA" type="range" min="-12" max="12" value="0">
+              <input id="highA" type="range" min="-12" max="12" value="0">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Deck B -->
+      <div class="card">
+        <div class="deck-title"><strong>Deck B</strong><span class="small label" id="statusB">idle</span></div>
+        <div class="deck-controls">
+          <div class="row">
+            <label class="label">Load</label>
+            <input id="fileB" type="file" accept="audio/*">
+          </div>
+          <div class="row">
+            <label class="label">Transport</label>
+            <button id="playB" class="btn">Play</button>
+            <button id="cueB" class="btn">Cue</button>
+          </div>
+          <div class="row">
+            <label class="label">Vol</label>
+            <div class="range"><input id="volB" type="range" min="0" max="1" step="0.01" value="0.9"></div>
+          </div>
+          <div class="row">
+            <label class="label">Rate</label>
+            <div class="range"><input id="rateB" type="range" min="0.5" max="1.5" step="0.01" value="1"></div>
+          </div>
+          <div class="row">
+            <label class="label">EQ</label>
+            <div style="display:flex;gap:6px;flex:1">
+              <input id="lowB" type="range" min="-12" max="12" value="0">
+              <input id="midB" type="range" min="-12" max="12" value="0">
+              <input id="highB" type="range" min="-12" max="12" value="0">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Crossfader & pads -->
+      <div class="card">
+        <div class="cross">
+          <div style="font-size:13px;color:var(--muted)">Crossfader</div>
+          <div class="bigfader">
+            <div style="width:36px;text-align:center;color:var(--muted)">A</div>
+            <div class="fader"><input id="cross" type="range" min="0" max="1" step="0.01" value="0.5"></div>
+            <div style="width:36px;text-align:center;color:var(--muted)">B</div>
+          </div>
+
+          <div style="width:100%;display:flex;gap:10px;align-items:center">
+            <div style="flex:1">
+              <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Sampler Pads</div>
+              <div class="pads">
+                <div id="pad1" class="pad">Pad 1</div>
+                <div id="pad2" class="pad">Pad 2</div>
+                <div id="pad3" class="pad">Pad 3</div>
+                <div id="pad4" class="pad">Pad 4</div>
+              </div>
+              <div style="display:flex;gap:6px;margin-top:8px">
+                <input id="padFile1" type="file" accept="audio/*">
+                <input id="padFile2" type="file" accept="audio/*">
+                <input id="padFile3" type="file" accept="audio/*">
+                <input id="padFile4" type="file" accept="audio/*">
+              </div>
+            </div>
+            <div style="width:120px">
+              <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Master</div>
+              <div class="row"><div class="label">Vol</div><div class="range"><input id="master" type="range" min="0" max="1" step="0.01" value="0.9"></div></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div style="text-align:center" class="small">Tip: load local tracks, use crossfader to blend, trigger pads for live drops. Recording saves a downloadable mix.</div>
+    </div>
+
+    <!-- RIGHT: Visualizer (big) -->
+    <div class="visual card" style="padding:0;overflow:hidden">
+      <canvas id="vis"></canvas>
+    </div>
+  </div>
+
+  <div class="footer">All audio & mixing happens locally in your browser — no uploads, no tracking.</div>
+</div>
+
+<script>
+/* Redesigned Rap Discotech — Full Mixer with simpler UI
+   - Two decks that load local files
+   - Volume, rate, 3-band EQ
+   - Crossfader, master volume
+   - Sampler pads (4)
+   - Beat-linked visualizer (analyser -> radial pulse + particles)
+   - Recording via MediaRecorder (master output)
+   All audio stays local in the browser.
+*/
+
+// ---------- Setup ----------
+let audioCtx = null;
+function ensureAudio(){ if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+ensureAudio();
+
+// Master & analyzer
+const master = audioCtx.createGain(); master.gain.value = 0.9;
+const analyser = audioCtx.createAnalyser(); analyser.fftSize = 2048;
+master.connect(analyser); analyser.connect(audioCtx.destination);
+
+// Deck class (lightweight)
+class Deck {
+  constructor(){
+    this.buffer = null;
+    this.source = null;
+    this.gain = audioCtx.createGain();
+    this.playbackRate = 1;
+    // EQ chain
+    this.low = audioCtx.createBiquadFilter(); this.low.type = 'lowshelf'; this.low.frequency.value = 200;
+    this.mid = audioCtx.createBiquadFilter(); this.mid.type = 'peaking'; this.mid.frequency.value = 1000; this.mid.Q.value = 1;
+    this.high = audioCtx.createBiquadFilter(); this.high.type = 'highshelf'; this.high.frequency.value = 3000;
+    // chain: low -> mid -> high -> gain -> master
+    this.low.connect(this.mid); this.mid.connect(this.high); this.high.connect(this.gain); this.gain.connect(master);
+    this.isPlaying = false;
+    this.startTime = 0;
+    this.pausedAt = 0;
+  }
+  async loadFile(file){
+    const ab = await file.arrayBuffer();
+    this.buffer = await audioCtx.decodeAudioData(ab.slice(0));
+  }
+  play(){
+    if(!this.buffer) return;
+    this.stop();
+    const src = audioCtx.createBufferSource();
+    src.buffer = this.buffer;
+    src.playbackRate.value = this.playbackRate;
+    src.connect(this.low);
+    src.start(0, this.pausedAt);
+    this.startTime = audioCtx.currentTime - this.pausedAt;
+    this.source = src;
+    this.isPlaying = true;
+  }
+  pause(){
+    if(this.source){ try{ this.source.stop(); }catch(e){} this.source.disconnect(); this.source = null; }
+    this.pausedAt = audioCtx.currentTime - this.startTime;
+    this.isPlaying = false;
+  }
+  stop(){
+    if(this.source){ try{ this.source.stop(); }catch(e){} this.source.disconnect(); this.source=null; }
+    this.pausedAt = 0; this.isPlaying=false;
+  }
+  setRate(r){
+    this.playbackRate = r;
+    if(this.source) try{ this.source.playbackRate.value = r; }catch(e){}
+  }
+}
+
+// instantiate decks
+const deckA = new Deck();
+const deckB = new Deck();
+
+// ---------- UI references ----------
+const fileA = document.getElementById('fileA'), fileB = document.getElementById('fileB');
+const playA = document.getElementById('playA'), playB = document.getElementById('playB');
+const volA = document.getElementById('volA'), volB = document.getElementById('volB');
+const rateA = document.getElementById('rateA'), rateB = document.getElementById('rateB');
+const lowA = document.getElementById('lowA'), midA = document.getElementById('midA'), highA = document.getElementById('highA');
+const lowB = document.getElementById('lowB'), midB = document.getElementById('midB'), highB = document.getElementById('highB');
+const cross = document.getElementById('cross'), masterEl = document.getElementById('master');
+const statusA = document.getElementById('statusA'), statusB = document.getElementById('statusB');
+
+// file inputs
+fileA.onchange = async (e) => {
+  if(e.target.files[0]){ await deckA.loadFile(e.target.files[0]); statusA.textContent = 'loaded'; alert('Deck A loaded: ' + e.target.files[0].name); }
+};
+fileB.onchange = async (e) => {
+  if(e.target.files[0]){ await deckB.loadFile(e.target.files[0]); statusB.textContent = 'loaded'; alert('Deck B loaded: ' + e.target.files[0].name); }
+};
+
+// play/pause
+playA.onclick = async () => { if(!deckA.buffer) return alert('Load a file first'); if(!audioCtx) ensureAudio(); if(audioCtx.state === 'suspended') await audioCtx.resume();
+  if(!deckA.isPlaying){ deckA.play(); playA.textContent = 'Pause'; statusA.textContent='playing'; } else { deckA.pause(); playA.textContent = 'Play'; statusA.textContent='paused'; } };
+playB.onclick = async () => { if(!deckB.buffer) return alert('Load a file first'); if(!audioCtx) ensureAudio(); if(audioCtx.state === 'suspended') await audioCtx.resume();
+  if(!deckB.isPlaying){ deckB.play(); playB.textContent = 'Pause'; statusB.textContent='playing'; } else { deckB.pause(); playB.textContent = 'Play'; statusB.textContent='paused'; } };
+
+// volumes (initial)
+deckA.gain.gain.value = parseFloat(volA.value); deckB.gain.gain.value = parseFloat(volB.value);
+volA.oninput = ()=> { deckA.gain.gain.value = parseFloat(volA.value) * (1 - parseFloat(cross.value)); };
+volB.oninput = ()=> { deckB.gain.gain.value = parseFloat(volB.value) * (parseFloat(cross.value)); };
+
+// rate
+rateA.oninput = ()=> deckA.setRate(parseFloat(rateA.value));
+rateB.oninput = ()=> deckB.setRate(parseFloat(rateB.value));
+
+// EQ bindings
+lowA.oninput = ()=> deckA.low.gain.value = parseFloat(lowA.value);
+midA.oninput = ()=> deckA.mid.gain.value = parseFloat(midA.value);
+highA.oninput = ()=> deckA.high.gain.value = parseFloat(highA.value);
+lowB.oninput = ()=> deckB.low.gain.value = parseFloat(lowB.value);
+midB.oninput = ()=> deckB.mid.gain.value = parseFloat(midB.value);
+highB.oninput = ()=> deckB.high.gain.value = parseFloat(highB.value);
+
+// crossfader (smooth linear mix)
+cross.oninput = ()=> {
+  const x = parseFloat(cross.value);
+  deckA.gain.gain.value = (1 - x) * parseFloat(volA.value);
+  deckB.gain.gain.value = x * parseFloat(volB.value);
+};
+masterEl.oninput = ()=> master.gain.value = parseFloat(masterEl.value);
+
+// ---------- Pads ----------
+const padFiles = [document.getElementById('padFile1'), document.getElementById('padFile2'), document.getElementById('padFile3'), document.getElementById('padFile4')];
+const padEls = [document.getElementById('pad1'), document.getElementById('pad2'), document.getElementById('pad3'), document.getElementById('pad4')];
+const padBuffers = [null,null,null,null];
+
+padFiles.forEach((el, i) => {
+  el.onchange = async (e) => {
+    if(e.target.files[0]){ const ab = await e.target.files[0].arrayBuffer(); padBuffers[i] = await audioCtx.decodeAudioData(ab.slice(0)); padEls[i].classList.add('active'); setTimeout(()=>padEls[i].classList.remove('active'),300); alert('Pad ' + (i+1) + ' loaded'); }
+  };
+});
+
+padEls.forEach((p, i) => {
+  p.onclick = () => {
+    if(!padBuffers[i]) return;
+    const s = audioCtx.createBufferSource();
+    s.buffer = padBuffers[i];
+    const g = audioCtx.createGain(); g.gain.value = 1;
+    s.connect(g); g.connect(master);
+    s.start();
+    p.classList.add('active');
+    setTimeout(()=>p.classList.remove('active'),150);
+  };
+});
+
+// ---------- Recording ----------
+let mediaRecorder = null; let chunks = [];
+const recBtn = document.getElementById('recBtn'), downloadLink = document.getElementById('downloadLink');
+
+recBtn.onclick = async () => {
+  ensureAudio();
+  if(!mediaRecorder){
+    const dest = audioCtx.createMediaStreamDestination(); master.connect(dest);
+    mediaRecorder = new MediaRecorder(dest.stream);
+    mediaRecorder.ondataavailable = e => { if(e.data.size) chunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(chunks, { type: 'audio/webm' });
+      const url = URL.createObjectURL(blob);
+      downloadLink.href = url; downloadLink.download = 'rap-discotech-mix.webm'; downloadLink.style.display='inline';
+      chunks = []; mediaRecorder = null; recBtn.textContent = 'Start Recording';
+    };
+    mediaRecorder.start();
+    recBtn.textContent = 'Stop Recording';
+  } else {
+    mediaRecorder.stop();
+    recBtn.textContent = 'Start Recording';
+  }
+};
+
+// ---------- Visualizer (beat-synced) ----------
+const canvas = document.getElementById('vis'), ctx = canvas.getContext('2d');
+function resize(){ canvas.width = canvas.clientWidth * devicePixelRatio; canvas.height = canvas.clientHeight * devicePixelRatio; ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0); }
+window.addEventListener('resize', resize); resize();
+
+const freqData = new Uint8Array(analyser.frequencyBinCount);
+let particlePool = [];
+function initParticles(n=120){
+  particlePool = [];
+  for(let i=0;i<n;i++){
+    particlePool.push({
+      x: canvas.clientWidth/2,
+      y: canvas.clientHeight/2,
+      vx: (Math.random()*2-1)*3,
+      vy: (Math.random()*2-1)*3,
+      life: Math.random()*1.2,
+      size: Math.random()*3+1,
+      hue: Math.random()*360
+    });
+  }
+}
+initParticles(140);
+
+function emitBurst(intensity=1){
+  // push some particles outward from center scaled by intensity
+  for(let i=0;i<Math.min(60, particlePool.length); i++){
+    const p = particlePool[i];
+    const ang = Math.random()*Math.PI*2;
+    const speed = 1 + Math.random()*6 * intensity;
+    p.x = canvas.clientWidth/2 + Math.cos(ang)*10;
+    p.y = canvas.clientHeight/2 + Math.sin(ang)*10;
+    p.vx = Math.cos(ang)*speed;
+    p.vy = Math.sin(ang)*speed;
+    p.life = 0.6 + Math.random()*0.8;
+    p.size = 1 + Math.random()*3 * intensity;
+    p.hue = (performance.now()/10 + Math.random()*360) % 360;
+  }
+}
+
+let lastPulse = 0;
+function draw(){
+  requestAnimationFrame(draw);
+  analyser.getByteFrequencyData(freqData);
+  ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight);
+  // background wash
+  ctx.fillStyle = 'rgba(10,16,20,0.32)';
+  ctx.fillRect(0,0,canvas.clientWidth,canvas.clientHeight);
+
+  // compute low energy (kick) and overall energy
+  let lowSum=0, tot=0;
+  for(let i=0;i<64;i++){ lowSum += freqData[i]; tot += freqData[i]; }
+  const lowAvg = lowSum / 64 / 255;
+  const totalAvg = tot / freqData.length / 255;
+
+  // radial pulse stroke
+  const pulse = Math.min(1, Math.max(0, lowAvg*3));
+  ctx.beginPath();
+  ctx.arc(canvas.clientWidth/2, canvas.clientHeight/2, 80 + pulse*180, 0, Math.PI*2);
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = `rgba(139,211,255,${0.04 + 0.2*pulse})`;
+  ctx.stroke();
+
+  // trigger occasional burst when pulse rises
+  if(performance.now() - lastPulse > 120 && pulse > 0.12){
+    emitBurst( Math.min(2, 0.5 + pulse*2.5) );
+    lastPulse = performance.now();
+  }
+
+  // particle physics & drawing
+  particlePool.forEach((p)=> {
+    // integrate
+    p.x += p.vx * (1 + totalAvg*1.6);
+    p.y += p.vy * (1 + totalAvg*1.6);
+    p.vx *= 0.985; p.vy *= 0.985;
+    p.life -= 0.02 * (1 + totalAvg*1.8);
+    // wrap gently
+    if(p.x < -20) p.x = canvas.clientWidth + 20;
+    if(p.x > canvas.clientWidth + 20) p.x = -20;
+    if(p.y < -20) p.y = canvas.clientHeight + 20;
+    if(p.y > canvas.clientHeight + 20) p.y = -20;
+
+    // draw
+    const alpha = Math.max(0, Math.min(1, p.life));
+    ctx.beginPath();
+    ctx.fillStyle = `hsla(${p.hue},85%,60%,${0.04 + 0.6*alpha})`;
+    ctx.arc(p.x, p.y, p.size * (1 + totalAvg*2), 0, Math.PI*2);
+    ctx.fill();
+    // subtle glow ring
+    ctx.beginPath();
+    ctx.strokeStyle = `hsla(${p.hue},85%,60%,${0.02*alpha})`;
+    ctx.lineWidth = 1;
+    ctx.arc(p.x, p.y, p.size*(1.6 + totalAvg*2.4), 0, Math.PI*2);
+    ctx.stroke();
+  });
+
+  // spectrum bars (bottom)
+  const barCount = 48;
+  const barW = canvas.clientWidth / barCount;
+  for(let i=0;i<barCount;i++){
+    const idx = Math.floor(i * freqData.length / barCount);
+    const v = freqData[idx] / 255;
+    const h = v * canvas.clientHeight * 0.28;
+    const x = i * barW;
+    const y = canvas.clientHeight - h;
+    ctx.fillStyle = `rgba(${Math.floor(60+v*190)}, ${Math.floor(140+v*80)}, ${Math.floor(200-v*120)}, ${0.9 * (0.2 + v*0.9)})`;
+    ctx.fillRect(x + 2, y, barW - 4, h);
+  }
+
+  // center label small
+  ctx.font = '14px Inter, Arial';
+  ctx.fillStyle = 'rgba(230,242,255,0.6)';
+  ctx.fillText('Visualizer — master output', 16, 22);
+}
+draw();
+
+// ---------- Safety: suspend/resume ----------
+document.addEventListener('visibilitychange', ()=> {
+  if(document.hidden){
+    if(audioCtx && audioCtx.state === 'running') audioCtx.suspend();
+  } else {
+    if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  }
+});
+
+// ---------- small polish: auto-update volumes on cross and initial set ----------
+cross.dispatchEvent(new Event('input')); // apply initial cross
+volA.dispatchEvent(new Event('input'));
+volB.dispatchEvent(new Event('input'));
+
+// make sure master connects to destination via analyser (already done)
+
+// done
+</script>
+</body>
+</html>
