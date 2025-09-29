@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Pitch Trainer 🎵</title>
+<style>
+body { text-align:center; font-family:sans-serif; background:#111; color:#fff; margin:0; padding:0; }
+canvas { background:#222; display:block; margin:auto; margin-top:20px; }
+button { margin:20px; padding:10px 20px; font-size:16px; }
+#info { font-size:20px; margin-top:10px; }
+</style>
+</head>
+<body>
+<h1>Pitch Trainer 🎵</h1>
+<button id="start">Start Training</button>
+<div id="info">Frequency: -- Hz | Note: --</div>
+<canvas id="canvas" width="400" height="400"></canvas>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let audioCtx, analyser, dataArray, source;
+let running = false;
+
+// Notes and rainbow colors
+const NOTES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+const COLORS = ["#FF0000","#FF7F00","#FFFF00","#00FF00","#0000FF","#4B0082","#8B00FF",
+                "#FF0000","#FF7F00","#FFFF00","#00FF00","#0000FF"]; // Repeat to cover 12 notes
+
+// --- Start audio ---
+async function startAudio() {
+  audioCtx = new AudioContext();
+  const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+  source = audioCtx.createMediaStreamSource(stream);
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 2048;
+  dataArray = new Float32Array(analyser.fftSize);
+  source.connect(analyser);
+  running = true;
+  draw();
+}
+
+// --- Auto-correlation pitch detection ---
+function autoCorrelate(buf, sampleRate) {
+  let SIZE = buf.length;
+  let rms = 0;
+  for (let i=0;i<SIZE;i++){ let val=buf[i]; rms+=val*val;}
+  rms=Math.sqrt(rms/SIZE);
+  if(rms<0.01) return -1; // too quiet
+
+  let r = new Array(SIZE).fill(0);
+  for(let lag=0; lag<SIZE; lag++){
+    for(let i=0;i<SIZE-lag;i++){
+      r[lag] += buf[i]*buf[i+lag];
+    }
+  }
+  let d=0; while(d<SIZE/2 && r[d]>r[d+1]) d++;
+  let maxval=-1, maxpos=-1;
+  for(let i=d;i<SIZE/2;i++){
+    if(r[i]>maxval){ maxval=r[i]; maxpos=i;}
+  }
+  let T0 = maxpos;
+  return T0>0 ? sampleRate/T0 : -1;
+}
+
+// --- Convert frequency to MIDI note ---
+function freqToNote(freq){
+  if(freq<=0) return null;
+  const midi = Math.round(69 + 12*Math.log2(freq/440));
+  return midi;
+}
+
+// --- Draw loop ---
+function draw(){
+  if(!running) return;
+  analyser.getFloatTimeDomainData(dataArray);
+  const freq = autoCorrelate(dataArray, audioCtx.sampleRate);
+  let note = null;
+  if(freq>0) note = freqToNote(freq);
+
+  // Display frequency and note
+  let noteName = note!==null ? NOTES[note%12] : "--";
+  document.getElementById('info').innerText = `Frequency: ${freq>0 ? freq.toFixed(1) : '--'} Hz | Note: ${noteName}`;
+
+  // Clear canvas
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Map note/frequency to square size
+  let size = 50;
+  if(note!==null){
+    // C3 (48) to C6(84) roughly mapped to 50-300px
+    let clamped = Math.max(48,Math.min(84,note));
+    size = ((clamped-48)/(84-48))*250 + 50;
+  }
+
+  // Draw square
+  const color = note!==null ? COLORS[note%12] : "#ffffff";
+  ctx.fillStyle=color;
+  ctx.fillRect(canvas.width/2 - size/2, canvas.height/2 - size/2, size, size);
+
+  requestAnimationFrame(draw);
+}
+
+document.getElementById('start').onclick = startAudio;
+</script>
+</body>
+</html>
