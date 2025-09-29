@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Voice-Controlled Breakout Game</title>
+<style>
+body { text-align:center; font-family:sans-serif; margin:0; background:#111; color:#fff; }
+canvas { background:#222; display:block; margin:auto; }
+button { margin:10px; padding:10px 20px; font-size:16px; }
+</style>
+</head>
+<body>
+<h1>VocalWave Balls 9000</h1>
+<button id="startGame">Start Game</button>
+<p id="status">Press "Start Game" to begin.</p>
+<p id="score">Score: 0</p>
+<canvas id="gameCanvas" width="600" height="400"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+let analyser, dataArray, audioCtx, source, rafId;
+let waveform = [], smoothWaveform = [];
+let balls = [];
+let bricks = [];
+let gameStarted = false;
+let score = 0;
+let gameOver = false;
+
+// Game constants
+const brickRows = 5;
+const brickCols = 5;
+const brickWidth = 100;
+const brickHeight = 20;
+const waveY = 300; // baseline for waveform
+
+// --- Initialize balls ---
+function initBalls() {
+  balls = [
+    { x: canvas.width/3, y: 200, vx: 2, vy: -2, radius: 8 },
+    { x: 2*canvas.width/3, y: 200, vx: -2, vy: -2, radius: 8 }
+  ];
+}
+
+// --- Initialize bricks ---
+function initBricks() {
+  bricks = [];
+  for(let r=0;r<brickRows;r++){
+    for(let c=0;c<brickCols;c++){
+      bricks.push({ x: c*(brickWidth+5)+35, y: r*(brickHeight+5)+30, destroyed:false });
+    }
+  }
+  score = 0;
+  document.getElementById('score').innerText = "Score: 0";
+}
+
+// --- Start audio recording ---
+async function startAudio() {
+  audioCtx = new AudioContext();
+  const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+  source = audioCtx.createMediaStreamSource(stream);
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 1024;
+  dataArray = new Uint8Array(analyser.frequencyBinCount);
+  source.connect(analyser);
+}
+
+// --- Get average audio amplitude ---
+function getAudioLevel() {
+  analyser.getByteTimeDomainData(dataArray);
+  let sum = 0;
+  for(let i=0;i<dataArray.length;i++) sum += Math.abs(dataArray[i]-128);
+  return sum/dataArray.length; // ~0-128
+}
+
+// --- Update waveform line ---
+function updateWaveform() {
+  analyser.getByteTimeDomainData(dataArray);
+  waveform = [];
+  for(let i=0;i<canvas.width;i++){
+    const idx = Math.floor(i * dataArray.length/canvas.width);
+    const y = waveY + (dataArray[idx]-128)/2; 
+    waveform.push(y);
+  }
+  smoothWaveform = smoothArray(waveform,5);
+}
+
+// --- Smooth waveform using moving average ---
+function smoothArray(arr, windowSize) {
+  let smoothed = [];
+  for(let i=0;i<arr.length;i++){
+    let sum = 0, count=0;
+    for(let j=-Math.floor(windowSize/2); j<=Math.floor(windowSize/2); j++){
+      if(i+j>=0 && i+j<arr.length){
+        sum += arr[i+j];
+        count++;
+      }
+    }
+    smoothed.push(sum/count);
+  }
+  return smoothed;
+}
+
+// --- Draw everything ---
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Draw bricks
+  bricks.forEach(b => {
+    if(!b.destroyed){
+      ctx.fillStyle='#ff5555';
+      ctx.fillRect(b.x,b.y,brickWidth,brickHeight);
+    }
+  });
+
+  // Draw waveform paddle
+  ctx.beginPath();
+  ctx.moveTo(0,smoothWaveform[0]);
+  for(let i=1;i<smoothWaveform.length;i++) ctx.lineTo(i,smoothWaveform[i]);
+  ctx.strokeStyle='#55ff55';
+  ctx.lineWidth=2;
+  ctx.stroke();
+
+  // Draw balls
+  balls.forEach(ball=>{
+    ctx.beginPath();
+    ctx.arc(ball.x,ball.y,ball.radius,0,2*Math.PI);
+    ctx.fillStyle='#ffff00';
+    ctx.fill();
+  });
+}
+
+// --- Ball physics ---
+function updateBalls() {
+  balls.forEach(ball => {
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+
+    // Wall collision
+    if(ball.x < ball.radius || ball.x > canvas.width - ball.radius) ball.vx *= -1;
+    if(ball.y < ball.radius) ball.vy *= -1;
+
+    // Waveform collision with interpolation and smoothing
+    const audioLevel = getAudioLevel();
+    const startX = Math.max(0, Math.floor(ball.x - ball.radius));
+    const endX = Math.min(canvas.width - 1, Math.ceil(ball.x + ball.radius));
+    let collided = false;
+
+    for(let i = startX; i < endX; i++) {
+      const nextY = smoothWaveform[i];
+      if(ball.y + ball.radius >= nextY){
+        collided = true;
+        break;
+      }
+    }
+
+    if(collided) {
+      if(audioLevel > 1) { 
+        // Bounce off
+        ball.vy = -Math.abs(ball.vy) * (audioLevel / 10);
+        const idx = Math.floor(ball.x);
+        const slope = smoothWaveform[Math.min(idx+1,smoothWaveform.length-1)] - smoothWaveform[Math.max(idx-1,0)];
+        ball.vx += slope*0.55; 
+      } else {
+        // Ball phases through, lose condition
+        gameOver = true;
+      }
+    }
+
+    // Brick collision
+    bricks.forEach(b => {
+      if(!b.destroyed &&
+         ball.x > b.x && ball.x < b.x + brickWidth &&
+         ball.y > b.y && ball.y < b.y + brickHeight) {
+        b.destroyed = true;
+        ball.vy *= -1;
+        score++;
+        document.getElementById('score').innerText = "Score: " + score;
+      }
+    });
+  });
+
+  // Win condition
+  if(bricks.every(b => b.destroyed)) gameOver = true;
+}
+
+// --- Main loop ---
+function loop() {
+  if(!gameStarted) return;
+  if(gameOver){
+    document.getElementById('status').innerText = bricks.every(b=>b.destroyed) ? "YOU WIN! 🎉" : "GAME OVER";
+    return;
+  }
+  updateWaveform();
+  updateBalls();
+  draw();
+  rafId = requestAnimationFrame(loop);
+}
+
+document.getElementById('startGame').onclick = async () => {
+  if(gameStarted) return;
+  gameStarted = true;
+  gameOver = false;
+  document.getElementById('status').innerText = "Game started! Sing to keep balls bouncing.";
+  initBalls();
+  initBricks();
+  await startAudio();
+  loop();
+};
+</script>
+</body>
+</html>
