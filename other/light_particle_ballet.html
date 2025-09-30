@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Particles Light Sword — Dance Fight</title>
+<style>
+  html,body{height:100%;margin:0;background:#0b0b10;color:#ddd;font-family:system-ui,Segoe UI,Roboto,Arial}
+  .topbar{
+    display:flex;gap:12px;align-items:center;padding:12px 18px;background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.02) inset;
+  }
+  label{font-size:14px}
+  #svgwrap{display:flex;justify-content:center;align-items:center;height:calc(100vh - 64px)}
+  svg{width:95vw;height:80vh;max-width:1400px;max-height:800px;display:block}
+  .control-note{opacity:.75;font-size:13px}
+  button {padding:8px 12px;border-radius:8px;border:0;background:#222;color:#fff;cursor:pointer}
+  input[type=color]{width:44px;height:34px;padding:0;border:0;background:transparent;cursor:pointer}
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <label>Left saber color: <input id="leftColor" type="color" value="#00ff3f"></label>
+    <button id="pauseBtn">Pause</button>
+    <div class="control-note">Sabers auto dance — collide ≳1/sec — click Pause to stop</div>
+  </div>
+
+  <div id="svgwrap">
+    <svg id="svg" viewBox="0 0 1200 700" xmlns="http://www.w3.org/2000/svg" >
+      <defs>
+        <!-- glow filter -->
+        <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+          <feGaussianBlur stdDeviation="8" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+
+        <!-- blade gradient template (will be cloned/updated in JS) -->
+        <linearGradient id="bladeGradL" x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0%" stop-color="#fff" stop-opacity="1"/>
+          <stop offset="18%" stop-color="#fff" stop-opacity="0.9"/>
+          <stop offset="100%" stop-color="#00ff3f" stop-opacity="0.02"/>
+        </linearGradient>
+
+        <linearGradient id="bladeGradR" x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0%" stop-color="#fff" stop-opacity="1"/>
+          <stop offset="18%" stop-color="#fff" stop-opacity="0.9"/>
+          <stop offset="100%" stop-color="#ff2b2b" stop-opacity="0.02"/>
+        </linearGradient>
+      </defs>
+
+      <!-- background glow layer for dramatic look -->
+      <rect x="0" y="0" width="1200" height="700" fill="#050509"/>
+
+      <!-- sabers group -->
+      <g id="sabers">
+        <!-- Left hilt (rect) -->
+        <g id="leftSaber" transform="translate(300,500)">
+          <rect class="hilt" x="-8" y="-10" width="80" height="20" rx="6" ry="6" fill="#222" stroke="#555" stroke-width="2"></rect>
+          <!-- particle layer -->
+          <g id="leftParticles"></g>
+          <!-- thin core (invisible, used for visuals) -->
+          <line id="leftCore" x1="70" y1="0" x2="500" y2="0" stroke="url(#bladeGradL)" stroke-width="8" stroke-linecap="round" filter="url(#glow)" opacity="0.95"></line>
+        </g>
+
+        <!-- Right hilt -->
+        <g id="rightSaber" transform="translate(900,500)">
+          <rect class="hilt" x="-72" y="-10" width="80" height="20" rx="6" ry="6" fill="#222" stroke="#555" stroke-width="2"></rect>
+          <g id="rightParticles"></g>
+          <!-- core defined from hilt tip leftwards -->
+          <line id="rightCore" x1="-70" y1="0" x2="-500" y2="0" stroke="url(#bladeGradR)" stroke-width="8" stroke-linecap="round" filter="url(#glow)" opacity="0.95"></line>
+        </g>
+      </g>
+
+      <!-- optional visual collision flash -->
+      <g id="clashFlash" opacity="0">
+        <circle id="clashCircle" cx="0" cy="0" r="10" fill="#fff" filter="url(#glow)"></circle>
+      </g>
+
+    </svg>
+  </div>
+
+<script>
+/* Particle Light Saber — Dance Fight
+   - Left color user-selectable (default green)
+   - Right color fixed red
+   - Blade visuals are particles + a core line
+   - Oscillating movement causes regular collisions ≥1/sec
+   - WebAudio hum for each saber and clash sound on intersect
+*/
+
+// --- Utility functions ---
+function lerp(a,b,t){ return a + (b-a)*t; }
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+
+// line segment intersection (p1->p2 with p3->p4)
+function segIntersects(p1,p2,p3,p4){
+  const orient = (a,b,c) => (b.x-a.x)*(c.y-a.y) - (b.y-a.y)*(c.x-a.x);
+  const o1 = orient(p1,p2,p3);
+  const o2 = orient(p1,p2,p4);
+  const o3 = orient(p3,p4,p1);
+  const o4 = orient(p3,p4,p2);
+  if (o1===0 && onSeg(p1,p3,p2)) return true;
+  if (o2===0 && onSeg(p1,p4,p2)) return true;
+  if (o3===0 && onSeg(p3,p1,p4)) return true;
+  if (o4===0 && onSeg(p3,p2,p4)) return true;
+  return (o1*o2 < 0) && (o3*o4 < 0);
+}
+function onSeg(a,b,c){
+  return b.x <= Math.max(a.x,c.x)+1e-6 && b.x+1e-6 >= Math.min(a.x,c.x) &&
+         b.y <= Math.max(a.y,c.y)+1e-6 && b.y+1e-6 >= Math.min(a.y,c.y);
+}
+
+// --- DOM refs ---
+const svg = document.getElementById('svg');
+const leftSaberG = document.getElementById('leftSaber');
+const rightSaberG = document.getElementById('rightSaber');
+const leftParticlesG = document.getElementById('leftParticles');
+const rightParticlesG = document.getElementById('rightParticles');
+const leftCore = document.getElementById('leftCore');
+const rightCore = document.getElementById('rightCore');
+const leftColorInput = document.getElementById('leftColor');
+const pauseBtn = document.getElementById('pauseBtn');
+const clashFlash = document.getElementById('clashFlash');
+const clashCircle = document.getElementById('clashCircle');
+
+// dimensions and pivot positions (hilt tips)
+const leftHilt = { x: 300, y: 500, tipOffset: 70 }; // tip relative to group origin
+const rightHilt = { x: 900, y: 500, tipOffset: -70 };
+
+// blade properties
+const bladeLength = 420; // visual length
+const particleCount = 40;
+const particleRadius = 6;
+
+// state
+let running = true;
+let tStart = performance.now();
+let lastIntersect = false;
+let audioCtx, leftHumGain, rightHumGain;
+let lastClashAt = 0;
+
+// WebAudio setup
+function setupAudio(){
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  // hum generation: each saber has an oscillator through slight detuned triangle + subtle noise
+  function createHum(freq){
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.value = freq;
+
+    const lfo = audioCtx.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.value = 2.6; // slow wobble
+    const lfoGain = audioCtx.createGain(); lfoGain.gain.value = 8;
+    lfo.connect(lfoGain);
+    lfoGain.connect(osc.frequency);
+    lfo.start();
+
+    const amp = audioCtx.createGain(); amp.gain.value = 0.000; // start silent until ramp
+    osc.connect(amp);
+
+    // small noise for texture
+    const bufferSize = 2 * audioCtx.sampleRate;
+    const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    for (let i=0;i<bufferSize;i++) output[i] = (Math.random()*2-1)*0.03;
+    const noise = audioCtx.createBufferSource();
+    noise.buffer = noiseBuffer;
+    noise.loop = true;
+    const noiseGain = audioCtx.createGain(); noiseGain.gain.value = 0.0;
+    noise.connect(noiseGain);
+    noiseGain.connect(amp);
+
+    // gentle filter
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 2000;
+    amp.connect(filter);
+
+    const outGain = audioCtx.createGain(); outGain.gain.value = 0.0; // controlled externally
+    filter.connect(outGain);
+    osc.start();
+    noise.start();
+
+    return {osc, noise, outGain, amp, setGain(g){ outGain.gain.setTargetAtTime(g, audioCtx.currentTime, .02); }};
+  }
+
+  const leftHum = createHum(160);
+  leftHumGain = leftHum.outGain;
+  const rightHum = createHum(180);
+  rightHumGain = rightHum.outGain;
+
+  // master connect
+  const master = audioCtx.createGain(); master.gain.value = 0.8;
+  leftHumGain.connect(master);
+  rightHumGain.connect(master);
+  master.connect(audioCtx.destination);
+
+  // initial warm hum
+  leftHum.setGain(0.02);
+  rightHum.setGain(0.025);
+}
+
+function playClash(volume = 0.6){
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+
+  // short bright noise burst for the clash
+  const bufferSize = Math.floor(audioCtx.sampleRate * 0.15);
+  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i=0;i<bufferSize;i++){
+    // band-limited-ish bright pop
+    data[i] = (Math.random()*2-1) * Math.exp(-3*i/bufferSize);
+  }
+  const noiseSrc = audioCtx.createBufferSource();
+  noiseSrc.buffer = buffer;
+  const noiseGain = audioCtx.createGain(); noiseGain.gain.value = 0.0001;
+  const filt = audioCtx.createBiquadFilter(); filt.type='highshelf'; filt.frequency.value=1200; filt.gain.value=6;
+
+  noiseSrc.connect(filt);
+  filt.connect(noiseGain);
+  noiseGain.connect(audioCtx.destination);
+  noiseGain.gain.setValueAtTime(volume*0.2, now);
+  noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+  noiseSrc.start(now);
+  noiseSrc.stop(now + 0.2);
+
+  // a short metallic oscillator bite
+  const osc = audioCtx.createOscillator();
+  osc.type = 'square';
+  osc.frequency.value = 100;
+  const gain = audioCtx.createGain(); gain.gain.value = 0.0001;
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  gain.gain.setValueAtTime(volume*0.5, now);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.48);
+  osc.start(now);
+  osc.stop(now + 0.42);
+}
+
+// create particle nodes
+function makeParticles(group, count){
+  const particles = [];
+  for (let i=0;i<count;i++){
+    const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('r', particleRadius.toString());
+    c.setAttribute('fill','#fff');
+    c.setAttribute('opacity', '0.2');
+    c.setAttribute('filter','url(#glow)');
+    group.appendChild(c);
+    particles.push({node: c, offset: Math.random(), jitter: (Math.random()*2-1)*6});
+  }
+  return particles;
+}
+
+const leftParticles = makeParticles(leftParticlesG, particleCount);
+const rightParticles = makeParticles(rightParticlesG, particleCount);
+
+// set initial gradients colors
+function updateGradients(leftColor){
+  // update bladeGradL stops
+  const gL = svg.querySelector('#bladeGradL');
+  if (gL){
+    gL.children[2].setAttribute('stop-color', leftColor);
+  }
+  const gR = svg.querySelector('#bladeGradR');
+  if (gR){
+    gR.children[2].setAttribute('stop-color', '#ff2b2b');
+  }
+
+  // also set stroke style for cores
+  leftCore.setAttribute('stroke', `url(#bladeGradL)`);
+  rightCore.setAttribute('stroke', `url(#bladeGradR)`);
+}
+
+// attach color input
+leftColorInput.addEventListener('input', (e)=>{
+  const c = e.target.value;
+  updateGradients(c);
+});
+
+// pause control
+pauseBtn.addEventListener('click', ()=>{
+  running = !running;
+  if (running){
+    pauseBtn.textContent = 'Pause';
+    tStart = performance.now() - (pausedAtOffset||0);
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    loop();
+  } else {
+    pauseBtn.textContent = 'Resume';
+    if (audioCtx) audioCtx.suspend();
+  }
+});
+
+// initialize gradients
+updateGradients(leftColorInput.value);
+
+// physics / motion
+function computeBladePositions(time){
+  // time seconds since start
+  // create smooth oscillation for each saber (angles in radians)
+  // left and right move with slightly different freq and phase so they cross periodically.
+  const t = time;
+
+  // left: pivot at leftHilt; angle swings around -20°.. -120° (mostly upward left-to-right)
+  const leftBaseAngle = -Math.PI/2 + 0.0; // vertical-ish
+  const leftAmp = Math.PI * 0.35; // amplitude
+  const leftFreq = 1.05; // Hz (slightly >1 so collisions happen >1/sec)
+  const leftAngle = leftBaseAngle + Math.sin(t*leftFreq*2*Math.PI + 0.2) * leftAmp;
+
+  // right: swings mirrored
+  const rightBaseAngle = -Math.PI/2 + 0;
+  const rightAmp = Math.PI * 0.32;
+  const rightFreq = 1.18;
+  const rightAngle = rightBaseAngle + Math.sin(t*rightFreq*2*Math.PI - 0.6) * rightAmp;
+
+  // positions: hilt tip coordinates
+  const leftTip = {
+    x: leftHilt.x + Math.cos(leftAngle) * leftHilt.tipOffset,
+    y: leftHilt.y + Math.sin(leftAngle) * leftHilt.tipOffset
+  };
+  const leftBladeEnd = {
+    x: leftTip.x + Math.cos(leftAngle) * bladeLength,
+    y: leftTip.y + Math.sin(leftAngle) * bladeLength
+  };
+
+  const rightTip = {
+    x: rightHilt.x + Math.cos(rightAngle) * rightHilt.tipOffset,
+    y: rightHilt.y + Math.sin(rightAngle) * rightHilt.tipOffset
+  };
+  const rightBladeEnd = {
+    x: rightTip.x + Math.cos(rightAngle) * bladeLength,
+    y: rightTip.y + Math.sin(rightAngle) * bladeLength
+  };
+
+  return { leftAngle, rightAngle, leftTip, leftBladeEnd, rightTip, rightBladeEnd };
+}
+
+// animate particles along blades and update core lines transform
+function renderFrame(now){
+  // now in ms
+  const time = (now - tStart)/1000;
+  const s = computeBladePositions(time);
+
+  // update group transforms so hilt stays at its place and rotation adjusted
+  // left group transform: translate then rotate around hilt center
+  leftSaberG.setAttribute('transform', `translate(${leftHilt.x},${leftHilt.y}) rotate(${s.leftAngle*180/Math.PI})`);
+  rightSaberG.setAttribute('transform', `translate(${rightHilt.x},${rightHilt.y}) rotate(${s.rightAngle*180/Math.PI})`);
+
+  // cores: we keep core line from tip to end; in group-local coords the core line x1,x2 are fixed,
+  // so visually rotate/translate by group transform above. No further change needed.
+
+  // update particle positions: distribute along length with sparkle motion
+  function updateParticles(particles, tipLocalX, length, timeOffset){
+    // tipLocalX is the start offset in local group coordinates (approx left uses 70 positive, right uses -70)
+    const base = tipLocalX;
+    for (let i=0;i<particles.length;i++){
+      const p = particles[i];
+      // each particle has offset [0..1] along blade
+      const phase = (time * 3 + i*0.13 + timeOffset) % 1;
+      // position along blade: near base -> brighter; give shimmer
+      const along = (p.offset * 0.6 + phase*0.4) % 1;
+      const dist = along * bladeLength;
+      // jitter perpendicular to blade direction (simulate flicker)
+      const jitter = p.jitter * Math.sin((now/1000)*30 + i);
+      // local coordinates (core sits along +x axis in group space)
+      // particles placed at x = base + dist, y = jitter
+      const x = base + dist;
+      const y = jitter * (1 - along); // less jitter near tip
+      p.node.setAttribute('cx', x.toString());
+      p.node.setAttribute('cy', y.toString());
+      // fade based on along
+      const op = lerp(0.95, 0.02, Math.pow(along, 1.8));
+      p.node.setAttribute('opacity', (op * (0.7 + 0.3*Math.sin(i + now/1200))).toFixed(3));
+      // size jitter
+      const r = Math.max(1.2, particleRadius * (1 - along*0.6 + 0.2*Math.sin(i*2 + now/140)));
+      p.node.setAttribute('r', r.toFixed(2));
+      // color handled by fill (white) combined with stroke/blur and gradient core
+    }
+  }
+
+  // left particles are placed in left group coordinates: tip is at +70
+  updateParticles(leftParticles, leftHilt.tipOffset, bladeLength, 0.1);
+  // right particles group: tip at -70 and particles extend leftwards (so base negative)
+  // we flip particle x by negating distances; to accomplish, set tipLocalX to rightHilt.tipOffset (negative) and invert particle placement
+  // but easier: reuse updateParticles and then reflect in right group by rotating group (done earlier)
+  updateParticles(rightParticles, rightHilt.tipOffset, bladeLength, 0.4);
+
+  // collision detection: compute absolute world coordinates for blade segments
+  const leftA = s.leftTip;
+  const leftB = s.leftBladeEnd;
+  const rightA = s.rightTip;
+  const rightB = s.rightBladeEnd;
+
+  const intersects = segIntersects(leftA, leftB, rightA, rightB);
+
+  // on new intersection, trigger clash
+  if (intersects && !lastIntersect){
+    const nowMs = performance.now();
+    // throttle slightly to keep distinct impacts but still allow >1/sec collisions
+    if (nowMs - lastClashAt > 120){ // allow frequent hits but avoid microflap
+      lastClashAt = nowMs;
+      triggerClash((leftA.x + leftB.x + rightA.x + rightB.x)/4, (leftA.y + leftB.y + rightA.y + rightB.y)/4);
+    }
+  }
+  lastIntersect = intersects;
+
+  // subtle visual feedback on intersection
+  if (intersects){
+    clashFlash.setAttribute('opacity', '1');
+    // position circle at approximate intersection point (interpolation)
+    const ix = (leftA.x + leftB.x + rightA.x + rightB.x)/4;
+    const iy = (leftA.y + leftB.y + rightA.y + rightB.y)/4;
+    clashCircle.setAttribute('cx', ix);
+    clashCircle.setAttribute('cy', iy);
+    const sScale = 1 + 0.8*Math.sin((now%200)/200 * Math.PI);
+    clashCircle.setAttribute('r', 22 + Math.random()*18);
+    // fade out quickly
+    clashFlash.style.transition = 'opacity 0.22s linear';
+    setTimeout(()=>{ clashFlash.setAttribute('opacity', '0'); }, 60);
+  }
+
+  // next frame
+  if (running) requestAnimationFrame(renderFrame);
+}
+
+// create a clash visual + sound
+function triggerClash(x,y){
+  // flash
+  clashFlash.setAttribute('opacity', '1');
+  clashCircle.setAttribute('cx', x);
+  clashCircle.setAttribute('cy', y);
+  clashCircle.setAttribute('r', 28 + Math.random()*18);
+  clashFlash.style.transition = 'opacity 0.16s linear';
+  setTimeout(()=>{ clashFlash.setAttribute('opacity', '0'); }, 100);
+
+  // play sound (ensure audio resumed)
+  if (!audioCtx) setupAudio();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  // volume scaled by how central the clash is (not necessary, but fun)
+  playClash(0.55 + Math.random()*0.2);
+  // small percussive hum bump to both hum gains
+  if (leftHumGain) {
+    leftHumGain.gain.setTargetAtTime(0.06, audioCtx.currentTime, 0.01);
+    leftHumGain.gain.setTargetAtTime(0.02, audioCtx.currentTime + 0.06, 0.04);
+  }
+  if (rightHumGain) {
+    rightHumGain.gain.setTargetAtTime(0.08, audioCtx.currentTime, 0.01);
+    rightHumGain.gain.setTargetAtTime(0.025, audioCtx.currentTime + 0.06, 0.04);
+  }
+}
+
+// Start the loop
+function init(){
+  tStart = performance.now();
+  // ensure audio created lazily on first interaction (but we create now for smoothness)
+  try { setupAudio(); } catch(e){ console.warn('Audio setup failed', e); }
+
+  // small startup animation: fade-in core opacity
+  leftCore.setAttribute('opacity', '0');
+  rightCore.setAttribute('opacity', '0');
+  setTimeout(()=>{ leftCore.setAttribute('opacity','0.98'); rightCore.setAttribute('opacity','0.98'); }, 100);
+
+  requestAnimationFrame(renderFrame);
+}
+
+// ensure left color persists onto gradient
+updateGradients(leftColorInput.value);
+
+// resume audio on first user gesture (browsers require)
+window.addEventListener('pointerdown', (e)=>{
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}, {once:true});
+
+// kick off
+init();
+</script>
+</body>
+</html>
