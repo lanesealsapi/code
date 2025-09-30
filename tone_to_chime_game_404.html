@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Chime Brick Smash</title>
+<style>
+  body {
+    margin:0;
+    background:#111;
+    color:#fff;
+    font-family:sans-serif;
+    overflow:hidden;
+    text-align:center;
+  }
+  #startBtn {
+    margin:20px;
+    padding:12px 24px;
+    font-size:18px;
+    border:none;
+    border-radius:8px;
+    background:rgba(0,150,255,0.7);
+    color:#fff;
+    cursor:pointer;
+    transition:background 0.2s;
+  }
+  #startBtn:hover { background:rgba(0,150,255,0.9); }
+  canvas { display:block; margin:0 auto; background:#000; }
+  #hud {
+    position:absolute;
+    top:10px; left:10px;
+    font-size:18px;
+  }
+</style>
+</head>
+<body>
+<button id="startBtn">Start Chime Game</button>
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+<div id="hud">
+  <div>Score: <span id="score">0</span></div>
+  <div>Level: <span id="level">1</span></div>
+</div>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+let audioCtx, analyser, source;
+let particles = [];
+let rings = [];
+let score = 0;
+let level = 1;
+let running = false;
+let freqData;
+
+const colors = [
+  {name:"red", rgb:[255,80,80]},
+  {name:"blue", rgb:[80,80,255]},
+  {name:"yellow", rgb:[255,255,80]},
+  {name:"green", rgb:[80,255,80]},
+  {name:"purple", rgb:[200,80,255]},
+  {name:"cyan", rgb:[80,255,255]},
+  {name:"orange", rgb:[255,160,60]}
+];
+
+// Brick sound generator
+function playBrickSound(colorIndex){
+  let now = audioCtx.currentTime;
+  let osc = audioCtx.createOscillator();
+  let gain = audioCtx.createGain();
+  osc.type = "square";
+  let base = 200;
+  osc.frequency.value = base + colorIndex*30 + (Math.random()*20-10);
+  gain.gain.setValueAtTime(0.2, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now+0.3);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(now);
+  osc.stop(now+0.3);
+}
+
+// Chime sound generator
+function playChime(noteFreq){
+  let now = audioCtx.currentTime;
+  for(let i=0;i<2;i++){
+    let osc = audioCtx.createOscillator();
+    let gain = audioCtx.createGain();
+    osc.type="sine";
+    let interval = (i===0?1: (Math.random()<0.5?1.25:1.5));
+    osc.frequency.value = noteFreq*interval;
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now+1);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now+1);
+  }
+}
+
+// Particle class
+class Particle{
+  constructor(x,y,color){
+    this.x=x; this.y=y; this.color=color;
+    this.radius=5; this.life=1.0;
+  }
+  update(){
+    this.life -= 0.02;
+  }
+  draw(){
+    ctx.beginPath();
+    ctx.fillStyle=`rgba(${this.color.rgb[0]},${this.color.rgb[1]},${this.color.rgb[2]},${this.life})`;
+    ctx.arc(this.x,this.y,this.radius,0,Math.PI*2);
+    ctx.fill();
+  }
+}
+
+// Brick ring generator
+function createRing(radius,count){
+  let bricks=[];
+  for(let i=0;i<count;i++){
+    let angle= (i/count)*Math.PI*2;
+    let color=colors[Math.floor(Math.random()*colors.length)];
+    bricks.push({x:canvas.width/2+radius*Math.cos(angle),
+                 y:canvas.height/2+radius*Math.sin(angle),
+                 color:color,
+                 angle:angle,
+                 radius:radius});
+  }
+  rings.push(bricks);
+}
+
+// Animate and collision check
+function animate(){
+  if(!running) return;
+  requestAnimationFrame(animate);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  
+  // Draw particles
+  particles.forEach(p=>{p.update(); p.draw();});
+  particles=particles.filter(p=>p.life>0);
+  
+  // Draw rings
+  rings.forEach((ring,ri)=>{
+    ring.forEach((brick,bi)=>{
+      ctx.fillStyle=`rgb(${brick.color.rgb[0]},${brick.color.rgb[1]},${brick.color.rgb[2]})`;
+      ctx.beginPath();
+      ctx.arc(brick.x,brick.y,15,0,Math.PI*2);
+      ctx.fill();
+      // Collision with particles
+      particles.forEach(p=>{
+        let dx=p.x-brick.x, dy=p.y-brick.y;
+        let dist=Math.sqrt(dx*dx+dy*dy);
+        if(dist<20){
+          // Color match check
+          if(Math.abs(p.color.rgb[0]-brick.color.rgb[0])<100 &&
+             Math.abs(p.color.rgb[1]-brick.color.rgb[1])<100 &&
+             Math.abs(p.color.rgb[2]-brick.color.rgb[2])<100){
+            playBrickSound(colors.indexOf(brick.color));
+            ring.splice(bi,1);
+            score+=10;
+            document.getElementById("score").textContent=score;
+          }
+        }
+      });
+    });
+  });
+  rings=rings.filter(r=>r.length>0);
+
+  // Lose condition if bricks cross center
+  rings.forEach(r=>{
+    r.forEach(brick=>{
+      if(Math.abs(brick.x-canvas.width/2)<30 &&
+         Math.abs(brick.y-canvas.height/2)<30){
+        running=false;
+        alert("Game Over! Final Score: "+score);
+      }
+    });
+  });
+}
+
+// Shrink rings closer every second
+function shrinkRings(){
+  if(!running) return;
+  rings.forEach(r=>{
+    r.forEach(brick=>{
+      brick.radius*=0.9;
+      brick.x=canvas.width/2+brick.radius*Math.cos(brick.angle);
+      brick.y=canvas.height/2+brick.radius*Math.sin(brick.angle);
+    });
+  });
+  setTimeout(shrinkRings,1000);
+}
+
+// Frequency detection
+function detectNote(){
+  if(!running) return;
+  analyser.getByteFrequencyData(freqData);
+  let maxVal=0, maxIndex=0;
+  for(let i=0;i<freqData.length;i++){
+    if(freqData[i]>maxVal){maxVal=freqData[i]; maxIndex=i;}
+  }
+  if(maxVal>150){
+    let nyquist=audioCtx.sampleRate/2;
+    let freq=(maxIndex/ freqData.length)*nyquist;
+    playChime(freq);
+    let color=colors[Math.floor(Math.random()*colors.length)];
+    particles.push(new Particle(canvas.width/2,canvas.height/2,color));
+  }
+  setTimeout(detectNote,100);
+}
+
+document.getElementById("startBtn").onclick=async()=>{
+  audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  let stream=await navigator.mediaDevices.getUserMedia({audio:true});
+  source=audioCtx.createMediaStreamSource(stream);
+  analyser=audioCtx.createAnalyser();
+  analyser.fftSize=2048;
+  freqData=new Uint8Array(analyser.frequencyBinCount);
+  source.connect(analyser);
+  running=true;
+  score=0; level=1;
+  document.getElementById("score").textContent=score;
+  document.getElementById("level").textContent=level;
+  rings=[];
+  createRing(200,12);
+  createRing(300,16);
+  animate();
+  detectNote();
+  shrinkRings();
+};
+</script>
+</body>
+</html>
