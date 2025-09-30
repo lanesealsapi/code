@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guitar Tuner</title>
+<style>
+  body { margin:0; padding:0; font-family:sans-serif; background:#111; color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; }
+  button { padding:10px 20px; font-size:16px; margin-bottom:20px; cursor:pointer; }
+  #note { font-size:48px; margin-top:20px; }
+  #detune { font-size:24px; color:#f59e0b; }
+</style>
+</head>
+<body>
+<button id="startBtn">Start Tuner</button>
+<div id="note">-</div>
+<div id="detune"></div>
+<script>
+const notes = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+let audioContext, analyser, dataArray, source;
+
+function startTuner(){
+  navigator.mediaDevices.getUserMedia({ audio:true }).then(stream=>{
+    audioContext = new (window.AudioContext||window.webkitAudioContext)();
+    source = audioContext.createMediaStreamSource(stream);
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 2048;
+    source.connect(analyser);
+    dataArray = new Float32Array(analyser.fftSize);
+    update();
+  }).catch(err=>alert('Microphone error: '+err));
+}
+
+function autoCorrelate(buf, sampleRate) {
+  let SIZE = buf.length;
+  let rms = 0;
+  for (let i = 0; i < SIZE; i++) {
+    rms += buf[i]*buf[i];
+  }
+  rms = Math.sqrt(rms/SIZE);
+  if(rms<0.01) return -1;
+
+  let r1=0,r2=SIZE-1,thresh=0.2;
+  for(let i=0;i<SIZE/2;i++) if(Math.abs(buf[i])<thresh){r1=i;break;}
+  for(let i=1;i<SIZE/2;i++) if(Math.abs(buf[SIZE-i])<thresh){r2=SIZE-i;break;}
+  buf = buf.slice(r1,r2);
+  SIZE = buf.length;
+
+  let c = new Array(SIZE).fill(0);
+  for(let i=0;i<SIZE;i++) for(let j=0;j<SIZE-i;j++) c[i] += buf[j]*buf[j+i];
+  let d=0; while(c[d]>c[d+1]) d++;
+  let maxval=-1,maxpos=-1;
+  for(let i=d;i<SIZE;i++){if(c[i]>maxval){maxval=c[i]; maxpos=i;}}
+  let T0 = maxpos;
+  return sampleRate/T0;
+}
+
+function update(){
+  requestAnimationFrame(update);
+  analyser.getFloatTimeDomainData(dataArray);
+  let freq = autoCorrelate(dataArray,audioContext.sampleRate);
+  if(freq==-1){ document.getElementById('note').innerText='-'; document.getElementById('detune').innerText=''; return;}
+  let noteNum = 12*Math.log2(freq/440)+69;
+  let noteIndex = Math.round(noteNum)%12;
+  document.getElementById('note').innerText = notes[noteIndex];
+  let detune = Math.floor((noteNum-Math.round(noteNum))*100);
+  document.getElementById('detune').innerText = detune>0?`+${detune} cents`:`${detune} cents`;
+}
+
+document.getElementById('startBtn').addEventListener('click',()=>{
+  startTuner();
+  document.getElementById('startBtn').style.display='none';
+});
+</script>
+</body>
+</html>
