@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chime Smash Game</title>
+  <style>
+    body {
+      margin: 0;
+      background: radial-gradient(circle at center, #222 0%, #000 100%);
+      color: #fff;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.3);
+      color: #fff;
+      border-radius: 6px;
+      z-index: 2;
+      position: relative;
+    }
+    #hud {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 18px;
+      z-index: 2;
+    }
+    canvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 1;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <button id="startButton">Start Chime Smash</button>
+  <div id="hud">Score: 0 | Level: 1</div>
+  <canvas id="gameCanvas"></canvas>
+  <script>
+    const startButton = document.getElementById("startButton");
+    const hud = document.getElementById("hud");
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    let audioCtx, analyser, dataArray;
+    let particles = [];
+    let bricks = [];
+    let score = 0, level = 1;
+    let gameOver = false;
+
+    const colorPairs = [
+      ["#4da6ff", "#ffe066"], // blue + yellow
+      ["#ff4d4d", "#66ff66"], // red + green
+      ["#b366ff", "#ffcc66"], // purple + orange
+      ["#66ffff", "#ff6699"], // cyan + pink
+      ["#99ff66", "#6666ff"], // lime + indigo
+      ["#ff9966", "#66ccff"], // coral + sky blue
+      ["#ffff66", "#666666"]  // yellow + gray
+    ];
+
+    function updateHUD() {
+      hud.innerText = `Score: ${score} | Level: ${level}`;
+    }
+
+    function resetGame() {
+      score = 0;
+      level = 1;
+      gameOver = false;
+      bricks = [];
+      updateHUD();
+      spawnBricks();
+    }
+
+    startButton.addEventListener("click", async () => {
+      resetGame();
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const source = audioCtx.createMediaStreamSource(stream);
+
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 2048;
+      dataArray = new Float32Array(analyser.fftSize);
+      source.connect(analyser);
+
+      detectPitch();
+      animate();
+      setInterval(closeBricks, 1000); // jerky inward move
+    });
+
+    function detectPitch() {
+      if (gameOver) return;
+      analyser.getFloatTimeDomainData(dataArray);
+      let autoCorr = autoCorrelate(dataArray, audioCtx.sampleRate);
+      if (autoCorr !== -1) playChime(autoCorr);
+      setTimeout(detectPitch, 400);
+    }
+
+    function autoCorrelate(buffer, sampleRate) {
+      let SIZE = buffer.length;
+      let rms = 0;
+      for (let i = 0; i < SIZE; i++) rms += buffer[i] * buffer[i];
+      rms = Math.sqrt(rms / SIZE);
+      if (rms < 0.01) return -1;
+
+      let r1 = 0, r2 = SIZE - 1, thres = 0.2;
+      for (let i = 0; i < SIZE/2; i++) if (Math.abs(buffer[i]) < thres) { r1 = i; break; }
+      for (let i = 1; i < SIZE/2; i++) if (Math.abs(buffer[SIZE-i]) < thres) { r2 = SIZE-i; break; }
+
+      buffer = buffer.slice(r1, r2);
+      SIZE = buffer.length;
+
+      let c = new Array(SIZE).fill(0);
+      for (let i = 0; i < SIZE; i++)
+        for (let j = 0; j < SIZE - i; j++)
+          c[i] = c[i] + buffer[j] * buffer[j+i];
+
+      let d = 0; while (c[d] > c[d+1]) d++;
+      let maxval = -1, maxpos = -1;
+      for (let i = d; i < SIZE; i++) {
+        if (c[i] > maxval) { maxval = c[i]; maxpos = i; }
+      }
+      let T0 = maxpos;
+      return sampleRate / T0;
+    }
+
+    function playChime(frequency) {
+      if (!frequency) return;
+      const intervals = [1.25, 1.5, 2.0];
+      const idx = Math.floor(Math.random() * intervals.length);
+      const freqs = [frequency, frequency * intervals[idx]];
+      const pair = colorPairs[idx % colorPairs.length];
+
+      freqs.forEach((f, i) => {
+        const osc = audioCtx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.value = f;
+        const gainNode = audioCtx.createGain();
+        gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0.4, audioCtx.currentTime + 0.05);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.0);
+        osc.connect(gainNode).connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 1.0);
+
+        spawnParticles(pair[i % 2]);
+        checkBrickHit(pair[i % 2]);
+      });
+    }
+
+    function spawnParticles(color, x = canvas.width/2, y = canvas.height/2, explosion = false) {
+      const count = explosion ? 20 : 12;
+      for (let i = 0; i < count; i++) {
+        particles.push({
+          x: x,
+          y: y,
+          vx: (Math.random() - 0.5) * (explosion ? 6 : 4),
+          vy: (Math.random() - 0.5) * (explosion ? 6 : 4),
+          size: Math.random() * 4 + 2,
+          life: explosion ? 50 : 40,
+          color: color
+        });
+      }
+    }
+
+    function spawnBricks() {
+      const margin = 40 + level * 10;
+      for (let i = 0; i < level + 3; i++) {
+        const pair = colorPairs[i % colorPairs.length];
+        bricks.push({
+          x: Math.random() * (canvas.width - margin*2) + margin,
+          y: Math.random() * (canvas.height - margin*2) + margin,
+          size: 40,
+          color: pair[Math.floor(Math.random()*2)]
+        });
+      }
+    }
+
+    function closeBricks() {
+      if (gameOver) return;
+      bricks.forEach(b => {
+        b.x += (canvas.width/2 - b.x) * 0.2;
+        b.y += (canvas.height/2 - b.y) * 0.2;
+      });
+      bricks.forEach(b => {
+        if (Math.hypot(b.x - canvas.width/2, b.y - canvas.height/2) < 50) {
+          gameOver = true;
+          alert("Game Over! Final Score: " + score);
+        }
+      });
+    }
+
+    function playBrickSound() {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.2);
+    }
+
+    function checkBrickHit(color) {
+      for (let i = bricks.length - 1; i >= 0; i--) {
+        if (bricks[i].color === color) {
+          score += 10;
+          playBrickSound();
+          spawnParticles(bricks[i].color, bricks[i].x, bricks[i].y, true);
+          bricks.splice(i, 1);
+          updateHUD();
+        }
+      }
+      if (bricks.length === 0) {
+        level++;
+        spawnBricks();
+        updateHUD();
+      }
+    }
+
+    function animate() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // draw bricks
+      bricks.forEach(b => {
+        ctx.fillStyle = b.color;
+        ctx.fillRect(b.x - b.size/2, b.y - b.size/2, b.size, b.size);
+      });
+      // draw particles
+      particles.forEach((p, idx) => {
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+        ctx.fill();
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+        if (p.life <= 0) particles.splice(idx, 1);
+      });
+      if (!gameOver) requestAnimationFrame(animate);
+    }
+  </script>
+</body>
+</html>
