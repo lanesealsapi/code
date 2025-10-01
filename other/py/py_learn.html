@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Python Fundamentals</title>
+  <style>
+    :root {
+      --color-bg-dark: #111;
+      --color-text-dark: #eee;
+      --color-accent1-dark: #00e6e6;
+      --color-accent2-dark: #ff00ff;
+
+      --color-bg-light: #fdfdfd;
+      --color-text-light: #222;
+      --color-accent1-light: #0077ff;
+      --color-accent2-light: #ff7700;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: var(--color-bg-dark);
+      color: var(--color-text-dark);
+      transition: background 0.3s, color 0.3s;
+      line-height: 1.6;
+      scroll-behavior: smooth;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 220px;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(6px);
+      padding: 20px;
+      box-shadow: 2px 0 10px rgba(0,0,0,0.4);
+      overflow-y: auto;
+    }
+
+    .sidebar h2 {
+      font-size: 1.1rem;
+      margin-bottom: 10px;
+      color: var(--color-accent1-dark);
+    }
+
+    .sidebar a {
+      display: block;
+      color: var(--color-text-dark);
+      text-decoration: none;
+      padding: 6px 0;
+      border-left: 3px solid transparent;
+      transition: 0.2s;
+    }
+
+    .sidebar a.active {
+      border-left: 3px solid var(--color-accent1-dark);
+      color: var(--color-accent1-dark);
+      font-weight: bold;
+    }
+
+    .content {
+      margin-left: 240px;
+      padding: 30px;
+      max-width: 800px;
+    }
+
+    h1, h2 {
+      color: var(--color-accent1-dark);
+    }
+
+    .card {
+      background: rgba(30,30,30,0.9);
+      border-radius: 10px;
+      padding: 20px;
+      margin: 20px 0;
+      box-shadow: 0 0 10px rgba(0,255,255,0.2);
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+
+    .snippet {
+      font-size: 0.9rem;
+      margin-bottom: 10px;
+      color: var(--color-accent2-dark);
+    }
+
+    pre {
+      background: #000;
+      padding: 12px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 0.9rem;
+      color: #0f0;
+    }
+
+    .output {
+      margin-top: 10px;
+      background: #000;
+      padding: 8px;
+      border-radius: 6px;
+      color: #0f0;
+      font-family: monospace;
+      min-height: 20px;
+    }
+
+    /* Fake "Run" button just shows expected output */
+    button {
+      background: var(--color-accent1-dark);
+      color: #111;
+      padding: 8px 14px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-top: 10px;
+      font-weight: bold;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: var(--color-accent2-dark);
+      color: #fff;
+    }
+
+    /* Toggle switch */
+    .toggle-container {
+      position: fixed;
+      top: 10px;
+      left: 240px;
+      z-index: 1000;
+    }
+
+    .toggle {
+      appearance: none;
+      width: 50px;
+      height: 24px;
+      background: var(--color-accent1-dark);
+      border-radius: 24px;
+      position: relative;
+      cursor: pointer;
+      outline: none;
+      transition: background 0.3s;
+    }
+    .toggle::before {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.3s;
+    }
+    .toggle:checked::before {
+      transform: translateX(26px);
+    }
+
+    /* Light theme overrides */
+    body.light {
+      background: var(--color-bg-light);
+      color: var(--color-text-light);
+    }
+    body.light h1, body.light h2 {
+      color: var(--color-accent1-light);
+    }
+    body.light .card {
+      background: #fff;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    body.light .snippet {
+      color: var(--color-accent2-light);
+    }
+    body.light .sidebar {
+      background: #f3f3f3;
+    }
+    body.light .sidebar h2 {
+      color: var(--color-accent1-light);
+    }
+    body.light .sidebar a.active {
+      border-left: 3px solid var(--color-accent1-light);
+      color: var(--color-accent1-light);
+    }
+    body.light button {
+      background: var(--color-accent1-light);
+      color: #fff;
+    }
+    body.light button:hover {
+      background: var(--color-accent2-light);
+    }
+  </style>
+</head>
+<body>
+  <div class="sidebar">
+    <h2>Sections</h2>
+    <a href="#variables">Variables</a>
+    <a href="#functions">Functions</a>
+    <a href="#conditionals">Conditionals</a>
+    <a href="#loops">Loops</a>
+    <a href="#lists">Lists</a>
+    <a href="#dicts">Dictionaries</a>
+    <a href="#classes">Classes</a>
+    <a href="#imports">Modules</a>
+  </div>
+
+  <div class="toggle-container">
+    <input type="checkbox" id="modeToggle" class="toggle">
+  </div>
+
+  <div class="content">
+    <h1>🐍 Python Fundamentals</h1>
+    <p>Quick explanations with code snippets and expected output.</p>
+
+    <div id="variables" class="card">
+      <h2>Variables</h2>
+      <p class="snippet">In Python, you don’t declare types. Just assign a value to create a variable.</p>
+      <pre>x = 10
+name = "L.A.x"
+pi = 3.14</pre>
+      <button onclick="showOutput('out1', 'x=10, name=L.A.x, pi=3.14')">Show Output</button>
+      <div class="output" id="out1"></div>
+    </div>
+
+    <div id="functions" class="card">
+      <h2>Functions</h2>
+      <p class="snippet">Define functions with <code>def</code> and return values.</p>
+      <pre>def greet(person):
+    return "Hello " + person</pre>
+      <button onclick="showOutput('out2', 'Hello L.A.x')">Show Output</button>
+      <div class="output" id="out2"></div>
+    </div>
+
+    <div id="conditionals" class="card">
+      <h2>Conditionals</h2>
+      <p class="snippet">Use <code>if</code>, <code>elif</code>, and <code>else</code> for decisions.</p>
+      <pre>age = 18
+if age >= 18:
+    print("Adult")
+else:
+    print("Minor")</pre>
+      <button onclick="showOutput('out3', 'Adult')">Show Output</button>
+      <div class="output" id="out3"></div>
+    </div>
+
+    <div id="loops" class="card">
+      <h2>Loops</h2>
+      <p class="snippet">Use <code>for</code> to iterate, <code>while</code> for repetition.</p>
+      <pre>for i in range(1, 6):
+    print(i)</pre>
+      <button onclick="showOutput('out4', '1 2 3 4 5')">Show Output</button>
+      <div class="output" id="out4"></div>
+    </div>
+
+    <div id="lists" class="card">
+      <h2>Lists</h2>
+      <p class="snippet">Lists store ordered collections of items.</p>
+      <pre>colors = ["red", "green", "blue"]
+print(colors[0])</pre>
+      <button onclick="showOutput('out5', 'red')">Show Output</button>
+      <div class="output" id="out5"></div>
+    </div>
+
+    <div id="dicts" class="card">
+      <h2>Dictionaries</h2>
+      <p class="snippet">Dictionaries map keys to values.</p>
+      <pre>person = {"name": "L.A.x", "age": 25}
+print(person["name"])</pre>
+      <button onclick="showOutput('out6', 'L.A.x')">Show Output</button>
+      <div class="output" id="out6"></div>
+    </div>
+
+    <div id="classes" class="card">
+      <h2>Classes</h2>
+      <p class="snippet">Classes bundle data and behavior together.</p>
+      <pre>class Dog:
+    def __init__(self, name):
+        self.name = name
+
+spark = Dog("Spark")
+print(spark.name)</pre>
+      <button onclick="showOutput('out7', 'Spark')">Show Output</button>
+      <div class="output" id="out7"></div>
+    </div>
+
+    <div id="imports" class="card">
+      <h2>Modules</h2>
+      <p class="snippet">Import modules to reuse code from the Python standard library.</p>
+      <pre>import math
+print(math.sqrt(16))</pre>
+      <button onclick="showOutput('out8', '4.0')">Show Output</button>
+      <div class="output" id="out8"></div>
+    </div>
+  </div>
+
+  <script>
+    // Fake run simulation: show expected output
+    function showOutput(id, text) {
+      document.getElementById(id).textContent = text;
+    }
+
+    // Toggle theme
+    const toggle = document.getElementById("modeToggle");
+    toggle.addEventListener("change", () => {
+      document.body.classList.toggle("light", toggle.checked);
+    });
+
+    // Scroll spy
+    const sections = document.querySelectorAll(".content .card");
+    const navLinks = document.querySelectorAll(".sidebar a");
+
+    window.addEventListener("scroll", () => {
+      let current = "";
+      sections.forEach(section => {
+        const sectionTop = section.offsetTop - 60;
+        if (pageYOffset >= sectionTop) {
+          current = section.getAttribute("id");
+        }
+      });
+      navLinks.forEach(link => {
+        link.classList.remove("active");
+        if (link.getAttribute("href") === "#" + current) {
+          link.classList.add("active");
+        }
+      });
+    });
+  </script>
+</body>
+</html>
