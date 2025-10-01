@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>JavaScript Fundamentals</title>
+  <style>
+    :root {
+      --color-bg-dark: #111;
+      --color-text-dark: #eee;
+      --color-accent1-dark: #00e6e6;
+      --color-accent2-dark: #ff00ff;
+
+      --color-bg-light: #fdfdfd;
+      --color-text-light: #222;
+      --color-accent1-light: #0077ff;
+      --color-accent2-light: #ff7700;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: var(--color-bg-dark);
+      color: var(--color-text-dark);
+      transition: background 0.3s, color 0.3s;
+      line-height: 1.6;
+      scroll-behavior: smooth;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 220px;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(6px);
+      padding: 20px;
+      box-shadow: 2px 0 10px rgba(0,0,0,0.4);
+      overflow-y: auto;
+    }
+
+    .sidebar h2 {
+      font-size: 1.1rem;
+      margin-bottom: 10px;
+      color: var(--color-accent1-dark);
+    }
+
+    .sidebar a {
+      display: block;
+      color: var(--color-text-dark);
+      text-decoration: none;
+      padding: 6px 0;
+      border-left: 3px solid transparent;
+      transition: 0.2s;
+    }
+
+    .sidebar a.active {
+      border-left: 3px solid var(--color-accent1-dark);
+      color: var(--color-accent1-dark);
+      font-weight: bold;
+    }
+
+    .content {
+      margin-left: 240px;
+      padding: 30px;
+      max-width: 800px;
+    }
+
+    h1, h2 {
+      color: var(--color-accent1-dark);
+    }
+
+    .card {
+      background: rgba(30,30,30,0.9);
+      border-radius: 10px;
+      padding: 20px;
+      margin: 20px 0;
+      box-shadow: 0 0 10px rgba(0,255,255,0.2);
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+
+    .snippet {
+      font-size: 0.9rem;
+      margin-bottom: 10px;
+      color: var(--color-accent2-dark);
+    }
+
+    pre {
+      background: #000;
+      padding: 12px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 0.9rem;
+    }
+
+    .output {
+      margin-top: 10px;
+      background: #000;
+      padding: 8px;
+      border-radius: 6px;
+      color: #0f0;
+      font-family: monospace;
+      min-height: 20px;
+    }
+
+    button {
+      background: var(--color-accent1-dark);
+      color: #111;
+      padding: 8px 14px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-top: 10px;
+      font-weight: bold;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: var(--color-accent2-dark);
+      color: #fff;
+    }
+
+    /* Toggle switch */
+    .toggle-container {
+      position: fixed;
+      top: 10px;
+      left: 240px;
+      z-index: 1000;
+    }
+
+    .toggle {
+      appearance: none;
+      width: 50px;
+      height: 24px;
+      background: var(--color-accent1-dark);
+      border-radius: 24px;
+      position: relative;
+      cursor: pointer;
+      outline: none;
+      transition: background 0.3s;
+    }
+    .toggle::before {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.3s;
+    }
+    .toggle:checked::before {
+      transform: translateX(26px);
+    }
+
+    /* Light theme overrides */
+    body.light {
+      background: var(--color-bg-light);
+      color: var(--color-text-light);
+    }
+    body.light h1, body.light h2 {
+      color: var(--color-accent1-light);
+    }
+    body.light .card {
+      background: #fff;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    body.light .snippet {
+      color: var(--color-accent2-light);
+    }
+    body.light .sidebar {
+      background: #f3f3f3;
+    }
+    body.light .sidebar h2 {
+      color: var(--color-accent1-light);
+    }
+    body.light .sidebar a.active {
+      border-left: 3px solid var(--color-accent1-light);
+      color: var(--color-accent1-light);
+    }
+    body.light button {
+      background: var(--color-accent1-light);
+      color: #fff;
+    }
+    body.light button:hover {
+      background: var(--color-accent2-light);
+    }
+  </style>
+</head>
+<body>
+  <div class="sidebar">
+    <h2>Sections</h2>
+    <a href="#variables">Variables</a>
+    <a href="#functions">Functions</a>
+    <a href="#conditionals">Conditionals</a>
+    <a href="#loops">Loops</a>
+    <a href="#objects">Objects</a>
+    <a href="#arrays">Arrays</a>
+    <a href="#events">Events</a>
+    <a href="#dom">DOM</a>
+  </div>
+
+  <div class="toggle-container">
+    <input type="checkbox" id="modeToggle" class="toggle">
+  </div>
+
+  <div class="content">
+    <h1>🚀 JavaScript Fundamentals</h1>
+    <p>Click through sections, read quick explanations, and run live code.</p>
+
+    <div id="variables" class="card">
+      <h2>Variables</h2>
+      <p class="snippet">Variables store data values. Use <code>let</code> for changeable values and <code>const</code> for constants.</p>
+      <pre>let name = "L.A.x";
+const pi = 3.14;</pre>
+      <button onclick="exampleVariables()">Run Example</button>
+      <div class="output" id="out1"></div>
+    </div>
+
+    <div id="functions" class="card">
+      <h2>Functions</h2>
+      <p class="snippet">Functions let you group reusable code blocks into a single call.</p>
+      <pre>function greet(person) {
+  return "Hello " + person + "!";
+}</pre>
+      <button onclick="exampleFunctions()">Run Example</button>
+      <div class="output" id="out2"></div>
+    </div>
+
+    <div id="conditionals" class="card">
+      <h2>Conditionals</h2>
+      <p class="snippet">Conditionals let your code make decisions based on conditions.</p>
+      <pre>let age = 18;
+if (age >= 18) {
+  "Adult";
+} else {
+  "Minor";
+}</pre>
+      <button onclick="exampleConditionals()">Run Example</button>
+      <div class="output" id="out3"></div>
+    </div>
+
+    <div id="loops" class="card">
+      <h2>Loops</h2>
+      <p class="snippet">Loops repeat tasks without rewriting the same code.</p>
+      <pre>for (let i = 1; i <= 5; i++) {
+  console.log(i);
+}</pre>
+      <button onclick="exampleLoops()">Run Example</button>
+      <div class="output" id="out4"></div>
+    </div>
+
+    <div id="objects" class="card">
+      <h2>Objects</h2>
+      <p class="snippet">Objects group data and behavior into key-value pairs.</p>
+      <pre>let person = {
+  name: "L.A.x",
+  age: 25
+};</pre>
+      <button onclick="exampleObjects()">Run Example</button>
+      <div class="output" id="out5"></div>
+    </div>
+
+    <div id="arrays" class="card">
+      <h2>Arrays</h2>
+      <p class="snippet">Arrays store ordered lists of values.</p>
+      <pre>let colors = ["red", "green", "blue"];</pre>
+      <button onclick="exampleArrays()">Run Example</button>
+      <div class="output" id="out6"></div>
+    </div>
+
+    <div id="events" class="card">
+      <h2>Events</h2>
+      <p class="snippet">Events let your page react to user interactions.</p>
+      <pre>document.querySelector("button")
+  .addEventListener("click", () => {
+    alert("Clicked!");
+  });</pre>
+      <button onclick="exampleEvents(this)">Click Me</button>
+      <div class="output" id="out7"></div>
+    </div>
+
+    <div id="dom" class="card">
+      <h2>DOM</h2>
+      <p class="snippet">The DOM is how JavaScript interacts with web pages.</p>
+      <pre>document.getElementById("demo").textContent = "Hi!";</pre>
+      <button onclick="exampleDOM()">Run Example</button>
+      <div class="output" id="out8"></div>
+    </div>
+  </div>
+
+  <script>
+    // Example functions
+    function exampleVariables() {
+      let name = "L.A.x";
+      const pi = 3.14;
+      document.getElementById("out1").textContent =
+        "Name: " + name + ", Pi: " + pi;
+    }
+    function exampleFunctions() {
+      function greet(person) { return "Hello " + person + "!"; }
+      document.getElementById("out2").textContent = greet("L.A.x");
+    }
+    function exampleConditionals() {
+      let age = 18;
+      let result = age >= 18 ? "Adult" : "Minor";
+      document.getElementById("out3").textContent = "Result: " + result;
+    }
+    function exampleLoops() {
+      let out = "";
+      for (let i = 1; i <= 5; i++) { out += i + " "; }
+      document.getElementById("out4").textContent = out.trim();
+    }
+    function exampleObjects() {
+      let person = { name: "L.A.x", age: 25 };
+      document.getElementById("out5").textContent =
+        person.name + " is " + person.age + " years old.";
+    }
+    function exampleArrays() {
+      let colors = ["red", "green", "blue"];
+      document.getElementById("out6").textContent = colors.join(", ");
+    }
+    function exampleEvents(btn) {
+      document.getElementById("out7").textContent = "You clicked!";
+    }
+    function exampleDOM() {
+      document.getElementById("out8").textContent = "DOM updated!";
+    }
+
+    // Toggle theme
+    const toggle = document.getElementById("modeToggle");
+    toggle.addEventListener("change", () => {
+      document.body.classList.toggle("light", toggle.checked);
+    });
+
+    // Scroll spy
+    const sections = document.querySelectorAll(".content .card");
+    const navLinks = document.querySelectorAll(".sidebar a");
+
+    window.addEventListener("scroll", () => {
+      let current = "";
+      sections.forEach(section => {
+        const sectionTop = section.offsetTop - 60;
+        if (pageYOffset >= sectionTop) {
+          current = section.getAttribute("id");
+        }
+      });
+      navLinks.forEach(link => {
+        link.classList.remove("active");
+        if (link.getAttribute("href") === "#" + current) {
+          link.classList.add("active");
+        }
+      });
+    });
+  </script>
+</body>
+</html>
