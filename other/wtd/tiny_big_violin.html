@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SVG Digital Violin</title>
+<style>
+  body {
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background: #111;
+    font-family: sans-serif;
+    user-select: none;
+  }
+  #violin-container {
+    position: relative;
+    width: 600px;
+    height: 400px;
+  }
+  #violin-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .string {
+    position: absolute;
+    height: 4px;
+    background: #ccc;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .string.active { background: #f90; }
+</style>
+</head>
+<body>
+
+<div id="violin-container">
+  <!-- SVG Violin Body -->
+  <svg id="violin-svg" viewBox="0 0 600 400">
+    <!-- Body -->
+    <ellipse cx="300" cy="200" rx="100" ry="180" fill="#8B4513" stroke="#5A2C0C" stroke-width="4"/>
+    <!-- Neck -->
+    <rect x="280" y="50" width="40" height="150" fill="#A0522D"/>
+    <!-- Scroll -->
+    <circle cx="300" cy="40" r="20" fill="#8B4513" stroke="#5A2C0C" stroke-width="3"/>
+    <!-- F-holes -->
+    <path d="M270,170 q10,-20 20,0 q-10,20 -20,0" fill="#000"/>
+    <path d="M330,170 q10,-20 20,0 q-10,20 -20,0" fill="#000"/>
+  </svg>
+
+  <!-- Interactive strings overlay -->
+  <div class="string" data-string="E4" style="top:100px; left:260px; width:80px;"></div>
+  <div class="string" data-string="A4" style="top:140px; left:260px; width:80px;"></div>
+  <div class="string" data-string="D4" style="top:180px; left:260px; width:80px;"></div>
+  <div class="string" data-string="G3" style="top:220px; left:260px; width:80px;"></div>
+</div>
+
+<script>
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const strings = document.querySelectorAll('.string');
+let isDragging = false;
+let lastY = 0;
+
+// Full notes per string
+const stringNotes = {
+  E4:['E4','F4','F#4','G4','G#4','A4','A#4','B4','C5','C#5','D5','D#5','E5'],
+  A4:['A4','A#4','B4','C5','C#5','D5','D#5','E5','F5','F#5','G5','G#5','A5'],
+  D4:['D4','D#4','E4','F4','F#4','G4','G#4','A4','A#4','B4','C5','C#5','D5'],
+  G3:['G3','G#3','A3','A#3','B3','C4','C#4','D4','D#4','E4','F4','F#4','G4']
+};
+
+const noteFrequencies={
+  'C3':130.81,'C#3':138.59,'D3':146.83,'D#3':155.56,'E3':164.81,'F3':174.61,'F#3':185.00,'G3':196.00,'G#3':207.65,'A3':220.00,'A#3':233.08,'B3':246.94,
+  'C4':261.63,'C#4':277.18,'D4':293.66,'D#4':311.13,'E4':329.63,'F4':349.23,'F#4':369.99,'G4':392.00,'G#4':415.30,'A4':440.00,'A#4':466.16,'B4':493.88,
+  'C5':523.25,'C#5':554.37,'D5':587.33,'D#5':622.25,'E5':659.25,'F5':698.46,'F#5':739.99,'G5':783.99
+};
+
+// Violin-like sound using triangle wave and ADSR envelope
+function playNote(note,speed=1){
+  const oscillator=audioCtx.createOscillator();
+  const gainNode=audioCtx.createGain();
+
+  oscillator.type='triangle'; // triangle wave more violin-like
+  oscillator.frequency.value=noteFrequencies[note]||440;
+  oscillator.connect(gainNode);
+  gainNode.connect(audioCtx.destination);
+
+  // Simple ADSR
+  const now=audioCtx.currentTime;
+  const volume=Math.min(Math.abs(speed)/10,1);
+  gainNode.gain.setValueAtTime(0,now);
+  gainNode.gain.linearRampToValueAtTime(0.3*volume,now+0.02);
+  gainNode.gain.linearRampToValueAtTime(0.3*volume,now+0.2);
+  gainNode.gain.linearRampToValueAtTime(0,now+0.5);
+
+  oscillator.start();
+  oscillator.stop(now+0.5);
+  return volume;
+}
+
+// Visual vibration
+function vibrateString(string,volume){
+  string.classList.add('active');
+  setTimeout(()=>string.classList.remove('active'),150);
+
+  let amplitude=3*volume;
+  let start=performance.now();
+  function vibrate(time){
+    let t=(time-start)/100;
+    string.style.transform=`translateX(${Math.sin(t*10)*amplitude}px)`;
+    if(t<15) requestAnimationFrame(vibrate);
+    else string.style.transform='translateX(0)';
+  }
+  requestAnimationFrame(vibrate);
+}
+
+function getNoteFromPosition(string,x){
+  const width=string.clientWidth;
+  const notes=stringNotes[string.dataset.string];
+  let ratio=x/width;
+  let index=Math.floor(ratio*notes.length);
+  index=Math.max(0,Math.min(index,notes.length-1));
+  return notes[index];
+}
+
+// Mouse interactions
+strings.forEach(string=>{
+  string.addEventListener('mousedown',e=>{
+    isDragging=true;
+    lastY=e.clientY;
+    const note=getNoteFromPosition(string,e.offsetX);
+    vibrateString(string,playNote(note,1));
+  });
+  string.addEventListener('mousemove',e=>{
+    if(isDragging){
+      let speed=e.clientY-lastY;
+      lastY=e.clientY;
+      const note=getNoteFromPosition(string,e.offsetX);
+      vibrateString(string,playNote(note,speed));
+    }
+  });
+});
+document.addEventListener('mouseup',()=>isDragging=false);
+</script>
+
+</body>
+</html>
