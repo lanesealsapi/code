@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ultimate Moon Orbit Simulator OP</title>
+<style>
+  body { margin:0; overflow:hidden; background:black; font-family:sans-serif; color:white; }
+  svg { display:block; width:100vw; height:100vh; background:black; }
+  #message { position:absolute; top:20px; left:50%; transform:translateX(-50%); font-size:24px; text-align:center; }
+  #autoguide {
+    position:absolute; top:60px; left:50%; transform:translateX(-50%);
+    font-size:18px; background:rgba(0,0,0,0.5); padding:5px 10px; border-radius:8px; cursor:pointer;
+  }
+  #autoguide input { margin-right:6px; }
+</style>
+</head>
+<body>
+<div id="message">Orbit the Moon! ↑↓ pitch, ←→ yaw, Space thrust.</div>
+<div id="autoguide"><input type="checkbox" id="toggleGuide"> Auto Orbit Guide</div>
+<svg id="canvas"></svg>
+
+<script>
+// Canvas
+const svg = document.getElementById('canvas');
+const width = window.innerWidth;
+const height = window.innerHeight;
+
+// Helper
+function create(tag, attrs){
+  const el = document.createElementNS("http://www.w3.org/2000/svg",tag);
+  for(let k in attrs) el.setAttribute(k, attrs[k]);
+  svg.appendChild(el);
+  return el;
+}
+
+// Stars
+for(let i=0;i<300;i++){
+  create("circle",{cx:Math.random()*width, cy:Math.random()*height, r:Math.random()*1.2, fill:"white", opacity:Math.random()});
+}
+
+// Moon
+const moon = create("circle",{cx:width/2, cy:100, r:80, fill:"#dcdcdc"});
+// Craters
+for(let i=0;i<25;i++){
+  create("circle",{cx:width/2 + Math.random()*120-60, cy:100 + Math.random()*120-60, r:Math.random()*10, fill:"#aaa", opacity:0.5});
+}
+
+// Earth (water world with green land)
+const earth = create("circle",{cx:width-150, cy:height-150, r:60, fill:"#2a7fff"});
+for(let i=0;i<30;i++){
+  create("circle",{cx:width-150 + Math.random()*100-50, cy:height-150 + Math.random()*100-50, r:Math.random()*5, fill:"#1a7f1a", opacity:0.6});
+}
+
+// Rocket
+let rocket = {x:width/2, y:height-200, vx:0, vy:-1, angle:0, yaw:0, angularVelocity:0, yawVelocity:0, thrusting:false, fuel:100};
+
+// Rocket trail
+let trail=[];
+
+// Rocket body
+const rocketGroup = create("g",{});
+const mainBody = create("rect",{x:-5, y:-20, width:10, height:30, rx:3, ry:3, fill:"#ccc"});
+const nose = create("polygon",{points:"0,-20 5,-30 10,-20", fill:"#aaa"});
+const leftWing = create("polygon",{points:"-5,0 -15,10 0,10", fill:"#f00"});
+const rightWing = create("polygon",{points:"5,0 15,10 0,10", fill:"#f00"});
+rocketGroup.appendChild(mainBody);
+rocketGroup.appendChild(nose);
+rocketGroup.appendChild(leftWing);
+rocketGroup.appendChild(rightWing);
+
+// Flames with glow
+let flames=[];
+for(let i=0;i<15;i++){
+  flames.push(create("circle",{r:Math.random()*3+1, fill:"orange", opacity:0.8}));
+}
+
+// Input
+let keys={left:false,right:false,up:false,down:false,space:false};
+document.addEventListener('keydown',e=>{
+  if(e.key==="ArrowLeft") keys.left=true;
+  if(e.key==="ArrowRight") keys.right=true;
+  if(e.key==="ArrowUp") keys.up=true;
+  if(e.key==="ArrowDown") keys.down=true;
+  if(e.key===" ") keys.space=true;
+});
+document.addEventListener('keyup',e=>{
+  if(e.key==="ArrowLeft") keys.left=false;
+  if(e.key==="ArrowRight") keys.right=false;
+  if(e.key==="ArrowUp") keys.up=false;
+  if(e.key==="ArrowDown") keys.down=false;
+  if(e.key===" ") keys.space=false;
+});
+
+// Auto Orbit Guide toggle
+let autoGuide = false;
+document.getElementById("toggleGuide").addEventListener('change', e=>{autoGuide=e.target.checked;});
+
+// Physics
+const gravity = 0.05;
+const thrustPower = 0.12;
+const torque = 0.003;
+
+// Animation loop
+function update(){
+  const dxMoon = width/2 - rocket.x;
+  const dyMoon = 100 - rocket.y;
+  const distMoon = Math.sqrt(dxMoon*dxMoon + dyMoon*dyMoon);
+
+  // Auto guide logic
+  if(autoGuide && distMoon>90 && distMoon<150){
+    // Align rocket yaw tangential to orbit
+    let orbitAngle = Math.atan2(dyMoon, dxMoon) + Math.PI/2;
+    let yawDiff = orbitAngle - rocket.yaw;
+    rocket.yawVelocity += yawDiff*0.05;
+    // Gentle thrust to maintain orbit
+    rocket.thrusting = true;
+  }
+
+  // User controls if autoGuide off
+  if(!autoGuide){
+    if(keys.left) rocket.yawVelocity -= torque;
+    if(keys.right) rocket.yawVelocity += torque;
+    if(keys.up) rocket.angularVelocity -= torque;
+    if(keys.down) rocket.angularVelocity += torque;
+    rocket.thrusting = keys.space && rocket.fuel>0;
+  }
+
+  // Rotation update
+  rocket.angle += rocket.angularVelocity;
+  rocket.yaw += rocket.yawVelocity;
+  rocket.angularVelocity *= 0.98;
+  rocket.yawVelocity *= 0.98;
+
+  // Thrust
+  if(rocket.thrusting && rocket.fuel>0){ 
+    rocket.vx += Math.sin(rocket.yaw)*thrustPower; 
+    rocket.vy -= Math.cos(rocket.yaw)*thrustPower; 
+    rocket.fuel -= 0.2;
+  }
+
+  // Moon gravity
+  const gForce = gravity*100/(distMoon*distMoon+1);
+  rocket.vx += dxMoon/distMoon * gForce;
+  rocket.vy += dyMoon/distMoon * gForce;
+
+  rocket.x += rocket.vx;
+  rocket.y += rocket.vy;
+
+  // Rocket transform
+  rocketGroup.setAttribute("transform",`translate(${rocket.x},${rocket.y}) rotate(${rocket.yaw*180/Math.PI})`);
+
+  // Flames with flicker glow
+  flames.forEach((f,i)=>{
+    const fx = rocket.x + (Math.random()*10-5);
+    const fy = rocket.y + 20 + Math.random()*10;
+    f.setAttribute("cx",fx);
+    f.setAttribute("cy",fy);
+    f.setAttribute("r",Math.random()*3+1);
+    f.setAttribute("fill",`rgba(255,${Math.floor(100+Math.random()*155)},0,${0.5+Math.random()*0.5})`);
+  });
+
+  // Trail
+  trail.push({x:rocket.x,y:rocket.y});
+  if(trail.length>150) trail.shift();
+  // Only draw a small number of trail dots for performance
+  for(let i=0;i<trail.length;i+=2){
+    let t = trail[i];
+    let dot = create("circle",{cx:t.x, cy:t.y, r:0.5, fill:"white", opacity:i/trail.length});
+  }
+
+  // Orbit detection
+  if(distMoon>90 && distMoon<150 && Math.abs(rocket.vx)<3 && Math.abs(rocket.vy)<3){
+    document.getElementById("message").innerText = `🌕 Orbiting Moon! Fuel: ${rocket.fuel.toFixed(0)}%`;
+  }
+
+  // Crash detection
+  if(distMoon<80){document.getElementById("message").innerText="💥 Crashed on Moon!"; return;}
+  if(rocket.y>height || rocket.x<0 || rocket.x>width){document.getElementById("message").innerText="💥 Rocket left bounds!"; return;}
+  if(rocket.fuel<=0 && rocket.thrusting){document.getElementById("message").innerText="⚠️ Out of fuel!";}
+
+  requestAnimationFrame(update);
+}
+
+update();
+</script>
+</body>
+</html>
