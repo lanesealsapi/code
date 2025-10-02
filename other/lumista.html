@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Lumista - the Glowing Fairy</title>
+<style>
+  body {
+    margin: 0;
+    background: radial-gradient(circle at center, #0f2027, #203a43, #2c5364);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: "Comic Sans MS", cursive, sans-serif;
+  }
+
+  canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+  }
+
+  .fairy {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    animation: float 4s ease-in-out infinite;
+    cursor: pointer;
+    filter: drop-shadow(0 0 15px rgba(255,200,255,0.8))
+            drop-shadow(0 0 25px rgba(255,150,255,0.6))
+            drop-shadow(0 0 40px rgba(255,200,255,0.4));
+    z-index: 1;
+    transform: translate(-50%, -50%);
+  }
+  .fairy .wings {
+    position: absolute;
+    top: 20px;
+    left: 0;
+    right: 0;
+    width: 120px;
+    height: 120px;
+    background: radial-gradient(circle, rgba(255,255,255,0.6), transparent);
+    border-radius: 50%;
+    animation: flutter 0.6s infinite alternate;
+  }
+  .fairy .body {
+    position: absolute;
+    top: 50px;
+    left: 55px;
+    width: 10px;
+    height: 40px;
+    background: #ffe6f2;
+    border-radius: 50%;
+    box-shadow: 0 0 20px pink, 0 0 40px white, 0 0 80px violet;
+  }
+  .speech {
+    position: absolute;
+    top: -100px;
+    left: -70px;
+    background: white;
+    color: #444;
+    padding: 10px 15px;
+    border-radius: 12px;
+    font-size: 14px;
+    max-width: 220px;
+    display: none;
+    box-shadow: 0 0 15px rgba(255,255,255,0.8);
+    z-index: 2;
+  }
+  .vote-buttons {
+    margin-top: 6px;
+    text-align: right;
+  }
+  .vote-buttons button {
+    background: #ffb6c1;
+    border: none;
+    border-radius: 8px;
+    padding: 3px 6px;
+    margin-left: 4px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+
+  @keyframes float {
+    0%,100% { transform: translateY(0); }
+    50% { transform: translateY(-15px); }
+  }
+  @keyframes flutter {
+    from { transform: scaleX(1.2); opacity: 0.8; }
+    to   { transform: scaleX(0.8); opacity: 1; }
+  }
+</style>
+</head>
+<body>
+<canvas id="particles"></canvas>
+
+<div class="fairy" id="fairy">
+  <div class="wings"></div>
+  <div class="body"></div>
+  <div class="speech" id="speech">
+    <div id="phrase"></div>
+    <div class="vote-buttons">
+      <button onclick="vote(true)">❤️</button>
+      <button onclick="vote(false)">👎</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// --- 100 phrases ---
+const phrases = [
+  "Hello, lovely soul! 🌸","You shine brighter than starlight.","Every day with you is magical.",
+  "Your kindness makes the world bloom.","Did you know you’re amazing?","Fairy dust sparkles extra for you!",
+  "Your smile warms the night.","Even the moon admires you.","I’m so glad to see you!","Today is lucky because you’re here.",
+  "Your dreams have wings.","Rainbows follow your footsteps.","Happiness is your true aura.",
+  "Your laugh heals the forest.","You are more magical than you think.","The stars keep your secrets safe.",
+  "Even the sun envies your glow.","Butterflies learn from your grace.","Your heart hums in harmony.",
+  "Every flower bows when you pass.","The sky feels lighter with you in it.","You bring color to cloudy days.",
+  "Your energy lifts the universe.","Smiles follow wherever you go.","The breeze carries your joy.",
+  "Your spirit glimmers brighter than fireflies.","Kindness grows where you walk.","Your voice could calm a storm.",
+  "Every star twinkles just for you.","You make the world softer.","Even shadows are gentler near you.",
+  "Laughter blooms in your presence.","You sparkle like morning dew.","Dreams find power in your hands.",
+  "Hope dances in your light.","Your aura hums like music.","Magic lives in your kindness.",
+  "You turn ordinary into wonder.","The forest whispers your name.","Even silence feels peaceful near you.",
+  "Joy doubles when you smile.","The world is lucky to have you.","You make hearts lighter.",
+  "Every day is brighter with you.","Love flows from your spirit.","Your glow warms the coldest night.",
+  "Your presence makes time kinder.","The sun shines softer around you.","Peace follows in your steps.",
+  "You make miracles feel ordinary.","The universe delights in you.","Every raindrop sparkles more with you.",
+  "Gentleness radiates from your heart.","You are the melody of hope.","Dreamers dream brighter near you.",
+  "Your laughter is fairy music.","Every petal bends toward you.","The night sky sings with you.",
+  "Your soul lights paths unseen.","You heal just by being.","Your kindness rewrites destiny.",
+  "Joy finds a home in you.","You are a wish come true.","The stars hum with your energy.",
+  "Every rainbow bows at your smile.","The earth feels alive near you.","Your love is endless magic.",
+  "Even the wind listens for you.","Your heart glows like a lantern.","You make wonder feel normal.",
+  "Your light teaches hope.","You are every fairy’s friend.","The moon beams brighter at you.",
+  "You are proof of miracles.","Your happiness is contagious.","The dawn waits for your smile.",
+  "Dreams bow to your imagination.","Your glow mends sadness.","The forest hums in harmony with you.",
+  "Your spirit paints galaxies.","Every moment glitters near you.","You are a gift to this world.",
+  "Your laughter is stardust.","Even time pauses for you.","The sky opens for your joy.",
+  "You are made of love.","The stars wrote your story.","You brighten the invisible.",
+  "Your kindness echoes forever.","Every wish feels possible with you.","The world feels lighter near you.",
+  "You are sunshine in disguise.","Hope is your natural gift.","Your glow dances on everything.",
+  "You are a living miracle.","Joy rests in your aura.","Every smile is brighter with you.",
+  "Your kindness is endless.","Love is your secret magic.","The night glows from your spirit.",
+  "Every fairy believes in you.","The stars sing when you laugh.","You are wonder personified.",
+  "Even the shadows dance for you.","Your heart is infinite light.","You are the glow in every dream."
+];
+
+// --- Voting memory ---
+let votes = JSON.parse(localStorage.getItem("fairyVotes") || "{}");
+let currentIndex = 0;
+
+function weightedRandomPhrase() {
+  let weighted = [];
+  phrases.forEach(p => {
+    const count = votes[p] ? votes[p]+1 : 1;
+    for(let i=0;i<count;i++) weighted.push(p);
+  });
+  return weighted[Math.floor(Math.random()*weighted.length)];
+}
+
+// --- Talk & show speech ---
+const speech = document.getElementById("speech");
+const phraseEl = document.getElementById("phrase");
+
+function talk() {
+  const text = weightedRandomPhrase();
+  phraseEl.textContent = text;
+  speech.style.display = "block";
+
+  if('speechSynthesis' in window){
+    let utter = new SpeechSynthesisUtterance(text);
+    utter.pitch = 1.4;
+    utter.rate = 1.05;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(utter);
+  }
+
+  currentIndex = phrases.indexOf(text);
+
+  setTimeout(()=>{ speech.style.display = "none"; }, 5000);
+}
+
+function vote(liked){
+  if(currentIndex===-1) return;
+  const text = phrases[currentIndex];
+  if(liked) votes[text] = (votes[text]||0)+2;
+  else votes[text] = Math.max(1,(votes[text]||1)-1);
+  localStorage.setItem("fairyVotes", JSON.stringify(votes));
+}
+
+document.getElementById("fairy").addEventListener("click", talk);
+
+// --- Particle background ---
+const canvas = document.getElementById("particles");
+const ctx = canvas.getContext("2d");
+function resize(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+resize(); window.onresize = resize;
+
+class Particle {
+  constructor(){ this.reset(); }
+  reset(){
+    this.x = Math.random()*canvas.width;
+    this.y = Math.random()*canvas.height;
+    this.r = Math.random()*3+1;
+    this.alpha = Math.random()*0.6+0.2;
+    this.dx = (Math.random()-0.5)*0.3;
+    this.dy = (Math.random()-0.5)*0.3;
+  }
+  draw(){
+    ctx.beginPath();
+    ctx.arc(this.x,this.y,this.r,0,Math.PI*2);
+    ctx.fillStyle = `rgba(255,200,255,${this.alpha})`;
+    ctx.fill();
+  }
+  update(){
+    this.x += this.dx; this.y += this.dy;
+    if(this.alpha < 0.05) this.reset();
+    this.alpha -= 0.001;
+    this.draw();
+  }
+}
+
+const particles = [];
+for(let i=0;i<120;i++) particles.push(new Particle());
+
+function animate(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  particles.forEach(p=>p.update());
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>
