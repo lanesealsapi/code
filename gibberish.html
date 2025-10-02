@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sexy Chaos Word Generator</title>
+<style>
+
+  body {
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(135deg, #0f0f1a, #1a0f2f);
+    color: #0ff;
+    font-family: sans-serif;
+    overflow: hidden;
+  }
+
+  #container {
+    text-align: center;
+    position: relative;
+  }
+
+  #word {
+    font-size: 5vw;
+    font-weight: 700;
+    text-shadow: 0 0 20px #0ff, 0 0 40px #0ff, 0 0 60px #0ff;
+    opacity: 0;
+    transition: opacity 0.8s ease-in-out, transform 0.8s ease-in-out;
+  }
+
+  #generateBtn {
+    position: absolute;
+    bottom: -80px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 15px 30px;
+    font-size: 1.2rem;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #0ff, #00f);
+    color: #111;
+    cursor: pointer;
+    box-shadow: 0 0 20px #0ff;
+    transition: transform 0.2s;
+  }
+
+  #generateBtn:hover {
+    transform: translateX(-50%) scale(1.1);
+  }
+</style>
+</head>
+<body>
+<div id="container">
+  <div id="word">---</div>
+  <button id="generateBtn" onclick="showWord()">GENERATE</button>
+</div>
+
+<script>
+// 200-word dictionary
+const words = [
+  "time","person","year","way","day","thing","man","world","life","hand",
+  "part","child","eye","woman","place","work","week","case","point","government",
+  "company","number","group","problem","fact","be","have","do","say","get",
+  "make","go","know","take","see","come","think","look","want","give",
+  "use","find","tell","ask","work","seem","feel","try","leave","call",
+  "good","new","first","last","long","great","little","own","other","old",
+  "right","big","high","different","small","large","next","early","young","important",
+  "few","public","bad","same","able","love","friend","run","walk","jump",
+  "fly","swim","laugh","cry","play","sleep","eat","drink","read","write",
+  "listen","hear","see","touch","smell","taste","light","dark","hot","cold",
+  "fast","slow","strong","weak","hard","soft","bright","dim","sharp","blunt",
+  "tree","flower","river","mountain","sky","cloud","rain","snow","wind","fire",
+  "earth","stone","sand","sea","ocean","lake","forest","leaf","root","seed",
+  "animal","bird","fish","dog","cat","horse","cow","sheep","pig","mouse",
+  "red","blue","green","yellow","black","white","gray","purple","orange","pink",
+  "happy","sad","angry","scared","calm","excited","bored","tired","sick","well",
+  "music","song","sound","voice","note","melody","rhythm","beat","tune","harmony",
+  "house","home","room","door","window","roof","floor","wall","chair","table",
+  "car","bike","train","plane","boat","road","street","path","bridge","tower",
+  "book","page","word","letter","sentence","paragraph","story","poem","idea","thought",
+  "computer","phone","keyboard","screen","mouse","internet","software","hardware","app","game",
+  "food","bread","fruit","vegetable","meat","fish","drink","water","milk","coffee",
+  "childhood","memory","dream","hope","fear","joy","pain","love","hate","friendship",
+  "sun","moon","star","planet","galaxy","space","universe","time","light","darkness",
+  "energy","power","force","matter","atom","molecule","cell","organ","body","brain",
+  "language","word","speech","sentence","text","letter","alphabet","grammar","syntax","meaning"
+];
+
+// Semantic clusters
+const semanticMap = {
+  nature: ["tree","flower","river","mountain","sky","cloud","rain","snow","wind","fire","earth","stone","sand","sea","ocean","lake","forest","leaf","root","seed"],
+  action: ["run","walk","jump","fly","swim","laugh","cry","play","sleep","eat","drink","read","write","listen","hear","see","touch","smell","taste"],
+  emotion: ["happy","sad","angry","scared","calm","excited","bored","tired","sick","well","love","fear","joy","pain","hate","friendship","hope","dream","memory"]
+};
+
+function clusterWord(word) {
+  let clusters = [];
+  let i = 0;
+  while (i < word.length) {
+    let size = Math.floor(Math.random() * 2) + 1;
+    clusters.push(word.slice(i, i + size));
+    i += size;
+  }
+  return clusters;
+}
+
+function semanticTwist(cluster, originalWord) {
+  if (semanticMap.nature.includes(originalWord)) {
+    return cluster.replace(/[kpt]/g, "l").replace(/[bdf]/g, "m");
+  } else if (semanticMap.action.includes(originalWord)) {
+    return cluster.replace(/[aeiou]/g, m => m.toUpperCase());
+  } else if (semanticMap.emotion.includes(originalWord)) {
+    return cluster.replace(/[aeiou]/g, m => m + m);
+  }
+  return cluster;
+}
+
+function generateWord() {
+  let chaosFactor = Math.random() * 0.6 + 0.4;
+
+  let w1 = words[Math.floor(Math.random() * words.length)];
+  let w2 = words[Math.floor(Math.random() * words.length)];
+  let w3 = words[Math.floor(Math.random() * words.length)];
+
+  let clusters = [...clusterWord(w1), ...clusterWord(w2)];
+  if (Math.random() < 0.5) clusters.push(...clusterWord(w3));
+
+  clusters = clusters.map(c => semanticTwist(c, w1));
+
+  for (let j = clusters.length - 1; j > 0; j--) {
+    if (Math.random() < chaosFactor) {
+      let k = Math.floor(Math.random() * (j + 1));
+      [clusters[j], clusters[k]] = [clusters[k], clusters[j]];
+    }
+  }
+
+  let word = clusters.join('')
+                     .replace(/[aeiou]{2,}/g, m => m[0])
+                     .replace(/[^aeiou]{3,}/g, m => m.slice(0,2));
+
+  return word;
+}
+
+// Display word with smooth fade
+function showWord() {
+  const wordEl = document.getElementById('word');
+  wordEl.style.opacity = 0;
+  wordEl.style.transform = 'scale(0.7)';
+
+  setTimeout(() => {
+    wordEl.textContent = generateWord();
+    wordEl.style.opacity = 1;
+    wordEl.style.transform = 'scale(1)';
+  }, 500);
+}
+</script>
+
+</body>
+</html>
