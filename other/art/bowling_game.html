@@ -1,0 +1,763 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Tiny Breeze Bowling — L.A.x.'s Lane</title>
+<style>
+  :root{
+    --bg:#08121a;
+    --lane:#2b2b2b;
+    --wood:#b98648;
+    --accent:#8bd3ff;
+    --panel:#0f2730;
+    --glass: rgba(255,255,255,0.06);
+  }
+  html,body{height:100%;margin:0;font-family:Inter,Segoe UI,system-ui,Arial;background:linear-gradient(180deg,var(--bg),#041018);color:#e6f7ff}
+  .wrap{
+    display:grid;
+    grid-template-columns: 1fr 320px;
+    gap:20px;
+    padding:28px;
+    height:100vh;
+    box-sizing:border-box;
+  }
+  .game {
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+    border-radius:14px;
+    padding:18px;
+    z-index: 2;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.02);
+    display:flex;align-items:center;justify-content:center;
+  }
+  canvas{ border-radius:10px; background: linear-gradient(180deg,#0b1a22, #071018); box-shadow: 0 18px 50px rgba(0,0,0,0.6); }
+  .panel{
+    background: linear-gradient(180deg,var(--panel), #071b22);
+    border-radius:12px;
+    padding:16px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+    height: calc(100% - 16px);
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  h1{font-size:18px;margin:0 0 8px 0}
+  label{font-size:13px;color:#cfeffb}
+  .row{display:flex;gap:8px;align-items:center;}
+  input[type="range"]{width:100%}
+  button{
+    padding:8px; z-index: 2; 12px;border-radius:8px;background:linear-gradient(180deg,var(--accent),#3fb0ff);
+    border:none;color:#012;cursor:pointer;font-weight:700;box-shadow:0 6px 18px rgba(59,162,255,0.18);
+  }
+  .muted{opacity:0.8;font-size:13px;color:#a8dbe8}
+  .small{font-size:12px;color:#bfe9ff}
+  .score{font-size:28px;font-weight:800;color:#fff;text-align:center;margin-top:6px}
+  .controls{display:flex;flex-direction:column;gap:10px}
+  .power-hint{font-size:12px;color:#cfeffb;opacity:0.9}
+  .footer{margin-top:auto;font-size:12px;color:#9fdff8;opacity:0.8}
+  .toggle {
+    display:inline-flex;align-items:center;gap:8px;background:var(--glass);padding:6px;border-radius:999px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="game">
+    <canvas id="c" width="640" height="640"></canvas>
+  </div>
+
+  <div class="panel">
+    <div>
+      <h1>Tiny Breeze Bowling - Avoid the LiZard</h1>
+      <div class="muted">Click & drag the ball to aim & set power. Release to launch. Choose ball weight — classical music is on by default.</div>
+    </div>
+
+    <div class="controls">
+      <div>
+        <label>Ball Weight: <span id="weightLabel">Medium</span></label>
+        <input id="weight" type="range" min="1" max="3" step="0.01" value="2">
+        <div class="small muted">1 = light (zigs & zags), 3 = heavy (satisfying knocks)</div>
+      </div>
+
+      <div>
+        <label>Wind Strength: <span id="windLabel">Soft</span></label>
+        <input id="wind" type="range" min="0" max="1.5" step="0.01" value="0.35">
+        <div class="small muted">Wind applies small torque to pins, so they sway gently.</div>
+      </div>
+
+      <div style="display:flex;gap:8px;">
+        <button id="reset">Reset</button>
+        <button id="toggleMusic">Pause Music</button>
+        <div style="flex:1"></div>
+        <div class="toggle small"><input id="lizardToggle" type="checkbox" unchecked> Lizard</div>
+      </div>
+
+      <div>
+        <label>Score</label>
+        <div class="score" id="score">0</div>
+      </div>
+
+      <div>
+        <label>Instructions</label>
+        <div class="muted small">Drag backward from the ball, release to shoot. Lizard may scurry across lane — a gamble of chaos.</div>
+        <div class="power-hint">Tip: heavier balls are slower but hit harder; lighter balls curve more with wind & lizard nudges.</div>
+      </div>
+    </div>
+
+    <div class="footer">
+      Built for you — classical accompaniment, no external libraries.
+    </div>
+  </div>
+</div>
+
+<script>
+/* Tiny Breeze Bowling
+   - Canvas based lane, pins modeled as hinge + angular physics
+   - Ball has mass; collisions produce angular impulse causing pins to tip
+   - Wind torque applied to pins (sway)
+   - Lizard moves across and can nudge the ball
+   - Sounds & music via WebAudio (synthesized)
+*/
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+const W = canvas.width, H = canvas.height;
+
+// UI refs
+const weightRange = document.getElementById('weight');
+const weightLabel = document.getElementById('weightLabel');
+const windRange = document.getElementById('wind');
+const windLabel = document.getElementById('windLabel');
+const resetBtn = document.getElementById('reset');
+const scoreEl = document.getElementById('score');
+const toggleMusicBtn = document.getElementById('toggleMusic');
+const lizardToggle = document.getElementById('lizardToggle');
+
+let score = 0;
+
+// Audio setup
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let musicOn = false;
+let musicNodes = [];
+function startMusic(){
+  stopMusic();
+  const tempo = 60;
+  const now = audioCtx.currentTime;
+  // soft harpsichord-ish with 3 notes loop
+  const coords = [0, 0.4, 0.8];
+  coords.forEach((off,i) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 220 * Math.pow(2, i*0.25);
+    gain.gain.value = 0;
+    const delay = audioCtx.createDelay();
+    delay.delayTime.value = 0.02 * i;
+    osc.connect(gain);
+    gain.connect(delay);
+    delay.connect(audioCtx.destination);
+    osc.start();
+    // schedule gentle amplitude LFO
+    const g = gain.gain;
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(0, now);
+    g.linearRampToValueAtTime(0.08, now + 0.1 + off);
+    g.linearRampToValueAtTime(0.03, now + 1.2 + off);
+    g.linearRampToValueAtTime(0, now + 2.2 + off);
+    osc.onended = () => {};
+    musicNodes.push({osc,g,delay});
+  });
+}
+function stopMusic(){
+  musicNodes.forEach(n=>{
+    try { n.osc.stop(); } catch(e){}
+  });
+  musicNodes = [];
+}
+startMusic();
+
+toggleMusicBtn.onclick = () => {
+  musicOn = !musicOn;
+  if(!musicOn){ stopMusic(); toggleMusicBtn.textContent='Play Music'; }
+  else { startMusic(); toggleMusicBtn.textContent='Pause Music'; }
+};
+
+// small 'zerp' sound on pin hit using short noise burst
+function playZerp(volume=0.7, pitch=200){
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = 'triangle';
+  o.frequency.value = pitch;
+  g.gain.value = 0.0001;
+  o.connect(g);
+  g.connect(audioCtx.destination);
+  const t = audioCtx.currentTime;
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(volume, t+0.003);
+  g.gain.exponentialRampToValueAtTime(0.0001, t+0.16);
+  o.start(t);
+  o.stop(t+0.18);
+}
+function playThump(volume=0.8){
+  // low percussive thump
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = 'sawtooth';
+  o.frequency.value = 90;
+  g.gain.value = 0;
+  const bi = audioCtx.createBiquadFilter();
+  bi.type = 'lowpass';
+  bi.frequency.value = 200;
+  o.connect(bi);
+  bi.connect(g);
+  g.connect(audioCtx.destination);
+  const t = audioCtx.currentTime;
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(volume, t+0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t+0.14);
+  o.start(t);
+  o.stop(t+0.16);
+}
+
+// Lane geometry
+const lane = {
+  x: 120, y: 40, w: W - 240, h: H - 160,
+  woodW: W - 240 - 60
+};
+
+// Ball
+const BALL_RADIUS = 18;
+let ball = {
+  x: lane.x + lane.w/2,
+  y: lane.y + lane.h - 60,
+  vx: 0, vy: 0, mass: 2, radius: BALL_RADIUS,
+  inMotion: false, atRest: true
+};
+
+// Pins as hinge + angle physics
+class Pin {
+  constructor(baseX, baseY){
+    this.baseX = baseX;
+    this.baseY = baseY;
+    this.height = 42;
+    this.headR = 8;
+    this.theta = 0; // angle from vertical (radians), small sway
+    this.omega = 0; // angular velocity
+    this.fallen = false;
+    this.mass = 0.3; // used for moment component
+    this.I = 0.5 * this.mass * Math.pow(this.height,2); // rough
+  }
+  headPos(){
+    // top of pin relative to current angle
+    const hx = this.baseX + Math.sin(this.theta) * this.height;
+    const hy = this.baseY - Math.cos(this.theta) * this.height;
+    return {x: hx, y: hy};
+  }
+  applyTorque(t){
+    // alpha = torque / I
+    this.omega += t / this.I;
+  }
+  step(dt, windStrength){
+    if(this.fallen) return;
+    // wind torque oscillates a bit
+    const windTorque = Math.sin(perfTime*0.8 + (this.baseX/30)) * windStrength * 5;
+    // gravity restoring torque (pushes back to upright)
+    const k = -0.12; // stiffness
+    const damping = -0.06*this.omega;
+    const torque = windTorque + k * this.theta + damping;
+    this.applyTorque(torque);
+    // integrate
+    this.theta += this.omega * dt;
+    // damping
+    this.omega *= 0.995;
+    // if tip angle large -> fallen
+    if(Math.abs(this.theta) > 1.3){
+      this.fallen = true;
+      // particles / sound triggered elsewhere
+    }
+  }
+}
+
+// create standard bowling pin layout (10 pins triangle)
+let pins = [];
+function resetPins(){
+  pins = [];
+  const startX = lane.x + lane.w/2;
+  const startY = lane.y + 120;
+  const spacing = 40;
+  // rows 1 to 4
+  let rows = 4;
+  let idx=0;
+  for(let r=0;r<rows;r++){
+    const count = r+1;
+    const rowY = startY + r * (spacing*0.55);
+    const offset = -(count-1) * (spacing/2);
+    for(let j=0;j<count;j++){
+      const x = startX + offset + j*spacing;
+      const y = rowY;
+      pins.push(new Pin(x,y));
+      idx++;
+    }
+  }
+}
+resetPins();
+
+// lizard
+const lizard = {
+  x: lane.x - 120,
+  y: lane.y + lane.h - 120,
+  w: 44, h: 20,
+  vx: 0,
+  active:false,
+  timer: 0,
+  speed: 60 // px/s
+};
+
+// mouse/drag to aim
+let dragging = false;
+let dragStart = null;
+let aimVec = {x:0,y:0};
+
+// time
+let lastTime = performance.now()/1000;
+let perfTime = 0;
+
+// helpers
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+function dist(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
+
+// game state
+let canLaunch = true;
+let launched = false;
+let laneScore = 0;
+
+function resetGame(){
+  score = 0;
+  laneScore = 0;
+  resetPins();
+  resetBall();
+  scoreEl.textContent = score;
+  canLaunch = true;
+  launched = false;
+}
+
+function resetBall(){
+  ball.x = lane.x + lane.w/2;
+  ball.y = lane.y + lane.h - 60;
+  ball.vx = 0; ball.vy = 0;
+  ball.inMotion = false; ball.atRest = true;
+  canLaunch = true;
+}
+
+// UI updates
+weightRange.oninput = ()=> {
+  const val = Number(weightRange.value);
+  ball.mass = val;
+  if(val < 1.4) weightLabel.textContent = 'Light';
+  else if(val < 2.4) weightLabel.textContent = 'Medium';
+  else weightLabel.textContent = 'Heavy';
+};
+windRange.oninput = ()=> {
+  const v = Number(windRange.value);
+  if(v < 0.4) windLabel.textContent = 'Soft';
+  else if(v < 0.9) windLabel.textContent = 'Breezy';
+  else windLabel.textContent = 'Gusty';
+};
+resetBtn.onclick = ()=> {
+  resetPins();
+  resetBall();
+  score = 0;
+  scoreEl.textContent = score;
+};
+lizardToggle.onchange = ()=> {
+  if(!lizardToggle.checked) lizard.active = false;
+};
+
+// mouse events
+canvas.addEventListener('mousedown',(e)=>{
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  // only allow dragging if click near ball
+  if(Math.hypot(mx-ball.x,my-ball.y) < BALL_RADIUS+8 && !ball.inMotion){
+    dragging = true;
+    dragStart = {x:mx,y:my};
+    aimVec = {x:0,y:0};
+  }
+});
+canvas.addEventListener('mousemove',(e)=>{
+  if(!dragging) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  aimVec = {x: dragStart.x - mx, y: dragStart.y - my}; // pull vector
+});
+canvas.addEventListener('mouseup',(e)=>{
+  if(!dragging) return;
+  dragging = false;
+  // compute launch velocity from aimVec and mass
+  const power = clamp(Math.hypot(aimVec.x, aimVec.y) / 120, 0, 1.8);
+  const angle = Math.atan2(aimVec.y, aimVec.x);
+  // convert to velocity toward pins (negative y is up)
+  const speed = 380 * power * (2.2/ball.mass);
+  ball.vx = Math.cos(angle) * speed * -1;
+  ball.vy = Math.sin(angle) * speed * -1;
+  ball.inMotion = true;
+  ball.atRest = false;
+  launched = true;
+  // small launching thump proportional to mass
+  playThump(0.02 + ball.mass*0.02);
+});
+
+// collision: ball vs pin head -> create angular impulse
+function handleBallPinCollision(b, pin){
+  if(pin.fallen) return;
+  const hp = pin.headPos();
+  const dx = b.x - hp.x;
+  const dy = b.y - hp.y;
+  const d = Math.hypot(dx,dy);
+  const overlap = b.radius + pin.headR - d;
+  if(overlap > 0){
+    // simple impulse: relative velocity along normal
+    const nx = dx/d, ny = dy/d;
+    const relVel = b.vx*nx + b.vy*ny;
+    // normal impulse magnitude (elastic-ish)
+    const restitution = 0.4;
+    const impulse = -(1 + restitution) * relVel / (1/b.mass + 0.0);
+    // apply impulse to ball (move away)
+    b.vx += (impulse * nx) / b.mass;
+    b.vy += (impulse * ny) / b.mass;
+    // compute lever arm: vector from base to head rotated by theta
+    const lever = pin.height; // approx
+    // convert impulse to torque: torque = impulse * lever * sin(angle between normal and lever)
+    // approximate sin(...) as 1 for direct hit (gives satisfying tipping)
+    const torque = impulse * 0.6;
+    pin.applyTorque(torque);
+    // sonic feedback
+    playZerp(0.05 + Math.min(0.25, Math.abs(impulse)*0.002), 600 + Math.abs(impulse)*6);
+    playThump(0.02 + Math.min(0.12, Math.abs(impulse)*0.0012));
+  }
+}
+
+// ball vs lane edges / friction
+function updateBall(b, dt){
+  if(!b.inMotion) return;
+  // simple friction & air drag
+  const drag = 0.995 - (0.0005 * (b.mass));
+  b.vx *= Math.pow(drag, dt*60);
+  b.vy *= Math.pow(drag, dt*60);
+  // integrate
+  b.x += b.vx * dt;
+  b.y += b.vy * dt;
+  // keep above lane floor
+  const floor = lane.y + lane.h - 20;
+  if(b.y > floor){
+    b.y = floor;
+    b.vy *= -0.08; // small bounce
+    b.vx *= 0.94;
+  }
+  // slow to rest
+  if(Math.hypot(b.vx,b.vy) < 6) {
+    b.inMotion = false;
+    b.vx = b.vy = 0;
+  }
+  // wall collisions
+  if(b.x - b.radius < lane.x + 24){ b.x = lane.x + 24 + b.radius; b.vx *= -0.4; }
+  if(b.x + b.radius > lane.x + lane.w - 24){ b.x = lane.x + lane.w - 24 - b.radius; b.vx *= -0.4; }
+}
+
+// lizard logic
+function stepLizard(dt){
+  if(!lizardToggle.checked) return;
+  if(!lizard.active){
+    lizard.timer -= dt;
+    if(lizard.timer <= 0){
+      lizard.active = true;
+      // pick direction: left-to-right across lane
+      lizard.x = lane.x - 140;
+      lizard.y = lane.y + lane.h - 110 - Math.random()*40;
+      lizard.vx = 40 + Math.random()*80;
+    }
+  } else {
+    lizard.x += lizard.vx * dt;
+    // occasionally pause / change speed
+    if(Math.random() < 0.002) lizard.vx *= (0.6 + Math.random()*0.8);
+    // if off screen -> deactivate
+    if(lizard.x > lane.x + lane.w + 60){
+      lizard.active = false;
+      lizard.timer = 4 + Math.random()*8;
+    }
+    // collision with ball -> small impulse
+    if(ball.inMotion){
+      const overlapX = Math.abs((lizard.x + lizard.w/2) - ball.x);
+      const overlapY = Math.abs((lizard.y + lizard.h/2) - ball.y);
+      if(overlapX < ball.radius + lizard.w/2 && overlapY < ball.radius + lizard.h/2){
+        // nudge ball slightly
+        const push = Math.sign(ball.x - lizard.x) * 80 * (1/ball.mass);
+        ball.vx += push;
+        ball.vy -= 40 * (1/ball.mass);
+        playZerp(0.03, 1000);
+      }
+    }
+  }
+}
+
+// rendering helpers
+function drawRoundedRect(x,y,w,h,r,fill,stroke=false){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+  if(fill){ ctx.fillStyle = fill; ctx.fill(); }
+  if(stroke){ ctx.strokeStyle = stroke; ctx.stroke(); }
+}
+
+// particle effects when pin falls
+let particles = [];
+function emitParticles(x,y,count=10,color='#ffd7a6'){
+  for(let i=0;i<count;i++){
+    particles.push({
+      x:x, y:y,
+      vx:(Math.random()-0.5)*120, vy:(Math.random()-0.9)*120,
+      life:0.9 + Math.random()*0.8,
+      size: 2 + Math.random()*4,
+      color: color
+    });
+  }
+}
+function stepParticles(dt){
+  for(let i=particles.length-1;i>=0;i--){
+    const p = particles[i];
+    p.life -= dt;
+    if(p.life <= 0) particles.splice(i,1);
+    p.vx *= 0.995;
+    p.vy += 160 * dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+  }
+}
+
+// main loop
+function render(t){
+  const now = t/1000;
+  const dt = Math.min(0.033, now - lastTime);
+  lastTime = now;
+  perfTime = now;
+  // clear
+  ctx.clearRect(0,0,W,H);
+  // draw background vignette
+  const g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'rgba(8,18,24,0.9)');
+  g.addColorStop(1,'rgba(4,8,12,1)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+
+  // draw lane backdrop
+  drawRoundedRect(lane.x-6, lane.y-6, lane.w+12, lane.h+12, 18, 'rgba(255,255,255,0.02)');
+  // left & right gutters
+  drawRoundedRect(lane.x - 60, lane.y, 60, lane.h, 14, 'rgba(1,12,16,0.6)');
+  drawRoundedRect(lane.x + lane.w, lane.y, 60, lane.h, 14, 'rgba(1,12,16,0.6)');
+
+  // wooden planks
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(lane.x, lane.y, lane.w, lane.h);
+  ctx.clip();
+  const woodGrad = ctx.createLinearGradient(lane.x, lane.y, lane.x+lane.w, lane.y+lane.h);
+  woodGrad.addColorStop(0,'#7b4d2e'); woodGrad.addColorStop(0.5,'#b98648'); woodGrad.addColorStop(1,'#8c5b36');
+  ctx.fillStyle = woodGrad;
+  ctx.fillRect(lane.x, lane.y, lane.w, lane.h);
+  // lane lines
+  ctx.globalAlpha = 0.06;
+  for(let i=0;i<24;i++){
+    const x = lane.x + (i/24) * lane.w;
+    ctx.fillRect(x, lane.y, 10, lane.h);
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+
+  // update physics
+  // update pins
+  const windStrength = Number(windRange.value);
+  pins.forEach(p => p.step(dt, windStrength));
+
+  // ball updates
+  updateBall(ball, dt);
+
+  // lizard update
+  stepLizard(dt);
+
+  // check collisions ball -> pins
+  pins.forEach(pin => {
+    // skip if already fallen, but if newly fallen, emit particles + increment score
+    if(!pin.fallen){
+      handleBallPinCollision(ball, pin);
+      // check for fall detection (if just became fallen)
+      if(pin.fallen){
+        laneScore += 1;
+        playThump(0.09);
+        const hp = pin.headPos();
+        emitParticles(hp.x, hp.y, 12);
+      }
+    }
+  });
+
+  // particles step
+  stepParticles(dt);
+
+  // detect lane scoring finished? if ball stopped, tally
+  if(!ball.inMotion && launched){
+    // award score once and allow reset
+    score += laneScore;
+    laneScore = 0;
+    scoreEl.textContent = score;
+    launched = false;
+  }
+
+  // draw pins (back-to-front)
+  pins.forEach((pin,i)=>{
+    const baseX = pin.baseX, baseY = pin.baseY;
+    // shadow
+    ctx.beginPath();
+    ctx.ellipse(baseX + 6, baseY + 18, 18, 8, 0, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fill();
+
+    // pin body
+    ctx.save();
+    ctx.translate(baseX, baseY);
+    ctx.rotate(pin.theta);
+    // body
+    ctx.beginPath();
+    ctx.moveTo(0, -pin.height);
+    ctx.quadraticCurveTo(12,-pin.height+10,8,-pin.height+28);
+    ctx.quadraticCurveTo(18,-pin.height+44,0,-pin.height+58);
+    ctx.quadraticCurveTo(-18,-pin.height+44,-8,-pin.height+28);
+    ctx.quadraticCurveTo(-12,-pin.height+10,0,-pin.height);
+    ctx.closePath();
+    if(pin.fallen){
+      ctx.fillStyle = '#d3d3d3';
+    } else {
+      // glossy white with orange collar
+      const body = ctx.createLinearGradient(0,-pin.height,0,0);
+      body.addColorStop(0,'#ffffff');
+      body.addColorStop(0.7,'#f4f4f4');
+      ctx.fillStyle = body;
+    }
+    ctx.fill();
+    // collar
+    ctx.beginPath();
+    ctx.ellipse(0,-pin.height+28,12,6,0,0,Math.PI*2);
+    ctx.fillStyle = '#ff7043';
+    ctx.fill();
+    ctx.restore();
+    // head / top indicator (for collision)
+    const hp = pin.headPos();
+    ctx.beginPath();
+    ctx.arc(hp.x, hp.y, pin.headR, 0, Math.PI*2);
+    ctx.fillStyle = pin.fallen ? '#aaa' : '#fff';
+    ctx.fill();
+  });
+
+  // draw ball
+  // subtle shadow
+  ctx.beginPath();
+  ctx.ellipse(ball.x + 6, ball.y + 14, ball.radius*1.2, ball.radius*0.6, 0, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.fill();
+
+  // ball body gradient
+  const bgrad = ctx.createRadialGradient(ball.x - ball.radius/3, ball.y - ball.radius/3, 4, ball.x, ball.y, ball.radius+10);
+  bgrad.addColorStop(0,'#ffffff'); bgrad.addColorStop(0.2,'#e6f8ff'); bgrad.addColorStop(1,'#0a9bd1');
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI*2);
+  ctx.fillStyle = bgrad;
+  ctx.fill();
+
+  // ball finger holes (decorative)
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath();
+  ctx.arc(ball.x - 6, ball.y - 2, 2.8, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath();
+  ctx.arc(ball.x + 6, ball.y - 2, 2.2, 0, Math.PI*2); ctx.fill();
+
+  // aim indicator when dragging
+  if(dragging){
+    ctx.beginPath();
+    ctx.moveTo(ball.x, ball.y);
+    const aimEndX = ball.x + aimVec.x;
+    const aimEndY = ball.y + aimVec.y;
+    // dotted line
+    ctx.setLineDash([6,6]);
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(ball.x, ball.y);
+    ctx.lineTo(aimEndX, aimEndY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // power ring
+    const power = clamp(Math.hypot(aimVec.x,aimVec.y)/120,0,1.8);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, 30 + power*40, 0, Math.PI*2);
+    ctx.stroke();
+  }
+
+  // lizard draw
+  if(lizardToggle.checked && lizard.active){
+    ctx.save();
+    ctx.translate(lizard.x, lizard.y);
+    // small stylized lizard: body, tail, legs, eye
+    ctx.fillStyle = '#7ef08b';
+    ctx.beginPath();
+    ctx.ellipse(22,10,20,9, Math.sin(perfTime*6)*0.12, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(2,10); ctx.quadraticCurveTo(-8,0,-8,-6); ctx.quadraticCurveTo(-6,-1,2,10); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(38,12); ctx.quadraticCurveTo(58,16,78,6); ctx.lineWidth=3; ctx.strokeStyle='#6cd075'; ctx.stroke();
+    // eye
+    ctx.beginPath(); ctx.fillStyle='#053'; ctx.arc(18,6,2.6,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  // particles
+  particles.forEach(p=>{
+    ctx.beginPath();
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = clamp(p.life,0,1);
+    ctx.fillRect(p.x, p.y, p.size, p.size);
+    ctx.globalAlpha = 1;
+  });
+
+  // subtle UI overlay
+  ctx.fillStyle = 'rgba(255,255,255,0.02)';
+  ctx.fillRect(18,18,220,84);
+  // Title text
+  ctx.fillStyle = '#dff7ff';
+  ctx.font = '700 18px system-ui,Segoe UI';
+  ctx.fillText('Tiny Breeze Bowling', 28, 40);
+  ctx.font = '12px system-ui,Segoe UI';
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.fillText('Drag to aim • Release to shoot', 28, 60);
+  ctx.fillStyle = '#9fe6ff';
+  ctx.fillText('Score: ' + score, 28, 78);
+
+  requestAnimationFrame(render);
+}
+
+// initialize
+resetGame();
+requestAnimationFrame(render);
+
+// expose some methods for debugging if desired
+window.game = {resetGame, pins, ball};
+
+</script>
+</body>
+</html>
