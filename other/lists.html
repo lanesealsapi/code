@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beautiful Circular Linked List</title>
+<style>
+    
+  body {
+    margin: 0;
+    background-color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background: #0d0d0d;
+    font-family: 'Segoe UI', sans-serif;
+  }
+
+  .ring {
+    position: relative;
+    width: 500px;
+    height: 500px;
+  }
+
+  .node {
+    position: absolute;
+    width: 70px;
+    height: 70px;
+    background: linear-gradient(145deg, #3498db, #2980b9);
+    border-radius: 0%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    color: white;
+    box-shadow: 0 0 20px white;
+    transition: transform 0.3s;
+  }
+
+  .data {
+    position: absolute;
+    width: 25px;
+    height: 25px;
+    background: linear-gradient(45deg, white, white);
+    border-radius: 50%;
+    box-shadow: 0 0 15px #e74c3caa;
+    pointer-events: none;
+  }
+
+  /* Optional: glow effect on nodes when data passes */
+  .highlight {
+    box-shadow: 0 0 30px white, 0 0 40px white;
+    transform: scale(1.2);
+  }
+</style>
+</head>
+<body>
+<div class="ring" id="ring"></div>
+
+<script>
+// Define nodes
+const nodes = ['w', 'a', 'e', 'l', 'w', 'i','n'];
+const ring = document.getElementById('ring');
+const radius = 180;
+const center = 250;
+
+// Create node elements in a circle
+const nodeElements = nodes.map((label, i) => {
+  const angle = (2 * Math.PI / nodes.length) * i+20;
+  const x = center + radius * Math.cos(angle) - 35;
+  const y = center + radius * Math.sin(angle) - 35;
+  const div = document.createElement('div');
+  div.className = 'node';
+  div.innerText = label;
+  div.style.left = `${x}px`;
+  div.style.top = `${y}px`;
+  ring.appendChild(div);
+  return {div, angle};
+});
+
+// Create multiple data packets
+const dataPackets = [];
+const packetCount = 11;
+for (let i = 0; i < packetCount; i++) {
+  const data = document.createElement('div');
+  data.className = 'data';
+  ring.appendChild(data);
+  dataPackets.push({
+    element: data,
+    angle: (2 * Math.PI / packetCount) * i
+  });
+}
+
+// Animate packets hopping node-to-node
+
+function animate() {
+  dataPackets.forEach((packet, index) => {
+ 
+    packet.angle += 0.02 + index * 0.005; // Slight speed variation
+    const x = center + radius * Math.cos(packet.angle);
+    const y = center + radius * Math.sin(packet.angle);
+    packet.element.style.left = `${x}px`;
+    packet.element.style.top = `${y}px`;
+
+    // Highlight node when packet is near
+    nodeElements.forEach(node => {
+      const nx = center + radius * Math.cos(node.angle);
+      const ny = center + radius * Math.sin(node.angle);
+      const distance = Math.hypot(x+12.5 - nx, y+12.5 - ny);
+      if (distance < 30) {
+        node.div.classList.add('highlight');
+      } else {
+        node.div.classList.remove('highlight');
+      }
+    });
+  });
+
+  requestAnimationFrame(animate);
+}
+
+animate();
+</script>
+</body>
+</html>
