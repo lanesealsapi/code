@@ -435,6 +435,7 @@ function handleBallPinCollision(b, pin){
     // sonic feedback
     playZerp(0.05 + Math.min(0.25, Math.abs(impulse)*0.002), 600 + Math.abs(impulse)*6);
     playThump(0.02 + Math.min(0.12, Math.abs(impulse)*0.0012));
+    pin.baseX = -100;
   }
 }
 
