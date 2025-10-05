@@ -1,0 +1,8 @@
+tog.blend("music,"color","emotion");
+#return art;
+
+tog.ai("hello_there");
+#api respond;
+
+#no-api-keys-required
+tog.listen("audio-in");
