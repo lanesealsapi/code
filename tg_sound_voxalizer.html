@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TG - Ring Visualizer with Particles</title>
+<style>
+  body {
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background: black;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+  }
+</style>
+</head>
+<body>
+TG
+<canvas id="visualizer"></canvas>
+
+<script>
+const canvas = document.getElementById('visualizer');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let audioCtx, analyser, dataArray, source;
+const particles = [];
+
+class Particle {
+  constructor(cx, cy) {
+    this.x = cx;
+    this.y = cy;
+    this.radius = Math.random() * 2 + 1;
+    this.angle = Math.random() * 2 * Math.PI;
+    this.distance = 60 + Math.random() * 200;
+    this.speed = 0.01 + Math.random() * 0.02;
+    this.hue = Math.random() * 360;
+  }
+  update() {
+    this.angle += this.speed;
+    this.x = canvas.width / 2 + Math.cos(this.angle) * this.distance;
+    this.y = canvas.height / 2 + Math.sin(this.angle) * this.distance;
+  }
+  draw() {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
+    //ctx.fillStyle = `hsl(${this.hue}, 100%, 50%)`;
+    //ctx.shadowColor = `hsl(${this.hue}, 100%, 50%)`;
+    ctx.fillStyle = '#fff';
+    ctx.shadowColor = '#fff';
+    ctx.shadowBlur = 8;
+    ctx.fill();
+  }
+}
+
+function initParticles(count = 280) {
+  for(let i = 0; i < count; i++) {
+    particles.push(new Particle(canvas.width/2, canvas.height/2));
+  }
+}
+
+async function initAudio() {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = audioCtx.createAnalyser();
+  source = audioCtx.createMediaStreamSource(stream);
+  source.connect(analyser);
+
+  analyser.fftSize = 512;
+  dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+  initParticles();
+  animate();
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  // Subtle trail effect by partially clearing canvas
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  analyser.getByteFrequencyData(dataArray);
+
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  const radius = 20;
+  const barCount = dataArray.length;
+
+  // Draw bars
+  for(let i = 0; i < barCount; i++){
+    const angle = (i / barCount) * 2 * Math.PI;
+    const barHeight = dataArray[i] * 1.5;
+    const x1 = cx + Math.cos(angle) * radius;
+    const y1 = cy + Math.sin(angle) * radius;
+    const x2 = cx + Math.cos(angle) * (radius + barHeight);
+    const y2 = cy + Math.sin(angle) * (radius + barHeight);
+
+    const hue = (i / barCount) * 360;
+    ctx.strokeStyle = `hsl(${hue}, 100%, 50%)`;
+    ctx.shadowColor = `hsl(${hue}, 100%, 50%)`;
+    ctx.shadowBlur = 12;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+  }
+
+  // Draw center ring
+  ctx.shadowBlur = 0;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+  ctx.strokeStyle = white;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Update & draw particles
+  particles.forEach(p => {
+    p.update();
+    p.draw();
+  });
+}
+
+initAudio();
+</script>
+</body>
+</html>
