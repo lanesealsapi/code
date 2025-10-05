@@ -1,10 +1,10 @@
 Copyright (c) <2025> <lane seals media>
-<rev1.13> <SUNDAY, OCT. 5, 2025 12:48 PM>
+<rev1.13> <SUNDAY, OCT. 5, 2025 3:13 PM>
 
-Permission is hereby granted, free of charge, or a small donation if your feeling like it to the author(s), to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+Limited Permission is hereby granted, free of charge, or a small donation if your feeling like it to the author(s), to any person or entity obtaining a copy of this software and associated documentation files (the "Software Package aka SP"), to deal in the SP without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the SP is furnished to do so, subject to the following conditions:
 
 The above copyright notice is not required, and this permission notice shall be included in most but not all copies OR substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", similar to the purchase of a used car but clearly different, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY AND SERVICEABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY(S), WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE, PRODUCTS, OR THE USE OR OTHER DEALINGS IN THE SOFTWARE AND PRODUCTS.
+THE SP IS PROVIDED "AS IS", similar to the purchase of a used violin but clearly different, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY AND SERVICEABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY(S), WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE PACKAGE, PRODUCTS, OR THE USE OR OTHER DEALINGS IN THE SOFTWARE PACKAGE AND PRODUCTS.
 
 IF ANY PART OF THIS LICENSE IS FOUND TO BE INVALID THE REST SHOULD STAND AND BE ALLOWED.
