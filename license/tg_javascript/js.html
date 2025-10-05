@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>JavaScript Fundamentals – Quick Reference</title>
+  <style>
+    /* ---------- Global Styles ---------- */
+    body {
+      margin: 0;
+      font-family: "Inter", Arial, sans-serif;
+      background: linear-gradient(135deg, #0d0d0d, #1a1a1a);
+      color: #eee;
+      display: flex;
+      min-height: 100vh;
+    }
+    main {
+      flex: 1;
+      padding: 30px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 2.2rem;
+      margin-bottom: 10px;
+      color: #00f5d4;
+    }
+    p.intro {
+      font-size: 1.1rem;
+      margin-bottom: 30px;
+      color: #bbb;
+    }
+
+    /* ---------- Sidebar ---------- */
+    .sidebar {
+      position: sticky;
+      top: 0;
+      align-self: flex-start;
+      background: rgba(255,255,255,0.05);
+      border-right: 1px solid rgba(255,255,255,0.1);
+      backdrop-filter: blur(10px);
+      padding: 20px;
+      min-width: 220px;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    .sidebar h2 {
+      font-size: 1.2rem;
+      color: #00e6e6;
+      margin-bottom: 10px;
+    }
+    .sidebar a {
+      display: block;
+      color: #ccc;
+      text-decoration: none;
+      margin: 6px 0;
+      padding: 6px 10px;
+      border-radius: 6px;
+      transition: 0.2s;
+      font-size: 0.95rem;
+    }
+    .sidebar a:hover {
+      background: #00f5d4;
+      color: #111;
+    }
+
+    /* ---------- Cards ---------- */
+    .card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px;
+      padding: 20px;
+      margin: 20px 0;
+      backdrop-filter: blur(10px);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+    }
+    h2 {
+      color: #00e6e6;
+      font-size: 1.3rem;
+      margin-top: 0;
+    }
+    pre {
+      background: #111;
+      padding: 10px 14px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 0.9rem;
+      margin: 12px 0;
+    }
+
+    /* ---------- Buttons ---------- */
+    button {
+      background: #00f5d4;
+      color: #111;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      margin-top: 10px;
+      transition: all 0.25s ease;
+    }
+    button:hover {
+      background: #00d4b0;
+      transform: translateY(-2px);
+    }
+
+    /* ---------- Output ---------- */
+    .output {
+      margin-top: 12px;
+      background: #0a0a0a;
+      border: 1px solid rgba(0,255,200,0.2);
+      padding: 10px;
+      border-radius: 8px;
+      color: #00ff95;
+      font-family: "Fira Code", monospace;
+      min-height: 20px;
+      font-size: 0.9rem;
+    }
+
+    /* ---------- Smooth Scroll ---------- */
+    html {
+      scroll-behavior: smooth;
+    }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <h2>📘 Topics</h2>
+    <a href="#variables">1. Variables</a>
+    <a href="#functions">2. Functions</a>
+    <a href="#conditionals">3. Conditionals</a>
+    <a href="#loops">4. Loops</a>
+    <a href="#events">5. Events</a>
+    <a href="#arrays">6. Arrays</a>
+    <a href="#objects">7. Objects</a>
+    <a href="#dom">8. DOM</a>
+    <a href="#scope">9. Scope</a>
+    <a href="#templates">10. Templates</a>
+    <a href="#es6">11. ES6</a>
+  </nav>
+
+  <!-- Main Content -->
+  <main>
+    <h1>🚀 JavaScript Fundamentals</h1>
+    <p class="intro">Click the buttons to run interactive examples directly in your browser.</p>
+
+    <!-- Variables -->
+    <div class="card" id="variables">
+      <h2>1. Variables</h2>
+      <pre>let name = "L.A.x";
+const pi = 3.14;
+var oldWay = "still works";</pre>
+      <button onclick="exampleVariables()">Run Example</button>
+      <div class="output" id="out1"></div>
+    </div>
+
+    <!-- Functions -->
+    <div class="card" id="functions">
+      <h2>2. Functions</h2>
+      <pre>function greet(person) {
+  return "Hello " + person + "!";
+}
+const arrow = (x) => x * 2;</pre>
+      <button onclick="exampleFunctions()">Run Example</button>
+      <div class="output" id="out2"></div>
+    </div>
+
+    <!-- Conditionals -->
+    <div class="card" id="conditionals">
+      <h2>3. Conditionals</h2>
+      <pre>let age = 20;
+if (age >= 18) {
+  "Adult";
+} else {
+  "Minor";
+}</pre>
+      <button onclick="exampleConditionals()">Run Example</button>
+      <div class="output" id="out3"></div>
+    </div>
+
+    <!-- Loops -->
+    <div class="card" id="loops">
+      <h2>4. Loops</h2>
+      <pre>for (let i = 1; i <= 5; i++) {
+  console.log(i);
+}
+let n = 0;
+while (n < 3) { n++; }</pre>
+      <button onclick="exampleLoops()">Run Example</button>
+      <div class="output" id="out4"></div>
+    </div>
+
+    <!-- Events -->
+    <div class="card" id="events">
+      <h2>5. Events</h2>
+      <pre>document.querySelector("button")
+  .addEventListener("click", () => {
+    alert("You clicked!");
+  });</pre>
+      <button onclick="exampleEvents(this)">Click Me</button>
+      <div class="output" id="out5"></div>
+    </div>
+
+    <!-- Arrays -->
+    <div class="card" id="arrays">
+      <h2>6. Arrays</h2>
+      <pre>let fruits = ["apple", "banana", "cherry"];
+fruits.push("date");
+fruits.map(f => f.toUpperCase());</pre>
+      <button onclick="exampleArrays()">Run Example</button>
+      <div class="output" id="out6"></div>
+    </div>
+
+    <!-- Objects -->
+    <div class="card" id="objects">
+      <h2>7. Objects</h2>
+      <pre>let person = {
+  name: "L.A.x",
+  age: 25,
+  speak() { return "Hi!"; }
+};</pre>
+      <button onclick="exampleObjects()">Run Example</button>
+      <div class="output" id="out7"></div>
+    </div>
+
+    <!-- DOM -->
+    <div class="card" id="dom">
+      <h2>8. DOM Manipulation</h2>
+      <pre>document.getElementById("demo").textContent = "Changed!";</pre>
+      <button onclick="exampleDOM()">Run Example</button>
+      <div class="output" id="out8"></div>
+    </div>
+
+    <!-- Scope -->
+    <div class="card" id="scope">
+      <h2>9. Scope</h2>
+      <pre>function testScope() {
+  let local = "inside";
+  return local;
+}
+var global = "outside";</pre>
+      <button onclick="exampleScope()">Run Example</button>
+      <div class="output" id="out9"></div>
+    </div>
+
+    <!-- Template Literals -->
+    <div class="card" id="templates">
+      <h2>10. Template Literals</h2>
+      <pre>let user = "L.A.x";
+`Hello, ${user}!`</pre>
+      <button onclick="exampleTemplates()">Run Example</button>
+      <div class="output" id="out10"></div>
+    </div>
+
+    <!-- ES6 -->
+    <div class="card" id="es6">
+      <h2>11. ES6 Features</h2>
+      <pre>const add = (a=1, b=2) => a+b;
+const {name, age} = {name:"L.A.x", age:99};</pre>
+      <button onclick="exampleES6()">Run Example</button>
+      <div class="output" id="out11"></div>
+    </div>
+  </main>
+
+  <script>
+    function exampleVariables() {
+      let name = "L.A.x"; const pi = 3.14; var oldWay = "still works";
+      document.getElementById("out1").textContent =
+        `${name}, pi=${pi}, old=${oldWay}`;
+    }
+    function exampleFunctions() {
+      function greet(person){ return "Hello " + person + "!"; }
+      const arrow = (x) => x * 2;
+      document.getElementById("out2").textContent =
+        greet("World") + " | Double 4 = " + arrow(4);
+    }
+    function exampleConditionals() {
+      let age = 20;
+      let result = age >= 18 ? "Adult" : "Minor";
+      document.getElementById("out3").textContent = "Result: " + result;
+    }
+    function exampleLoops() {
+      let out=""; for (let i=1;i<=5;i++) out+=i+" ";
+      let n=0; while(n<3){n++;}
+      document.getElementById("out4").textContent =
+        out.trim() + " | while count=" + n;
+    }
+    function exampleEvents(btn) {
+      document.getElementById("out5").textContent =
+        "You clicked: " + btn.textContent;
+    }
+    function exampleArrays() {
+      let fruits=["apple","banana","cherry"]; fruits.push("date");
+      document.getElementById("out6").textContent =
+        fruits.map(f=>f.toUpperCase()).join(", ");
+    }
+    function exampleObjects() {
+      let person={name:"L.A.x", age:25, speak(){return "Hi!";}};
+      document.getElementById("out7").textContent =
+        `${person.name} (${person.age}) says: ${person.speak()}`;
+    }
+    function exampleDOM() {
+      let el=document.getElementById("out8");
+      el.textContent="DOM changed dynamically!";
+      el.style.color="#ffd166";
+    }
+    function exampleScope() {
+      var global="outside";
+      function testScope(){let local="inside"; return local;}
+      document.getElementById("out9").textContent =
+        "Global: " + global + " | Local: " + testScope();
+    }
+    function exampleTemplates() {
+      let user="L.A.x";
+      document.getElementById("out10").textContent =
+        `Hello, ${user}! 2+2=${2+2}`;
+    }
+    function exampleES6() {
+      const add=(a=1,b=2)=>a+b;
+      const {name,age}={name:"L.A.x", age:99};
+      document.getElementById("out11").textContent =
+        `Add()=${add()} | Destructured: ${name}, ${age}`;
+    }
+  </script>
+</body>
+</html>
