@@ -1,7 +1,7 @@
 Copyright (c) <2025> <lane seals media>
 <rev1.13> <SUNDAY, OCT. 5, 2025 3:13 PM>
 
-Limited Permission is hereby granted, free of charge, or a small donation if your feeling like it to the author(s), to any person or entity obtaining a copy of this software and associated documentation files (the "Software Package aka SP"), to deal in the SP without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the SP is furnished to do so, subject to the following conditions:
+Limited Permission is hereby granted, free of charge, or a small donation if your feeling like it to the author(s), to any person or entity obtaining a copy of this software and associated documentation files (the "Software Package aka SP" contained - in the subdirectories relative to this .txt license file -), to deal in the SP without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the SP is furnished to do so, subject to the following conditions:
 
 The above copyright notice is not required, and this permission notice shall be included in most but not all copies OR substantial portions of the Software.
 
