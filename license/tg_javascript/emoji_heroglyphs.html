@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Emoji Hieroglyph Generator — GlyphEmoji</title>
+<style>
+  body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial;line-height:1.4;margin:18px;background:#0f172a;color:#e6eef8}
+  .card{background:#0b1220;border:1px solid #122033;padding:16px;border-radius:10px;box-shadow:0 6px 18px rgba(2,6,23,0.6)}
+  h1{font-size:20px;margin:0 0 10px}
+  textarea,input{width:100%;padding:10px;border-radius:8px;border:1px solid #233244;background:#071027;color:#e6eef8}
+  button{padding:8px 12px;border-radius:8px;border:0;background:#06b6d4;color:#042027;margin-right:8px;cursor:pointer}
+  .glyphs{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .glyph{background:linear-gradient(180deg,#071827,#06202a);padding:10px;border-radius:8px;border:1px solid #123445;min-width:64px;text-align:center;font-size:26px}
+  .info{margin-top:12px;color:#9fb7d2}
+  table{width:100%;border-collapse:collapse;margin-top:12px}
+  th,td{padding:6px;border-bottom:1px dashed #123445;text-align:left}
+  code{background:#071827;padding:4px 6px;border-radius:6px;color:#bfeaf8}
+  .small{font-size:12px;color:#9fb7d2}
+  .sidebar{margin-top:12px}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Emoji Hieroglyph Generator — GlyphEmoji</h1>
+  <div class="small">Type something, press <strong>Encode</strong>, view hieroglyphs. Press <strong>Explain</strong> to show the language guide.</div>
+
+  <div style="margin-top:12px">
+    <textarea id="inputText" rows="3" placeholder="Type an English phrase, e.g. 'I love the sun'"></textarea>
+    <div style="margin-top:8px">
+      <button id="encodeBtn">Encode</button>
+      <button id="decodeBtn">Decode selected</button>
+      <button id="explainBtn">Explain language</button>
+      <button id="copyBtn">Copy glyphs</button>
+    </div>
+  </div>
+
+  <div class="glyphs" id="glyphOutput" aria-live="polite" style="margin-top:12px"></div>
+
+  <div class="info" id="phoneticOutput"></div>
+
+  <div class="sidebar card" style="margin-top:12px;">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <strong>Sample syllabary (editable in JS)</strong>
+      <span class="small">Syllable → Emoji</span>
+    </div>
+    <div id="tableWrap"></div>
+    <div class="small" style="margin-top:8px">Rules: CV or V syllables. Small markers: ⏳ past, ▶️ present, 🔁 habitual, • plural, ❓ question.</div>
+  </div>
+</div>
+
+<script>
+/* =========================
+   Editable syllable → emoji map
+   Add or change pairs here.
+   Keep keys lowercase, two-letter CV or single vowel.
+   ========================= */
+const SYLLABLE_TO_EMOJI = {
+  // vowels
+  "a":"🔴","e":"🔵","i":"🟢","o":"🟡","u":"⚪",
+  // k- series
+  "ka":"🌞","ke":"🌙","ki":"⭐","ko":"🔥","ku":"💧",
+  // m- series
+  "ma":"🐒","me":"🐧","mi":"🐱","mo":"🐻","mu":"🦄",
+  // s- series
+  "sa":"🐍","se":"🐬","si":"🐦","so":"🐶","su":"🐢",
+  // l- series
+  "la":"🥐","le":"🍞","li":"🍋","lo":"🍊","lu":"🍇",
+  // p- series
+  "pa":"🚀","pe":"✈️","pi":"🛰️","po":"🛸","pu":"🛶",
+  // r- series
+  "ra":"⚓","re":"⛵","ri":"🚢","ro":"🏝️","ru":"🗺️",
+  // t- series
+  "ta":"🌳","te":"🌲","ti":"🌾","to":"🍂","tu":"🍁",
+  // b- series
+  "ba":"🏠","be":"🏡","bi":"🏘️","bo":"🏚️","bu":"🏢",
+  // n- series
+  "na":"🌻","ne":"🌼","ni":"🌸","no":"🌺","nu":"🌹",
+  // d- series
+  "da":"🔑","de":"🗝️","di":"🛎️","do":"🔔","du":"📯",
+  // f- series
+  "fa":"⚡","fe":"🔥","fi":"💥","fo":"🌪️","fu":"🌈",
+  // g- series
+  "ga":"🪨","ge":"⛰️","gi":"🏔️","go":"🗻","gu":"🧭",
+  // h- series
+  "ha":"💡","he":"🔦","hi":"📡","ho":"🔌","hu":"🔋",
+  // extra common syllables
+  "ya":"🍏","yo":"🍎","wa":"🍑","wi":"🍒","we":"🥝",
+  // punctuation/markers
+  "space":"⚪", // word separator
+  "past":"⏳","present":"▶️","habit":"🔁","plural":"•","question":"❓","exclaim":"❗"
+};
+
+/* reverse map */
+const EMOJI_TO_SYLLABLE = {};
+for (const [s,e] of Object.entries(SYLLABLE_TO_EMOJI)){
+  EMOJI_TO_SYLLABLE[e]=s;
+}
+
+/* utility: build table view */
+function buildTable(){
+  const wrap=document.getElementById('tableWrap');
+  const rows=[];
+  for(const s of Object.keys(SYLLABLE_TO_EMOJI)){
+    rows.push({s, e:SYLLABLE_TO_EMOJI[s]});
+  }
+  rows.sort((a,b)=>a.s.localeCompare(b.s));
+  let html='<table><thead><tr><th>syllable</th><th>emoji</th></tr></thead><tbody>';
+  for(const r of rows){
+    html += `<tr><td><code>${r.s}</code></td><td style="font-size:20px">${r.e}</td></tr>`;
+  }
+  html += '</tbody></table>';
+  wrap.innerHTML=html;
+}
+buildTable();
+
+/* Transliteration: rough English -> CV syllables
+   Strategy: lower-case, keep letters a-z, then greedily match (consonant+vowel) else vowel alone, else single consonant -> treated as consonant+'a' as fallback.
+*/
+const vowels = new Set(['a','e','i','o','u']);
+const consonants = new Set(['b','c','d','f','g','h','j','k','l','m','n','p','q','r','s','t','v','w','x','y','z']);
+
+function normalizeInput(s){
+  return s.normalize('NFKD').toLowerCase().replace(/[^a-z\s']/g,'').replace(/\s+/g,' ').trim();
+}
+
+function englishToSyllables(text){
+  text = normalizeInput(text);
+  const words = text.split(' ');
+  const result = [];
+  for(const w of words){
+    let i=0;
+    let syls = [];
+    while(i < w.length){
+      // try CV
+      if(i+1 < w.length && consonants.has(w[i]) && vowels.has(w[i+1])){
+        syls.push(w[i]+w[i+1]);
+        i += 2;
+        continue;
+      }
+      // try V
+      if(vowels.has(w[i])){
+        syls.push(w[i]);
+        i += 1;
+        continue;
+      }
+      // try consonant + default vowel 'a'
+      if(consonants.has(w[i])){
+        syls.push(w[i]+'a');
+        i += 1;
+        continue;
+      }
+      // fallback single char
+      syls.push(w[i]);
+      i += 1;
+    }
+    result.push(syls);
+  }
+  return result; // array of arrays (words -> syllables)
+}
+
+/* Map syllables -> emojis (use space marker between words) */
+function syllablesToEmojis(wordsSyllables){
+  const out = [];
+  for(let wi=0; wi<wordsSyllables.length; wi++){
+    const syls = wordsSyllables[wi];
+    for(const s of syls){
+      if(SYLLABLE_TO_EMOJI[s]){
+        out.push(SYLLABLE_TO_EMOJI[s]);
+      } else {
+        // unknown: map first letter to vowel/ka fallback, or use a placeholder
+        const fallback = (s.length>0)? (SYLLABLE_TO_EMOJI[s[0]+'a'] || '❔') : '❔';
+        out.push(fallback);
+      }
+    }
+    if(wi < wordsSyllables.length-1) out.push(SYLLABLE_TO_EMOJI['space']);
+  }
+  return out;
+}
+
+/* decode emojis -> syllables (approx) */
+function emojisToSyllables(emojis){
+  return emojis.map(e => EMOJI_TO_SYLLABLE[e] || '?');
+}
+
+/* syllables -> text approximation */
+function syllablesToText(wordsSyllables){
+  // naive: join syllables, remove the default 'a' appended for consonants used as fallback
+  const words = wordsSyllables.map(ws => ws.join(''));
+  return words.join(' ');
+}
+
+/* UI wiring */
+const encodeBtn = document.getElementById('encodeBtn');
+const decodeBtn = document.getElementById('decodeBtn');
+const explainBtn = document.getElementById('explainBtn');
+const copyBtn = document.getElementById('copyBtn');
+const inputText = document.getElementById('inputText');
+const glyphOutput = document.getElementById('glyphOutput');
+const phoneticOutput = document.getElementById('phoneticOutput');
+
+function renderGlyphs(emojis){
+  glyphOutput.innerHTML = '';
+  for(const e of emojis){
+    const d = document.createElement('div');
+    d.className='glyph';
+    d.textContent = e;
+    d.title = EMOJI_TO_SYLLABLE[e] ? EMOJI_TO_SYLLABLE[e] : 'unknown';
+    d.onclick = ()=> {
+      d.classList.toggle('selected');
+    };
+    glyphOutput.appendChild(d);
+  }
+  phoneticOutput.innerHTML = `<div class="small">Click glyphs to select; press Decode selected to decode selected glyphs.</div>`;
+}
+
+encodeBtn.onclick = ()=>{
+  const text = inputText.value || '';
+  if(!text.trim()){
+    alert('Type a phrase to encode.');
+    return;
+  }
+  const sylsByWord = englishToSyllables(text);
+  const flat = syllablesToEmojis(sylsByWord);
+  renderGlyphs(flat);
+  // show phonetic mapping
+  const pretty = sylsByWord.map(w=>w.join('-')).join(' ⛛ ');
+  phoneticOutput.innerHTML = `<div><strong>Phonetic:</strong> ${pretty}</div>`;
+};
+
+decodeBtn.onclick = ()=>{
+  // decode selected glyphs; if none selected decode all
+  const nodes = [...glyphOutput.children];
+  let selected = nodes.filter(n=>n.classList.contains('selected')).map(n=>n.textContent);
+  if(selected.length === 0) selected = nodes.map(n=>n.textContent);
+  const syls = emojisToSyllables(selected);
+  const approx = syllablesToText([syls]); // naive single "word"
+  phoneticOutput.innerHTML = `<div><strong>Decoded syllables:</strong> ${syls.join(', ')}</div>
+  <div><strong>Approx text:</strong> ${approx}</div>`;
+};
+
+explainBtn.onclick = ()=>{
+  const explainText = `
+  GlyphEmoji language — quick guide:
+
+  • Syllable system: CV (consonant+vowel) or V. We transliterate English roughly into CV syllables.
+  • Consonants: b c d f g h j k l m n p q r s t v w x y z
+  • Vowels: a e i o u (short)
+  • Common markers: ⏳ past, ▶️ present/prog, 🔁 habitual, • plural, ⚪ word separator, ❓ question.
+  • Layout: read left→right. Adjectives are placed before nouns (place adjective emoji before noun emoji).
+  • Decoding is approximate — different spellings can map to same sounds.
+  
+  Example mapping subset (syllable → emoji): ${Object.entries(SYLLABLE_TO_EMOJI).slice(0,12).map(([s,e])=>s+'='+e).join('  ')}
+  `;
+  alert(explainText);
+};
+
+copyBtn.onclick = ()=>{
+  const glyphs = [...glyphOutput.children].map(n=>n.textContent).join(' ');
+  navigator.clipboard.writeText(glyphs).then(()=>alert('Copied glyphs to clipboard.'));
+};
+
+/* initial demo */
+inputText.value = "I love cats";
+encodeBtn.click();
+</script>
+</body>
+</html>
