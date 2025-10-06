@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Polyglot: 5 Concepts in C++, Java, JavaScript, Swift, Objective-C, Python, C</title>
+<style>
+  :root{--bg:#0f1724;--card:#071025;--muted:#94a3b8;--accent:#60a5fa;--code-bg:#0b1220}
+  html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;color:#e6eef8;background:linear-gradient(180deg,#071024,#031022)}
+  header{padding:18px 22px;border-bottom:1px solid rgba(255,255,255,0.03);display:flex;align-items:center;gap:12px}
+  h1{font-size:18px;margin:0}
+  .sub{color:var(--muted);font-size:13px}
+  .wrap{padding:18px;display:grid;grid-template-columns:1fr;gap:14px}
+  .grid{display:grid;grid-template-columns: 200px 1fr;gap:14px;align-items:start}
+  .langs{display:flex;gap:8px;flex-wrap:wrap}
+  .lang{background:rgba(255,255,255,0.03);padding:8px 10px;border-radius:8px;font-weight:700}
+  .cards{display:grid;grid-template-columns:repeat(7,1fr);gap:12px;align-items:start}
+  .card{background:var(--card);border-radius:8px;padding:10px;min-height:120px;box-shadow:0 6px 18px rgba(2,6,23,0.6)}
+  .card h3{margin:0 0 8px 0;font-size:13px}
+  .rowTitle{writing-mode:vertical-rl;text-orientation:mixed;color:var(--muted);text-align:center;padding:8px 6px;font-weight:700}
+  pre{background:var(--code-bg);padding:10px;border-radius:6px;overflow:auto;margin:0;font-size:12px;line-height:1.45}
+  .bar{display:flex;gap:8px;align-items:center}
+  button.copy{background:#0b1220;border:1px solid rgba(255,255,255,0.03);color:var(--muted);padding:6px 8px;border-radius:6px;cursor:pointer}
+  .controls{display:flex;gap:8px;align-items:center}
+  footer{padding:12px 18px;color:var(--muted);font-size:13px}
+  @media (max-width:1200px){ .cards{grid-template-columns:repeat(2,1fr);} .grid{grid-template-columns:1fr;} .rowTitle{display:none} }
+  @media (max-width:640px){ pre{font-size:11px} }
+</style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Polyglot: 5 Key Programming Concepts</h1>
+      <div class="sub">C++, Java, JavaScript, Swift, Objective‑C, Python, and C shown side-by-side. Click copy to copy a snippet.</div>
+    </div>
+    <div style="margin-left:auto" class="controls">
+      <button id="download">Download HTML</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="grid">
+      <div style="display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center">
+        <div class="rowTitle">Concepts →</div>
+        <div class="rowTitle">Simple Ops</div>
+        <div class="rowTitle">Conditionals</div>
+        <div class="rowTitle">Loops</div>
+        <div class="rowTitle">Functions / Methods</div>
+        <div class="rowTitle">Classes / Structs</div>
+      </div>
+
+      <div style="overflow:auto">
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
+          <div class="langs">
+            <span class="lang">C++</span>
+            <span class="lang">Java</span>
+            <span class="lang">JavaScript</span>
+            <span class="lang">Swift</span>
+            <span class="lang">Objective‑C</span>
+            <span class="lang">Python</span>
+            <span class="lang">C</span>
+          </div>
+        </div>
+
+        <div class="cards" id="cards">
+          <!-- 1 Simple Ops -->
+          <div class="card"><h3>Simple Ops — C++</h3><pre id="cxx-op">#include &lt;iostream&gt;
+int main(){
+  int a = 7; double b = 3.5;
+  std::cout << "sum: " << (a + b) << "\n";
+  return 0;
+}</pre><div class="bar"><button class="copy" data-target="cxx-op">Copy</button></div></div>
+
+          <div class="card"><h3>Simple Ops — Java</h3><pre id="java-op">public class App{
+  public static void main(String[]args){
+    int a=7; double b=3.5;
+    System.out.println("sum: " + (a + b));
+  }
+}</pre><div class="bar"><button class="copy" data-target="java-op">Copy</button></div></div>
+
+          <div class="card"><h3>Simple Ops — JavaScript</h3><pre id="js-op">const a = 7, b = 3.5;
+console.log(`sum: ${a + b}`);</pre><div class="bar"><button class="copy" data-target="js-op">Copy</button></div></div>
+
+          <div class="card"><h3>Simple Ops — Swift</h3><pre id="swift-op">let a = 7
+let b = 3.5
+print("sum: \(Double(a) + b)")</pre><div class="bar"><button class="copy" data-target="swift-op">Copy</button></div></div>
+
+          <div class="card"><h3>Simple Ops — Objective‑C</h3><pre id="objc-op">#import &lt;Foundation/Foundation.h&gt;
+int main(){ @autoreleasepool{
+  int a = 7; double b = 3.5;
+  NSLog(@"sum: %f", a + b);
+  return 0; }
+}</pre><div class="bar"><button class="copy" data-target="objc-op">Copy</button></div></div>
+
+          <div class="card"><h3>Simple Ops — Python</h3><pre id="py-op">a = 7
+b = 3.5
+print(f"sum: {a + b}")</pre><div class="bar"><button class="copy" data-target="py-op">Copy</button></div></div>
+
+          <div class="card"><h3>Simple Ops — C</h3><pre id="c-op">#include &lt;stdio.h&gt;
+int main(){
+  int a=7; double b=3.5;
+  printf("sum: %g\n", a + b);
+  return 0;
+}</pre><div class="bar"><button class="copy" data-target="c-op">Copy</button></div></div>
+
+          <!-- 2 Conditionals -->
+          <div class="card"><h3>Conditionals — C++</h3><pre id="cxx-if">int x = 10;
+if(x &gt; 5) std::cout << "big\n";
+else std::cout << "small\n";</pre><div class="bar"><button class="copy" data-target="cxx-if">Copy</button></div></div>
+
+          <div class="card"><h3>Conditionals — Java</h3><pre id="java-if">int x = 10;
+if(x > 5) System.out.println("big");
+else System.out.println("small");</pre><div class="bar"><button class="copy" data-target="java-if">Copy</button></div></div>
+
+          <div class="card"><h3>Conditionals — JavaScript</h3><pre id="js-if">const x = 10;
+console.log(x > 5 ? 'big' : 'small');</pre><div class="bar"><button class="copy" data-target="js-if">Copy</button></div></div>
+
+          <div class="card"><h3>Conditionals — Swift</h3><pre id="swift-if">let x = 10
+print(x > 5 ? "big" : "small")</pre><div class="bar"><button class="copy" data-target="swift-if">Copy</button></div></div>
+
+          <div class="card"><h3>Conditionals — Objective‑C</h3><pre id="objc-if">int x = 10;
+NSLog(@"%@", (x > 5) ? @"big" : @"small");</pre><div class="bar"><button class="copy" data-target="objc-if">Copy</button></div></div>
+
+          <div class="card"><h3>Conditionals — Python</h3><pre id="py-if">x = 10
+print('big' if x > 5 else 'small')</pre><div class="bar"><button class="copy" data-target="py-if">Copy</button></div></div>
+
+          <div class="card"><h3>Conditionals — C</h3><pre id="c-if">int x = 10;
+printf("%s\n", (x > 5) ? "big" : "small");</pre><div class="bar"><button class="copy" data-target="c-if">Copy</button></div></div>
+
+          <!-- 3 Loops -->
+          <div class="card"><h3>Loops — C++</h3><pre id="cxx-loop">for(int i=0;i&lt;5;++i) std::cout << i << ' ';
+std::cout << '\n';</pre><div class="bar"><button class="copy" data-target="cxx-loop">Copy</button></div></div>
+
+          <div class="card"><h3>Loops — Java</h3><pre id="java-loop">for(int i=0;i&lt;5;i++) System.out.print(i + " ");
+System.out.println();</pre><div class="bar"><button class="copy" data-target="java-loop">Copy</button></div></div>
+
+          <div class="card"><h3>Loops — JavaScript</h3><pre id="js-loop">for(let i=0;i&lt;5;i++) console.log(i);</pre><div class="bar"><button class="copy" data-target="js-loop">Copy</button></div></div>
+
+          <div class="card"><h3>Loops — Swift</h3><pre id="swift-loop">for i in 0..<5 { print(i) }</pre><div class="bar"><button class="copy" data-target="swift-loop">Copy</button></div></div>
+
+          <div class="card"><h3>Loops — Objective‑C</h3><pre id="objc-loop">for(int i=0;i&lt;5;i++) NSLog(@"%d", i);</pre><div class="bar"><button class="copy" data-target="objc-loop">Copy</button></div></div>
+
+          <div class="card"><h3>Loops — Python</h3><pre id="py-loop">for i in range(5):
+  print(i)</pre><div class="bar"><button class="copy" data-target="py-loop">Copy</button></div></div>
+
+          <div class="card"><h3>Loops — C</h3><pre id="c-loop">for(int i=0;i&lt;5;i++) printf("%d\n", i);</pre><div class="bar"><button class="copy" data-target="c-loop">Copy</button></div></div>
+
+          <!-- 4 Functions -->
+          <div class="card"><h3>Functions — C++</h3><pre id="cxx-fn">int add(int x,int y){return x+y;}
+// use:
+// std::cout<<add(2,3);</pre><div class="bar"><button class="copy" data-target="cxx-fn">Copy</button></div></div>
+
+          <div class="card"><h3>Functions — Java</h3><pre id="java-fn">static int add(int x,int y){return x+y;}
+// use in main: System.out.println(add(2,3));</pre><div class="bar"><button class="copy" data-target="java-fn">Copy</button></div></div>
+
+          <div class="card"><h3>Functions — JavaScript</h3><pre id="js-fn">function add(x,y){return x+y}
+console.log(add(2,3));</pre><div class="bar"><button class="copy" data-target="js-fn">Copy</button></div></div>
+
+          <div class="card"><h3>Functions — Swift</h3><pre id="swift-fn">func add(_ x:Int,_ y:Int)->Int{ x + y }
+print(add(2,3))</pre><div class="bar"><button class="copy" data-target="swift-fn">Copy</button></div></div>
+
+          <div class="card"><h3>Functions — Objective‑C</h3><pre id="objc-fn">int add(int x,int y){return x+y}
+// NSLog(@"%d", add(2,3));</pre><div class="bar"><button class="copy" data-target="objc-fn">Copy</button></div></div>
+
+          <div class="card"><h3>Functions — Python</h3><pre id="py-fn">def add(x,y):
+  return x+y
+print(add(2,3))</pre><div class="bar"><button class="copy" data-target="py-fn">Copy</button></div></div>
+
+          <div class="card"><h3>Functions — C</h3><pre id="c-fn">int add(int x,int y){return x+y}
+// printf("%d", add(2,3));</pre><div class="bar"><button class="copy" data-target="c-fn">Copy</button></div></div>
+
+          <!-- 5 Classes / Structs -->
+          <div class="card"><h3>Classes — C++</h3><pre id="cxx-class">class Point{public:
+  int x,y; Point(int X,int Y):x(X),y(Y){}
+};
+// Point p(1,2);</pre><div class="bar"><button class="copy" data-target="cxx-class">Copy</button></div></div>
+
+          <div class="card"><h3>Classes — Java</h3><pre id="java-class">class Point{int x,y; Point(int x,int y){this.x=x;this.y=y;}}
+// Point p=new Point(1,2);</pre><div class="bar"><button class="copy" data-target="java-class">Copy</button></div></div>
+
+          <div class="card"><h3>Objects — JavaScript</h3><pre id="js-class">class Point{constructor(x,y){this.x=x;this.y=y}}
+// new Point(1,2)</pre><div class="bar"><button class="copy" data-target="js-class">Copy</button></div></div>
+
+          <div class="card"><h3>Structs — Swift</h3><pre id="swift-class">struct Point{var x:Int; var y:Int}
+// let p = Point(x:1,y:2)</pre><div class="bar"><button class="copy" data-target="swift-class">Copy</button></div></div>
+
+          <div class="card"><h3>Classes — Objective‑C</h3><pre id="objc-class">@interface Point:NSObject { int x,y; }
+- (id)initWithX:(int)X y:(int)Y;
+@end
+// see implementation for brevity</pre><div class="bar"><button class="copy" data-target="objc-class">Copy</button></div></div>
+
+          <div class="card"><h3>Classes — Python</h3><pre id="py-class">class Point:
+  def __init__(self,x,y):
+    self.x=x; self.y=y
+# p = Point(1,2)</pre><div class="bar"><button class="copy" data-target="py-class">Copy</button></div></div>
+
+          <div class="card"><h3>Structs — C</h3><pre id="c-class">typedef struct{int x,y;} Point;
+// Point p = {1,2};</pre><div class="bar"><button class="copy" data-target="c-class">Copy</button></div></div>
+
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Simple, copyable examples. These snippets are intentionally small and idiomatic; adapt types and error handling for production.
+  </footer>
+
+<script>
+  // Copy buttons
+  document.querySelectorAll('button.copy').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-target');
+      const text = document.getElementById(id).innerText;
+      navigator.clipboard.writeText(text).then(()=>{
+        btn.textContent = 'Copied!';
+        setTimeout(()=> btn.textContent = 'Copy',900);
+      }).catch(()=>{ btn.textContent = 'Fail'; setTimeout(()=> btn.textContent = 'Copy',900); });
+    });
+  });
+
+  // Download HTML functionality
+  document.getElementById('download').addEventListener('click', ()=>{
+    const full = '<!doctype html>\n' + document.documentElement.outerHTML;
+    const blob = new Blob([full], {type:'text/html'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'polyglot-5-concepts.html'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  });
+</script>
+</body>
+</html>
