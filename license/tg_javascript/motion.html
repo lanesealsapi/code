@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Motion Detector — 0</title>
+<style>
+  :root{
+    --bg:#0f1724;
+    --card:#071029;
+    --accent:#3ddc97;
+    --muted:#94a3b8;
+    --danger:#ff6b6b;
+    --glass: rgba(255,255,255,0.03);
+  }
+  html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+  body{background:linear-gradient(180deg,var(--bg),#031022);color:#e6eef6;display:flex;gap:18px;align-items:flex-start;padding:28px;}
+  .wrap{display:grid;grid-template-columns: 540px 360px;gap:18px;width:100%;max-width:1100px;margin:0 auto;}
+  .card{background:var(--card);border-radius:12px;padding:14px;box-shadow:0 6px 20px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.03)}
+  .large{padding:12px}
+  h1{margin:0 0 8px 0;font-size:18px}
+  .video-stage{display:flex;gap:10px;align-items:center;justify-content:center;flex-direction:column}
+  video{display:none;width:480px;height:360px;border-radius:8px;overflow:hidden;background:#000}
+  canvas{border-radius:8px; background:#000; display:block; width:480px; height:360px; image-rendering: pixelated;}
+  .controls{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+  label{font-size:13px;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+  input[type="range"]{width:100%}
+  .stats{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+  .stat-row{display:flex;justify-content:space-between;align-items:center;font-size:14px}
+  .counter{font-size:44px;font-weight:700;color:var(--accent);text-align:center;padding:8px 0}
+  .bigbtn{display:inline-block;background:linear-gradient(180deg,#0ea5a4,#028f7b);color:#00110c;padding:8px 12px;border-radius:10px;border:none;cursor:pointer;font-weight:700}
+  .muted{color:var(--muted);font-size:13px}
+  .footer-note{font-size:12px;color:var(--muted);margin-top:8px}
+  .row{display:flex;gap:8px;align-items:center}
+  .pill{background:var(--glass);padding:6px 10px;border-radius:999px;font-weight:600;font-size:13px}
+  .danger{color:var(--danger)}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card large">
+      <div class="video-stage">
+        <h1>Webcam Motion Detector</h1>
+        <div class="row" style="gap:12px;">
+          <div style="display:flex;flex-direction:column;align-items:center;">
+            <canvas id="canvasFeed" width="480" height="360" title="Live feed (mirrored)"></canvas>
+            <div class="muted" style="margin-top:6px;">Live feed (mirrored)</div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;align-items:center;">
+            <canvas id="canvasDiff" width="480" height="360" title="Difference visualization"></canvas>
+            <div class="muted" style="margin-top:6px;">Difference visualization (thresholded)</div>
+          </div>
+        </div>
+
+        <div class="controls" style="width:100%;max-width:980px;">
+          <label>Per-pixel sensitivity (0–255)
+            <span id="lblPix">40</span>
+          </label>
+          <input id="rangePixel" type="range" min="0" max="255" value="40" />
+
+          <label>Motion percent threshold (0.01%–10%)
+            <span id="lblPercent">0.5%</span>
+          </label>
+          <input id="rangePercent" type="range" min="0.01" max="10" step="0.01" value="0.5" />
+
+          <label>Cooldown (ms) — prevents multiple counts for continuous motion
+            <span id="lblCooldown">1000</span>
+          </label>
+          <input id="rangeCooldown" type="range" min="200" max="5000" step="100" value="1000" />
+
+          <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:6px;">
+            <div class="row">
+              <button id="btnStart" class="bigbtn">Start Camera</button>
+              <button id="btnStop" class="bigbtn" style="background:linear-gradient(180deg,#f97316,#d65a00);margin-left:6px">Stop</button>
+            </div>
+            <div class="muted">FPS: <span id="fps">0</span></div>
+          </div>
+
+          <div class="stats">
+            <div class="stat-row"><div>Changed pixels</div><div id="changed">0</div></div>
+            <div class="stat-row"><div>% changed</div><div id="pct">0%</div></div>
+            <div class="stat-row"><div>Motion state</div><div id="state" class="pill">idle</div></div>
+            <div class="stat-row"><div>Last triggered</div><div id="last">—</div></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="card" style="display:flex;flex-direction:column;gap:10px;">
+      <h1>Counter</h1>
+      <div class="counter" id="counter">0</div>
+      <div class="muted">Every time new motion is detected (after cooldown) the counter increments and the browser window title updates.</div>
+
+      <div style="margin-top:12px;">
+        <h1 style="font-size:14px;margin-bottom:6px">Notes & Tips</h1>
+        <div class="muted" style="line-height:1.4;">
+          - Move the pixel sensitivity lower to make the detector more sensitive to small changes.<br>
+          - Lower the percent threshold to detect smaller overall motion (but you may get false positives like light changes).<br>
+          - Cooldown prevents multiple counts for continuous motion; increase it if you only want one count per event.<br>
+          - This simple detector compares consecutive frames and thresholds the per-pixel absolute difference. It's intentionally lightweight.
+        </div>
+      </div>
+
+      <div style="margin-top:auto;">
+        <h1 style="font-size:14px;margin-bottom:6px">Permission / Errors</h1>
+        <div id="error" class="muted">Camera not started.</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(async function(){
+  // Elements
+  const canvasFeed = document.getElementById('canvasFeed');
+  const canvasDiff = document.getElementById('canvasDiff');
+  const ctxFeed = canvasFeed.getContext('2d');
+  const ctxDiff = canvasDiff.getContext('2d');
+
+  const lblPix = document.getElementById('lblPix');
+  const lblPercent = document.getElementById('lblPercent');
+  const lblCooldown = document.getElementById('lblCooldown');
+
+  const rangePixel = document.getElementById('rangePixel');
+  const rangePercent = document.getElementById('rangePercent');
+  const rangeCooldown = document.getElementById('rangeCooldown');
+
+  const btnStart = document.getElementById('btnStart');
+  const btnStop = document.getElementById('btnStop');
+  const fpsLabel = document.getElementById('fps');
+
+  const changedLabel = document.getElementById('changed');
+  const pctLabel = document.getElementById('pct');
+  const stateLabel = document.getElementById('state');
+  const lastLabel = document.getElementById('last');
+  const counterEl = document.getElementById('counter');
+  const errorEl = document.getElementById('error');
+
+  // Settings (initial)
+  let perPixelThreshold = Number(rangePixel.value); // difference per pixel channel to consider changed
+  let percentThreshold = Number(rangePercent.value); // percent of total pixels to consider motion
+  let cooldownMs = Number(rangeCooldown.value);
+
+  lblPix.textContent = perPixelThreshold;
+  lblPercent.textContent = percentThreshold + '%';
+  lblCooldown.textContent = cooldownMs;
+
+  rangePixel.addEventListener('input', ()=>{ perPixelThreshold = Number(rangePixel.value); lblPix.textContent = perPixelThreshold; });
+  rangePercent.addEventListener('input', ()=>{ percentThreshold = Number(rangePercent.value); lblPercent.textContent = percentThreshold + '%'; });
+  rangeCooldown.addEventListener('input', ()=>{ cooldownMs = Number(rangeCooldown.value); lblCooldown.textContent = cooldownMs; });
+
+  // State
+  let stream = null;
+  let videoTrack = null;
+  let video = document.createElement('video');
+  video.autoplay = true;
+  video.muted = true;
+  video.playsInline = true;
+
+  let prevImageData = null;
+  let animationId = null;
+  let lastFrameTime = performance.now();
+  let fpsCounter = {frames:0, last: performance.now()};
+  let motionCounter = 0;
+  let motionState = false;
+  let lastTriggerTime = 0;
+
+  // helper: update window title
+  function updateTitle(){ document.title = `Motion Detector — ${motionCounter}`; }
+
+  // compute difference between two ImageData objects, draw thresholded diff to ctxDiff
+  function computeDiffAndDraw(curr, prev){
+    const w = curr.width;
+    const h = curr.height;
+    const totalPixels = w * h;
+    const out = ctxDiff.createImageData(w, h);
+    const px = curr.data;
+    const pp = prev.data;
+    const od = out.data;
+    let changedPixels = 0;
+    // Work pixel by pixel; compute sum of absolute differences across R,G,B
+    for(let i=0;i<px.length;i+=4){
+      const dr = Math.abs(px[i] - pp[i]);
+      const dg = Math.abs(px[i+1] - pp[i+1]);
+      const db = Math.abs(px[i+2] - pp[i+2]);
+      // We use maximum channel difference to be more sensitive to bright/colour shifts:
+      const maxDiff = Math.max(dr,dg,db);
+      if(maxDiff >= perPixelThreshold){
+        // mark white pixel in out (visualization)
+        od[i] = 255; od[i+1] = 255; od[i+2] = 255; od[i+3] = 255;
+        changedPixels++;
+      } else {
+        // keep transparent/dark
+        od[i] = 0; od[i+1] = 0; od[i+2] = 0; od[i+3] = 255;
+      }
+    }
+    ctxDiff.putImageData(out, 0, 0);
+    return {changedPixels, totalPixels};
+  }
+
+  function setStateLabel(isMotion){
+    stateLabel.textContent = isMotion ? 'motion' : 'idle';
+    stateLabel.style.background = isMotion ? 'linear-gradient(90deg,#052e2a,#06423a)' : 'var(--glass)';
+    stateLabel.style.color = isMotion ? 'var(--accent)' : '';
+  }
+
+  // main loop
+  async function loop(){
+    if(!stream) return;
+    animationId = requestAnimationFrame(loop);
+    // draw video mirrored to feed canvas
+    ctxFeed.save();
+    ctxFeed.scale(-1,1);
+    ctxFeed.drawImage(video, -canvasFeed.width, 0, canvasFeed.width, canvasFeed.height);
+    ctxFeed.restore();
+
+    // get current frame
+    const curr = ctxFeed.getImageData(0,0,canvasFeed.width,canvasFeed.height);
+
+    if(prevImageData){
+      const {changedPixels, totalPixels} = computeDiffAndDraw(curr, prevImageData);
+      const pct = (changedPixels / totalPixels) * 100;
+      changedLabel.textContent = changedPixels.toLocaleString();
+      pctLabel.textContent = pct.toFixed(2) + '%';
+
+      // motion detection logic: trigger when pct >= percentThreshold and we are not currently in motion (rising edge)
+      const now = performance.now();
+      const motionDetectedNow = pct >= percentThreshold;
+      if(motionDetectedNow && !motionState){
+        // new motion start -> check cooldown
+        if(now - lastTriggerTime >= cooldownMs){
+          motionCounter++;
+          counterEl.textContent = motionCounter;
+          updateTitle();
+          lastTriggerTime = now;
+          lastLabel.textContent = (new Date()).toLocaleString();
+        }
+      }
+      // Update motion state with a small hysteresis to avoid flicker: we consider motionState true if pct >= percentThreshold, and false only when pct < (percentThreshold * 0.6)
+      if(motionDetectedNow){
+        motionState = true;
+      } else if(pct < percentThreshold * 0.6){
+        motionState = false;
+      }
+
+      setStateLabel(motionState);
+    }
+
+    // store current as previous for next frame
+    prevImageData = ctxFeed.getImageData(0,0,canvasFeed.width,canvasFeed.height);
+
+    // FPS
+    const t = performance.now();
+    fpsCounter.frames++;
+    if(t - fpsCounter.last >= 500){
+      const fps = (fpsCounter.frames * 1000) / (t - fpsCounter.last);
+      fpsLabel.textContent = Math.round(fps);
+      fpsCounter.frames = 0;
+      fpsCounter.last = t;
+    }
+  }
+
+  // Start camera
+  async function startCamera(){
+    errorEl.textContent = 'Requesting camera...';
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({video:{width:480,height:360, facingMode: "user"}, audio:false});
+      video.srcObject = stream;
+      // ensure video play
+      await video.play();
+      videoTrack = stream.getVideoTracks()[0];
+      errorEl.textContent = 'Camera started.';
+      // prime canvases with same dimensions as video
+      canvasFeed.width = video.videoWidth || 480;
+      canvasFeed.height = video.videoHeight || 360;
+      canvasDiff.width = canvasFeed.width;
+      canvasDiff.height = canvasFeed.height;
+      // clear prevImageData
+      prevImageData = null;
+      if(animationId) cancelAnimationFrame(animationId);
+      loop();
+    }catch(err){
+      console.error('Camera error', err);
+      errorEl.textContent = 'Error: ' + (err.name || err.message || err.toString());
+    }
+  }
+
+  function stopCamera(){
+    if(animationId) cancelAnimationFrame(animationId);
+    if(stream){
+      stream.getTracks().forEach(t=>t.stop());
+      stream = null;
+      video.srcObject = null;
+      errorEl.textContent = 'Camera stopped.';
+    }
+  }
+
+  btnStart.addEventListener('click', ()=>startCamera());
+  btnStop.addEventListener('click', ()=>stopCamera());
+
+  // also start automatically if user prefers (comment out if you don't want autoplay)
+  // startCamera();
+
+  // Keyboard shortcut: press Space to reset counter
+  window.addEventListener('keydown', (e)=>{
+    if(e.code === 'Space'){
+      motionCounter = 0;
+      counterEl.textContent = motionCounter;
+      updateTitle();
+    }
+  });
+
+  // show initial title
+  updateTitle();
+
+  // Cleanup when page hidden or unloaded
+  window.addEventListener('beforeunload', ()=> stopCamera());
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.hidden){
+      // optionally stop camera to save resource
+      // stopCamera();
+    }
+  });
+
+})();
+</script>
+</body>
+</html>
