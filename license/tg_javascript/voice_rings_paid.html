@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ring Light Audio Sync</title>
+<style>
+  html,body{
+    margin:0;
+    height:100%;
+    background:black;
+    font-family:sans-serif;
+    color:#eee;
+    overflow:hidden;
+  }
+  .app{
+    display:grid;
+    grid-template-columns:1fr 320px;
+    height:100%;
+  }
+  canvas{
+    width:100%;
+    height:100%;
+    display:block;
+    background:black;
+  }
+  .panel{
+    background:rgba(255,255,255,0.05);
+    padding:14px;
+    box-sizing:border-box;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    border-left:1px solid rgba(255,255,255,0.1);
+  }
+  h1{font-size:18px;margin:0 0 6px;}
+  label{font-size:13px;min-width:80px;display:inline-block;}
+  input[type="range"]{width:100%;}
+  input[type="color"]{width:36px;height:36px;border:none;padding:0;background:none;}
+  .button{
+    background:rgba(255,255,255,0.08);
+    color:#fff;
+    border:none;
+    padding:8px 10px;
+    border-radius:6px;
+    cursor:pointer;
+  }
+  .colors{display:flex;flex-wrap:wrap;gap:8px;}
+  .color-slot{display:flex;align-items:center;gap:6px;}
+  .small{font-size:12px;color:#aaa;}
+</style>
+</head>
+<body>
+<div class="app">
+  <canvas id="canvas"></canvas>
+  <div class="panel">
+    <h1>Ring Light</h1>
+
+    <div><label>Size</label><input id="size" type="range" min="0.1" max="1.2" step="0.01" value="0.7"></div>
+    <div><label>Thickness</label><input id="thickness" type="range" min="0.01" max="0.6" step="0.01" value="0.18"></div>
+    <div><label>Softness</label><input id="softness" type="range" min="0" max="1" step="0.01" value="0.5"></div>
+    <div><label>Intensity</label><input id="intensity" type="range" min="0" max="2" step="0.01" value="1"></div>
+
+    <hr>
+
+    <div><label>Strobe</label><input id="strobe" type="checkbox"></div>
+    <div><label>Freq (Hz)</label><input id="freq" type="range" min="0.5" max="20" step="0.1" value="8"></div>
+    <div><label>Duty (%)</label><input id="duty" type="range" min="1" max="99" step="1" value="50"></div>
+
+    <div><label>Rotate</label><input id="rotate" type="checkbox"></div>
+
+    <hr>
+
+    <div><label>Mic Sync</label><input id="mic" type="checkbox"></div>
+    <div class="small">Allows the ring light to pulse to audio amplitude.</div>
+
+    <hr>
+
+    <div class="colors" id="colors"></div>
+    <button id="addColor" class="button">+ Add Color</button>
+    <button id="shuffle" class="button">Shuffle</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ---------- Canvas setup ----------
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+  const resize = () => {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = canvas.clientWidth * dpr;
+    canvas.height = canvas.clientHeight * dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  };
+  window.addEventListener("resize", resize);
+  resize();
+
+  // ---------- State ----------
+  const state = {
+    size: 0.7,
+    thickness: 0.18,
+    softness: 0.5,
+    intensity: 1,
+    strobe: false,
+    freq: 8,
+    duty: 0.5,
+    rotate: false,
+    mic: false,
+    micLevel: 0,
+    rotation: 0,
+    colors: ["#ffffff","#ffb86b","#66d9ef"]
+  };
+
+  // ---------- Controls ----------
+  const el = id => document.getElementById(id);
+  ["size","thickness","softness","intensity"].forEach(k => {
+    el(k).oninput = e => state[k] = parseFloat(e.target.value);
+  });
+  el("strobe").onchange = e => state.strobe = e.target.checked;
+  el("freq").oninput = e => state.freq = parseFloat(e.target.value);
+  el("duty").oninput = e => state.duty = parseFloat(e.target.value)/100;
+  el("rotate").onchange = e => state.rotate = e.target.checked;
+  el("mic").onchange = async e => {
+    state.mic = e.target.checked;
+    if (state.mic) await initMic();
+  };
+
+  const colorsEl = el("colors");
+  const rebuildColors = () => {
+    colorsEl.innerHTML = "";
+    state.colors.forEach((c,i)=>{
+      const wrap = document.createElement("div");
+      wrap.className="color-slot";
+      const input = document.createElement("input");
+      input.type="color"; input.value=c;
+      input.oninput = ev => state.colors[i] = ev.target.value;
+      const del = document.createElement("button");
+      del.textContent="x"; del.className="button"; del.onclick=()=>{state.colors.splice(i,1);rebuildColors();};
+      wrap.append(input,del);
+      colorsEl.append(wrap);
+    });
+  };
+  rebuildColors();
+
+  el("addColor").onclick = () => {
+    if (state.colors.length<6){
+      state.colors.push("#"+Math.floor(Math.random()*0xffffff).toString(16).padStart(6,"0"));
+      rebuildColors();
+    }
+  };
+  el("shuffle").onclick = () => {
+    for(let i=state.colors.length-1;i>0;i--){
+      const j=Math.floor(Math.random()*(i+1));
+      [state.colors[i],state.colors[j]]=[state.colors[j],state.colors[i]];
+    }
+    rebuildColors();
+  };
+
+  // ---------- Microphone setup ----------
+  let audioCtx, analyser, dataArray;
+  async function initMic(){
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const src = audioCtx.createMediaStreamSource(stream);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      const bufferLength = analyser.frequencyBinCount;
+      dataArray = new Uint8Array(bufferLength);
+      src.connect(analyser);
+    }catch(err){
+      console.warn("Mic access denied:",err);
+      state.mic=false;
+      el("mic").checked=false;
+    }
+  }
+
+  function updateMicLevel(){
+    if (!analyser) return 0;
+    analyser.getByteTimeDomainData(dataArray);
+    let sum=0;
+    for(let i=0;i<dataArray.length;i++){
+      const val=(dataArray[i]-128)/128;
+      sum += val*val;
+    }
+    const rms = Math.sqrt(sum/dataArray.length);
+    state.micLevel = rms; // 0–1 roughly
+  }
+
+  // ---------- Drawing ----------
+  function drawRing(dt){
+    resize();
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    const cx = w/2, cy = h/2;
+    const base = Math.min(w,h)/2;
+    const outer = base * state.size;
+    const inner = outer * (1 - state.thickness);
+    const segments = state.colors.length;
+    const segAngle = (Math.PI*2)/segments;
+
+    if(state.rotate) state.rotation += dt*0.1;
+
+    // compute mic + strobe intensity modulation
+    let modIntensity = state.intensity;
+    if (state.mic) modIntensity *= (0.6 + state.micLevel*2);
+    if (state.strobe){
+      const t = performance.now()/1000;
+      const phase = (t*state.freq)%1;
+      const on = phase < state.duty;
+      if(!on) modIntensity *= 0.2;
+    }
+
+    // draw ring
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    for(let i=0;i<segments;i++){
+      const color = state.colors[i];
+      const start = i*segAngle + state.rotation;
+      const end = start + segAngle;
+      const steps = 12;
+      for(let s=0;s<steps;s++){
+        const t = s/(steps-1);
+        const r = inner + (outer-inner)*t;
+        const alpha = (1-Math.abs(2*t-1)) * 0.8 * modIntensity;
+        ctx.beginPath();
+        ctx.strokeStyle = hexToRGBA(color,alpha);
+        ctx.lineWidth = 3 + (20*state.softness*(1-t));
+        ctx.arc(cx,cy,r,start,end);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  function hexToRGBA(hex,a){
+    const n = parseInt(hex.slice(1),16);
+    return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+  }
+
+  // ---------- Main loop ----------
+  let last = performance.now();
+  function loop(now){
+    const dt = (now-last)/1000; last=now;
+    if(state.mic) updateMicLevel();
+    drawRing(dt);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
