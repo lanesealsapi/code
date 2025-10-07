@@ -40,6 +40,7 @@ let mouse = { x: 0, y: 0 };
 // Game state
 let score = 0;
 let lives = 3;
+let missed = false; // flag to track missed paddle
 
 // Neon trail effect
 const trails = [];
@@ -49,7 +50,6 @@ window.addEventListener("mousemove", e => {
   mouse.y = e.clientY;
 });
 
-// Convert mouse position to angle around circle
 function updatePaddle() {
   paddleAngle = Math.atan2(mouse.y - center.y, mouse.x - center.x);
 }
@@ -65,11 +65,10 @@ function updateBall() {
   if (dist >= radius) {
     const angleToBall = Math.atan2(dy, dx);
     let angleDiff = ((angleToBall - paddleAngle + Math.PI*2) % (Math.PI*2));
-
     if (angleDiff > Math.PI) angleDiff -= Math.PI*2;
 
     if (angleDiff > -paddleArc/2 && angleDiff < paddleArc/2) {
-      // Paddle hit: reflect and add spin
+      // Paddle hit
       const normalX = dx / dist;
       const normalY = dy / dist;
       const dot = ball.vx * normalX + ball.vy * normalY;
@@ -84,15 +83,19 @@ function updateBall() {
       ball.vx *= 2.02;
       ball.vy *= 2.02;
 
-      // Increment score
       score++;
+      missed = false; // reset missed flag
     } else {
-      // Missed paddle: reduce life
-      lives--;
-      if (lives <= 0) {
-        lives = 3;
-        score = 0;
+      // Missed paddle: only decrease lives once per miss
+      if (!missed) {
+        lives--;
+        missed = true;
+        if (lives <= 0) {
+          lives = 3;
+          score = 0;
+        }
       }
+      // Reset ball
       ball.x = center.x + radius * Math.cos(Math.PI);
       ball.y = center.y + radius * Math.sin(Math.PI);
       ball.vx = 2;
@@ -100,7 +103,7 @@ function updateBall() {
     }
   }
 
-  // Add trail
+  // Trail effect
   trails.push({ x: ball.x, y: ball.y, alpha: 1 });
   for (let t of trails) t.alpha -= 0.02;
   while(trails.length && trails[0].alpha <= 0) trails.shift();
@@ -137,15 +140,15 @@ function drawBall() {
   // Draw trails
   for (let t of trails) {
     ctx.beginPath();
-    ctx.fillStyle = `rgba(0,255,255,${t.alpha})`;
+    ctx.fillStyle = `rgba(0,255,0,${t.alpha})`;
     ctx.arc(t.x, t.y, 12, 0, Math.PI*2);
     ctx.fill();
   }
 
   // Draw ball
   ctx.beginPath();
-  ctx.fillStyle = "#33ff33";
-  ctx.shadowColor = "#33ff33";
+  ctx.fillStyle = "#00FF00"; // neon green
+  ctx.shadowColor = "#00FF00";
   ctx.shadowBlur = 20;
   ctx.arc(ball.x, ball.y, 10, 0, Math.PI*2);
   ctx.fill();
