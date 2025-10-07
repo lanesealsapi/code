@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Neon Circular Pong</title>
+<style>
+  body {
+    margin: 0;
+    background: black;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const center = { x: canvas.width / 2, y: canvas.height / 2 };
+const radius = Math.min(canvas.width, canvas.height) / 3;
+
+let paddleAngle = Math.PI / 2;
+const paddleArc = Math.PI / 6;
+let ball = {
+  x: center.x + radius * Math.cos(Math.PI),
+  y: center.y + radius * Math.sin(Math.PI),
+  vx: 2,
+  vy: 1,
+  speed: 2
+};
+
+let mouse = { x: 0, y: 0 };
+
+// Neon trail effect
+const trails = [];
+
+window.addEventListener("mousemove", e => {
+  mouse.x = e.clientX;
+  mouse.y = e.clientY;
+});
+
+// Convert mouse position to angle around circle
+function updatePaddle() {
+  paddleAngle = Math.atan2(mouse.y - center.y, mouse.x - center.x);
+}
+
+function updateBall() {
+  ball.x += ball.vx;
+  ball.y += ball.vy;
+
+  const dx = ball.x - center.x;
+  const dy = ball.y - center.y;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+
+  if (dist >= radius) {
+    const angleToBall = Math.atan2(dy, dx);
+    let angleDiff = ((angleToBall - paddleAngle + Math.PI*2) % (Math.PI*2));
+
+    // Adjust for arc wrapping
+    if (angleDiff > Math.PI) angleDiff -= Math.PI*2;
+
+    if (angleDiff > -paddleArc/2 && angleDiff < paddleArc/2) {
+      // Paddle hit: reflect and add spin based on hit position
+      const normalX = dx / dist;
+      const normalY = dy / dist;
+      const dot = ball.vx * normalX + ball.vy * normalY;
+      ball.vx -= 2 * dot * normalX;
+      ball.vy -= 2 * dot * normalY;
+
+      // Spin effect
+      const spin = angleDiff * 3; 
+      ball.vx += -spin * normalY;
+      ball.vy += spin * normalX;
+
+      ball.vx *= 1.02;
+      ball.vy *= 1.02;
+    } else {
+      // Missed paddle: eject ball
+      ball.x = center.x + radius * Math.cos(Math.PI);
+      ball.y = center.y + radius * Math.sin(Math.PI);
+      ball.vx = 2;
+      ball.vy = 1;
+    }
+  }
+
+  // Add trail
+  trails.push({ x: ball.x, y: ball.y, alpha: 1 });
+  for (let t of trails) t.alpha -= 0.02;
+  while(trails.length && trails[0].alpha <= 0) trails.shift();
+}
+
+function drawCircle() {
+  ctx.beginPath();
+  ctx.strokeStyle = "#444";
+  ctx.lineWidth = 2;
+  ctx.arc(center.x, center.y, radius, 0, Math.PI*2);
+  ctx.stroke();
+}
+
+function drawPaddle() {
+  ctx.beginPath();
+  const gradient = ctx.createLinearGradient(
+    center.x + radius * Math.cos(paddleAngle),
+    center.y + radius * Math.sin(paddleAngle),
+    center.x + radius * Math.cos(paddleAngle + paddleArc),
+    center.y + radius * Math.sin(paddleAngle + paddleArc)
+  );
+  gradient.addColorStop(0, "#0ff");
+  gradient.addColorStop(1, "#f0f");
+  ctx.strokeStyle = gradient;
+  ctx.lineWidth = 12;
+  ctx.shadowColor = "#0ff";
+  ctx.shadowBlur = 15;
+  ctx.arc(center.x, center.y, radius, paddleAngle - paddleArc/2, paddleAngle + paddleArc/2);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+}
+
+function drawBall() {
+  // Draw trails
+  for (let t of trails) {
+    ctx.beginPath();
+    ctx.fillStyle = `rgba(0,255,255,${t.alpha})`;
+    ctx.arc(t.x, t.y, 12, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // Draw ball
+  ctx.beginPath();
+  ctx.fillStyle = "red";
+  ctx.shadowColor = "red";
+  ctx.shadowBlur = 20;
+  ctx.arc(ball.x, ball.y, 10, 0, Math.PI*2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+function loop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawCircle();
+  updatePaddle();
+  drawPaddle();
+  updateBall();
+  drawBall();
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+</body>
+</html>
