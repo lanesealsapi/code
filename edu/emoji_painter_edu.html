@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mini Painter — Emoji Trail Edition</title>
+  <style>
+    :root{--toolbar-h:64px;--bg:#222;--panel:#2b2b2b;--accent:#09f}
+    html,body{height:100%;margin:0;background:var(--bg);font-family:Inter, system-ui, -apple-system, sans-serif;color:#eee}
+    .app{display:flex;flex-direction:column;height:100vh}
+    .toolbar{height:var(--toolbar-h);display:flex;align-items:center;gap:10px;padding:8px;background:linear-gradient(180deg, rgba(0,0,0,.25), rgba(255,255,255,.02));box-shadow:0 2px 8px rgba(0,0,0,.5)}
+    .toolbar .group{display:flex;gap:8px;align-items:center}
+    button, select, input[type=range]{background:var(--panel);color:inherit;border:1px solid rgba(255,255,255,.06);padding:8px;border-radius:8px}
+    .btn{cursor:pointer}
+    .btn.active{outline:2px solid rgba(9,153,255,.18);box-shadow:0 0 0 3px rgba(9,153,255,.06)}
+    .canvas-wrap{flex:1;display:flex;align-items:stretch;justify-content:center;padding:12px}
+    canvas{background:white;border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,.5);max-width:100%;max-height:100%;touch-action:none}
+    label{font-size:13px;color:#ddd}
+    .spacer{flex:1}
+    .small{padding:6px 8px;font-size:13px}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="toolbar">
+      <div class="group" id="tools">
+        <button class="btn" data-tool="brush">Brush</button>
+        <button class="btn" data-tool="marker">Marker</button>
+        <button class="btn" data-tool="spray">Spray</button>
+        <button class="btn" data-tool="eraser">Eraser</button>
+        <button class="btn" data-tool="line">Line</button>
+        <button class="btn" data-tool="rect">Rect</button>
+        <button class="btn" data-tool="circle">Circle</button>
+        <button class="btn" data-tool="emoji">Emoji 🎨</button>
+      </div>
+
+      <div class="group">
+        <label for="color">Color</label>
+        <input id="color" type="color" value="#000000">
+      </div>
+
+      <div class="group">
+        <label for="size">Size</label>
+        <input id="size" type="range" min="1" max="80" value="8">
+      </div>
+
+      <div class="group">
+        <label for="emojiPicker">Emoji</label>
+        <select id="emojiPicker" class="small">
+          <option>🎨</option><option>🌈</option><option>🔥</option><option>⭐</option>
+          <option>💎</option><option>🌀</option><option>💥</option><option>🌸</option>
+          <option>✨</option><option>💫</option><option>🎵</option><option>💖</option>
+          <option>👁️</option><option>🌍</option><option>🌞</option><option>🌙</option>
+          <option>🧠</option><option>🕊️</option><option>☄️</option><option>⚡</option>
+        </select>
+      </div>
+
+      <div class="group">
+        <button id="undo" class="btn small">Undo</button>
+        <button id="clear" class="btn small">Clear</button>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="group">
+        <button id="save" class="btn small">Save PNG</button>
+        <select id="canvasSize" class="small">
+          <option value="800x600">800×600</option>
+          <option value="1024x768">1024×768</option>
+          <option value="1280x800">1280×800</option>
+          <option value="1600x1200">1600×1200</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="canvas-wrap">
+      <canvas id="c" width="1024" height="768"></canvas>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const toolsEl = document.querySelector('#tools');
+    const colorEl = document.getElementById('color');
+    const sizeEl = document.getElementById('size');
+    const undoBtn = document.getElementById('undo');
+    const clearBtn = document.getElementById('clear');
+    const saveBtn = document.getElementById('save');
+    const canvasSize = document.getElementById('canvasSize');
+    const emojiPicker = document.getElementById('emojiPicker');
+
+    let tool='brush', drawing=false, last={x:0,y:0}, startPos=null;
+    let undoStack=[];
+    const UNDO_LIMIT=25;
+
+    function setTool(t){
+      tool=t;
+      document.querySelectorAll('#tools .btn').forEach(b=>b.classList.toggle('active',b.dataset.tool===t));
+      canvas.style.cursor='crosshair';
+    }
+
+    toolsEl.addEventListener('click',e=>{const b=e.target.closest('button[data-tool]');if(b)setTool(b.dataset.tool)});
+
+    function pushUndo(){if(undoStack.length>=UNDO_LIMIT)undoStack.shift();undoStack.push(canvas.toDataURL());}
+
+    undoBtn.addEventListener('click',()=>{if(!undoStack.length)return;const data=undoStack.pop();const img=new Image();img.onload=()=>{ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0)};img.src=data});
+    clearBtn.addEventListener('click',()=>{pushUndo();ctx.clearRect(0,0,canvas.width,canvas.height);fillBackground('#fff');});
+    saveBtn.addEventListener('click',()=>{const a=document.createElement('a');a.download='emoji-trail.png';a.href=canvas.toDataURL();a.click();});
+
+    canvasSize.addEventListener('change',()=>{const[w,h]=canvasSize.value.split('x').map(Number);const temp=document.createElement('canvas');temp.width=w;temp.height=h;temp.getContext('2d').drawImage(canvas,0,0,w,h);canvas.width=w;canvas.height=h;ctx.drawImage(temp,0,0)});
+
+    function fillBackground(color){ctx.save();ctx.globalCompositeOperation='destination-over';ctx.fillStyle=color;ctx.fillRect(0,0,canvas.width,canvas.height);ctx.restore();}
+
+    function getPos(e){const r=canvas.getBoundingClientRect();const p=e.touches?e.touches[0]:e;return{x:p.clientX-r.left,y:p.clientY-r.top};}
+
+    function drawLine(a,b,opt={}){ctx.save();if(opt.erase)ctx.globalCompositeOperation='destination-out';ctx.lineJoin='round';ctx.lineCap='round';ctx.strokeStyle=opt.color||colorEl.value;ctx.lineWidth=opt.width||sizeEl.value;if(opt.alpha)ctx.globalAlpha=opt.alpha;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.restore();}
+
+    function sprayAt(p,size,density=20){ctx.save();ctx.fillStyle=colorEl.value;ctx.globalAlpha=0.3;for(let i=0;i<density;i++){const a=Math.random()*Math.PI*2;const r=Math.random()*size;ctx.fillRect(p.x+Math.cos(a)*r,p.y+Math.sin(a)*r,1,1);}ctx.restore();}
+
+    function drawEmoji(p){const emoji=emojiPicker.value;const baseSize=parseInt(sizeEl.value,10)*3;const randomScale=0.5+Math.random()*1.5;const fontSize=baseSize*randomScale;const rotation=(Math.random()*30-15)*(Math.PI/180);ctx.save();ctx.translate(p.x,p.y);ctx.rotate(rotation);ctx.font=`${fontSize}px serif`;ctx.fillText(emoji,-fontSize/2,fontSize/2);ctx.restore();}
+
+    function emojiTrail(p){for(let i=0;i<4;i++){const offsetX=(Math.random()-0.5)*20;const offsetY=(Math.random()-0.5)*20;drawEmoji({x:p.x+offsetX,y:p.y+offsetY});}}
+
+    canvas.addEventListener('pointerdown',e=>{e.preventDefault();drawing=true;pushUndo();last=getPos(e);startPos=last;if(tool==='emoji')emojiTrail(last);});
+
+    canvas.addEventListener('pointermove',e=>{if(!drawing)return;const p=getPos(e);if(tool==='brush')drawLine(last,p,{color:colorEl.value,width:sizeEl.value/1.5});else if(tool==='marker')drawLine(last,p,{color:colorEl.value,width:sizeEl.value*1.8,alpha:0.85});else if(tool==='eraser')drawLine(last,p,{erase:true,width:sizeEl.value*2});else if(tool==='spray')sprayAt(p,parseInt(sizeEl.value,10),25);else if(tool==='emoji')emojiTrail(p);last=p;});
+
+    canvas.addEventListener('pointerup',()=>drawing=false);
+    canvas.addEventListener('pointercancel',()=>drawing=false);
+
+    (function init(){fillBackground('#fff');setTool('brush');})();
+  </script>
+</body>
+</html>
