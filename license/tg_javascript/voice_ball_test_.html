@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amplitude & Frequency Controlled Ball with Drift</title>
+<style>
+  body, html { margin:0; padding:0; height:100%; overflow:hidden; background:#111; }
+  canvas { display:block; }
+  #startBtn { position:absolute; top:10px; left:10px; padding:8px 12px; font-size:16px; }
+</style>
+</head>
+<body>
+<button id="startBtn">Start Voice Control</button>
+<canvas id="canvas"></canvas>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let ball = { x: 30, y: canvas.height - 30, radius:30, color:'#06b6d4' };
+let lastVoiceTime = 0;
+
+let audioContext, analyser, dataArray, source;
+
+function drawBall(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI*2);
+  ctx.fillStyle = ball.color;
+  ctx.fill();
+  ctx.closePath();
+}
+
+drawBall();
+
+function startVoiceControl(){
+  navigator.mediaDevices.getUserMedia({ audio:true }).then(stream=>{
+    audioContext = new (window.AudioContext||window.webkitAudioContext)();
+    source = audioContext.createMediaStreamSource(stream);
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 512;
+    source.connect(analyser);
+    dataArray = new Uint8Array(analyser.frequencyBinCount);
+    animate();
+  }).catch(err=>alert('Error accessing microphone: '+err));
+}
+
+function getAmplitude(){
+  analyser.getByteTimeDomainData(dataArray);
+  let sum=0;
+  for(let i=0;i<dataArray.length;i++) sum += Math.abs(dataArray[i]-128);
+  return sum/dataArray.length; // 0-128
+}
+
+function getFrequency(){
+  analyser.getByteFrequencyData(dataArray);
+  let weightedSum=0, total=0;
+  for(let i=0;i<dataArray.length;i++){
+    weightedSum += i * dataArray[i];
+    total += dataArray[i];
+  }
+  return total ? weightedSum/total : dataArray.length/2; // dominant frequency index
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  const amplitude = getAmplitude();
+  const freqIndex = getFrequency();
+  const freqNorm = freqIndex / dataArray.length; // 0-1
+
+  const currentTime = performance.now();
+
+  if(amplitude > 5){ // threshold for detecting voice
+    lastVoiceTime = currentTime;
+
+    // Horizontal: amplitude drives right
+    const speedX = amplitude / 15;
+    ball.x += speedX;
+
+    // Vertical: higher frequency drives up
+    const speedY = freqNorm * 5;
+    ball.y -= speedY;
+  } else {
+    // drift back to zero if no/low sound for 0.1s
+    if(currentTime - lastVoiceTime > 100){
+      ball.x += (30 - ball.x) * 0.05;
+      ball.y += ((canvas.height - 30) - ball.y) * 0.05;
+    }
+  }
+
+  // clamp
+  ball.x = Math.max(ball.radius, Math.min(canvas.width - ball.radius, ball.x));
+  ball.y = Math.max(ball.radius, Math.min(canvas.height - ball.radius, ball.y));
+
+  drawBall();
+}
+
+document.getElementById('startBtn').addEventListener('click',()=>{
+  startVoiceControl();
+  document.getElementById('startBtn').style.display='none';
+});
+</script>
+</body>
+</html>
