@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Oregon Explor</title>
+<style>
+  body { margin:0; display:flex; justify-content:center; align-items:center; height:100vh; background:#e0f7fa; }
+  #map-container { border:1px solid #333; overflow:hidden; width:90vw; height:90vh; background:#aee; touch-action: none; }
+  svg { width:100%; height:100%; cursor: grab; }
+  .county { fill:none; stroke:#333; stroke-width:0.5; }
+  .river { fill:none; stroke:#1e88e5; stroke-width:1.5; }
+</style>
+</head>
+<body>
+
+<div id="map-container">
+  <svg id="oregon-map" viewBox="0 0 800 900">
+    <!-- Oregon counties (simplified paths for demonstration) -->
+    <path class="county" d="M100,100 L200,100 L200,200 L100,200 Z" />
+    <path class="county" d="M200,100 L300,100 L300,200 L200,200 Z" />
+    <!-- Add more county paths here -->
+
+    <!-- Major rivers (simplified paths for demonstration) -->
+    <path class="river" d="M150,50 C160,100 140,150 150,200 C160,250 140,300 150,350" />
+    <path class="river" d="M250,50 C260,100 240,150 250,200 C260,250 240,300 250,350" />
+    <!-- Add more river paths here -->
+  </svg>
+</div>
+
+<script>
+  const svg = document.getElementById('oregon-map');
+  let isPanning = false, startX = 0, startY = 0, viewBox = {x:0, y:0, width:800, height:900};
+
+  // Pan functionality
+  svg.addEventListener('mousedown', e => {
+    isPanning = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    svg.style.cursor = 'grabbing';
+  });
+  svg.addEventListener('mouseup', e => { isPanning = false; svg.style.cursor = 'grab'; });
+  svg.addEventListener('mouseleave', e => isPanning = false);
+  svg.addEventListener('mousemove', e => {
+    if (!isPanning) return;
+    const dx = (startX - e.clientX) * (viewBox.width / svg.clientWidth);
+    const dy = (startY - e.clientY) * (viewBox.height / svg.clientHeight);
+    viewBox.x += dx;
+    viewBox.y += dy;
+    svg.setAttribute('viewBox', `${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`);
+    startX = e.clientX;
+    startY = e.clientY;
+  });
+
+  // Zoom functionality
+  svg.addEventListener('wheel', e => {
+    e.preventDefault();
+    const scale = e.deltaY > 0 ? 1.1 : 0.9;
+    const mx = e.offsetX / svg.clientWidth;
+    const my = e.offsetY / svg.clientHeight;
+    const newWidth = viewBox.width * scale;
+    const newHeight = viewBox.height * scale;
+    viewBox.x += (viewBox.width - newWidth) * mx;
+    viewBox.y += (viewBox.height - newHeight) * my;
+    viewBox.width = newWidth;
+    viewBox.height = newHeight;
+    svg.setAttribute('viewBox', `${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`);
+  });
+</script>
+
+</body>
+</html>
