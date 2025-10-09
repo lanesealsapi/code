@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mini Movie Studio</title>
+  <style>
+    :root{
+      --bg:#0f1724; --panel:#0b1220; --muted:#9aa5b1; --accent:#6ee7b7; --glass: rgba(255,255,255,0.03);
+      --card:#0b1622; --success:#22c55e; --danger:#ef4444;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;background:linear-gradient(180deg,#071019 0%, #071022 60%);color:#e6eef6;
+      -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+
+    /* Layout */
+    .app{display:grid;grid-template-columns:260px 1fr;grid-template-rows:56px 1fr;height:100vh;gap:14px;padding:14px}
+    header{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--glass);backdrop-filter: blur(6px);border-radius:12px}
+    .brand{display:flex;align-items:center;gap:12px}
+    .logo{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#60a5fa);display:flex;align-items:center;justify-content:center;font-weight:700;color:#07212a}
+    .title{font-weight:700}
+
+    aside{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:12px;border-radius:12px}
+    .projects{display:flex;flex-direction:column;gap:8px;max-height:calc(100vh - 180px);overflow:auto;padding-right:6px}
+    .project{padding:10px;border-radius:8px;cursor:pointer;transition:all .12s ease;display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .project:hover{transform:translateY(-3px);box-shadow:0 6px 18px rgba(0,0,0,0.5)}
+    .project.active{background:linear-gradient(90deg, rgba(110,231,183,0.08), rgba(96,165,250,0.05));border:1px solid rgba(255,255,255,0.03)}
+    .controls{display:flex;gap:8px;margin-top:12px}
+    .btn{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px 10px;border-radius:8px;color:var(--accent);cursor:pointer}
+
+    main{display:flex;gap:12px}
+    .panel{flex:1;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:12px;border-radius:12px;min-height:200px}
+
+    .topbar{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+    .search{flex:1}
+    input[type=text], textarea{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+
+    .tabs{display:flex;gap:8px;margin-bottom:10px}
+    .tab{padding:7px 10px;border-radius:8px;background:transparent;border:1px solid rgba(255,255,255,0.02);cursor:pointer}
+    .tab.active{background:linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border:1px solid rgba(255,255,255,0.04)}
+
+    /* Storyboard list */
+    .scene-list{display:flex;flex-direction:column;gap:8px}
+    .scene{display:flex;gap:10px;padding:10px;border-radius:10px;align-items:center;border:1px solid rgba(255,255,255,0.03);background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent);}
+    .thumb{width:86px;height:56px;border-radius:6px;background:linear-gradient(180deg,#123, #012);display:flex;align-items:center;justify-content:center;font-weight:700}
+    .meta{flex:1}
+    .scene h4{margin:0;font-size:14px}
+    .scene p{margin:4px 0 0 0;font-size:12px;color:var(--muted)}
+    .scene .meta small{display:block;color:var(--muted);margin-top:6px}
+    .scene .actions{display:flex;gap:6px}
+
+    /* Timeline */
+    .timeline{display:flex;gap:6px;align-items:flex-end;padding:8px;border-radius:8px;background:linear-gradient(90deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));overflow:auto}
+    .clip{min-width:60px;padding:10px;border-radius:8px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));text-align:center}
+
+    footer{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;padding:8px 12px;color:var(--muted)}
+
+    /* small screens */
+    @media (max-width:900px){.app{grid-template-columns:1fr;grid-template-rows:56px auto 1fr;padding:10px}.app aside{order:2}.app main{order:3}}
+
+    /* tiny transitions to feel "snappy" */
+    .btn,.tab,.project,.scene{transition:transform .12s ease, box-shadow .12s ease}
+    .btn:active,.tab:active{transform:translateY(1px)}
+
+    .hint{font-size:12px;color:var(--muted)}
+
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div class="logo">MM</div>
+        <div>
+          <div class="title">Mini Movie Studio</div>
+          <div class="hint">Lightweight project + scene manager • local-first</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="hint">Shortcuts: <b>Ctrl/Cmd+S</b> save · <b>Ctrl/Cmd+E</b> export · <b>Ctrl/Cmd+N</b> new</div>
+        <button class="btn" id="newProjBtn">+ New</button>
+      </div>
+    </header>
+
+    <aside>
+      <strong>Projects</strong>
+      <div class="projects" id="projects"></div>
+      <div class="controls">
+        <button class="btn" id="importBtn">Import</button>
+        <button class="btn" id="exportBtn">Export</button>
+        <button class="btn" id="deleteProjBtn">Delete</button>
+      </div>
+      <input type="file" id="fileImport" accept="application/json" style="display:none" />
+    </aside>
+
+    <main>
+      <div class="panel" style="max-width:540px;">
+        <div class="topbar">
+          <input type="text" id="projName" placeholder="Project name..." />
+          <select id="projTempo" style="width:80px;border-radius:8px;padding:8px;background:transparent;color:inherit;border:1px solid rgba(255,255,255,0.04)">
+            <option value="24">24fps</option>
+            <option value="25">25fps</option>
+            <option value="30">30fps</option>
+          </select>
+        </div>
+
+        <div class="tabs">
+          <div class="tab active" data-tab="script">Script</div>
+          <div class="tab" data-tab="story">Storyboard</div>
+          <div class="tab" data-tab="timeline">Timeline</div>
+          <div class="tab" data-tab="assets">Assets</div>
+        </div>
+
+        <div id="tabContent" style="min-height:320px">
+          <!-- Script -->
+          <div class="tabpane" id="scriptPane">
+            <textarea id="scriptArea" rows="14" placeholder="Write scene descriptions, dialogue, notes..." style="resize:vertical"></textarea>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button class="btn" id="addSceneFromScript">Create Scene from Selection</button>
+              <div style="flex:1"></div>
+              <div class="hint">Autosaves to local storage</div>
+            </div>
+          </div>
+
+          <!-- Storyboard -->
+          <div class="tabpane" id="storyPane" style="display:none">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <strong>Scenes</strong>
+              <div style="display:flex;gap:8px">
+                <button class="btn" id="addSceneBtn">+ Scene</button>
+                <button class="btn" id="shuffleScenes">Shuffle</button>
+              </div>
+            </div>
+            <div class="scene-list" id="sceneList"></div>
+          </div>
+
+          <!-- Timeline -->
+          <div class="tabpane" id="timelinePane" style="display:none">
+            <strong>Timeline</strong>
+            <div class="timeline" id="timelineArea" style="margin-top:8px;min-height:120px"></div>
+            <div style="margin-top:8px" class="hint">Drag scenes from Storyboard to reorder. Timeline clips show duration (in seconds).</div>
+          </div>
+
+          <!-- Assets -->
+          <div class="tabpane" id="assetsPane" style="display:none">
+            <strong>Assets</strong>
+            <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+              <input type="file" id="assetInput" multiple accept="image/*,video/*" />
+              <div class="hint">Uploaded files are listed but not persisted to server (local-only).</div>
+            </div>
+            <div id="assetList" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <strong id="projTitlePreview">Untitled Project</strong>
+            <div class="hint" id="projMeta">0 scenes • 24fps</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn" id="playPreview">Preview</button>
+            <button class="btn" id="saveBtn">Save</button>
+          </div>
+        </div>
+
+        <div style="margin-top:10px">
+          <strong>Scene Editor</strong>
+          <div style="display:grid;grid-template-columns:1fr 160px;gap:8px;margin-top:8px">
+            <div>
+              <input type="text" id="sceneTitle" placeholder="Scene title..." />
+              <textarea id="sceneDesc" rows="6" placeholder="Scene description, notes, action..." style="margin-top:8px"></textarea>
+            </div>
+            <div>
+              <label>Duration (s)</label>
+              <input type="number" id="sceneDuration" value="5" min="1" style="width:100%;margin-top:6px" />
+              <label style="margin-top:8px;display:block">Thumbnail</label>
+              <input type="file" id="sceneThumb" accept="image/*" />
+              <div style="margin-top:8px;display:flex;gap:6px">
+                <button class="btn" id="updateSceneBtn">Update</button>
+                <button class="btn" id="delSceneBtn">Delete</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <footer>
+      <div class="hint">Local-first • No network calls • Export / Import JSON</div>
+      <div class="hint">Made with ❤️ — snappy, small, flexible</div>
+    </footer>
+  </div>
+
+<script>
+// Mini data model
+let projects = loadJSON('mms_projects') || [];
+let activeProjectId = null;
+let dragSourceSceneId = null;
+
+function uid(prefix='id'){return prefix+'_'+Math.random().toString(36).slice(2,9)}
+
+function saveAll(){localStorage.setItem('mms_projects', JSON.stringify(projects)); showHint('Saved ✓');}
+function loadJSON(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
+
+// UI binds
+const projectsEl = document.getElementById('projects');
+const projName = document.getElementById('projName');
+const projTempo = document.getElementById('projTempo');
+const projTitlePreview = document.getElementById('projTitlePreview');
+const projMeta = document.getElementById('projMeta');
+const scriptArea = document.getElementById('scriptArea');
+const sceneList = document.getElementById('sceneList');
+const timelineArea = document.getElementById('timelineArea');
+const addSceneBtn = document.getElementById('addSceneBtn');
+const addSceneFromScript = document.getElementById('addSceneFromScript');
+const saveBtn = document.getElementById('saveBtn');
+const newProjBtn = document.getElementById('newProjBtn');
+const exportBtn = document.getElementById('exportBtn');
+const importBtn = document.getElementById('importBtn');
+const fileImport = document.getElementById('fileImport');
+const delSceneBtn = document.getElementById('delSceneBtn');
+const updateSceneBtn = document.getElementById('updateSceneBtn');
+const sceneTitle = document.getElementById('sceneTitle');
+const sceneDesc = document.getElementById('sceneDesc');
+const sceneDuration = document.getElementById('sceneDuration');
+const sceneThumb = document.getElementById('sceneThumb');
+const assetInput = document.getElementById('assetInput');
+const assetList = document.getElementById('assetList');
+const projNamePreview = projTitlePreview;
+
+// Tabs
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click', e=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  document.querySelectorAll('.tabpane').forEach(p=>p.style.display='none');
+  document.getElementById(t.dataset.tab + 'Pane').style.display = 'block';
+}));
+
+// Project helpers
+function renderProjects(){projectsEl.innerHTML='';
+  projects.forEach(p=>{
+    const el = document.createElement('div'); el.className='project'+(p.id===activeProjectId?' active':'');
+    el.innerHTML = `<div style="flex:1"><strong>${escapeHtml(p.name)}</strong><div class="hint">${p.scenes.length} scenes • ${p.tempo}fps</div></div><div style="width:40px;text-align:right;color:var(--muted)">⋯</div>`;
+    el.onclick = ()=>{selectProject(p.id)};
+    projectsEl.appendChild(el);
+  })
+}
+
+function selectProject(id){activeProjectId = id; const p = projects.find(x=>x.id===id); if(!p) return; projName.value = p.name; projTempo.value = p.tempo; projTitlePreview.textContent = p.name; projMeta.textContent = `${p.scenes.length} scenes • ${p.tempo}fps`; scriptArea.value = p.script || '';
+  renderScenes(); renderTimeline(); renderAssets(); renderProjects(); showHint('Project loaded')
+}
+
+function newProject(name='Untitled Project'){
+  const p = {id:uid('proj'),name,tempo:24,scenes:[],script:'',assets:[]}; projects.unshift(p); saveAll(); selectProject(p.id); renderProjects();
+}
+
+function deleteActiveProject(){if(!activeProjectId) return; projects = projects.filter(x=>x.id!==activeProjectId); activeProjectId = projects[0]?.id || null; saveAll(); renderProjects(); if(activeProjectId) selectProject(activeProjectId); else {clearWorkspace()}}
+
+function clearWorkspace(){projName.value='';projTempo.value='24';scriptArea.value='';sceneList.innerHTML='';timelineArea.innerHTML='';assetList.innerHTML='';projTitlePreview.textContent='Untitled Project';projMeta.textContent='0 scenes • 24fps'}
+
+// Scenes
+function renderScenes(){sceneList.innerHTML=''; const p = projects.find(x=>x.id===activeProjectId); if(!p) return; p.scenes.forEach(s=>{
+  const el = document.createElement('div'); el.className='scene'; el.draggable = true; el.dataset.id = s.id;
+  el.innerHTML = `<div class="thumb">${s.thumb?'<img src="'+s.thumb+'" style="width:100%;height:100%;object-fit:cover;border-radius:6px">':'SC'}</div>
+    <div class="meta"><h4>${escapeHtml(s.title||'Untitled')}</h4><p>${escapeHtml(s.desc||'No description')}</p><small>Duration: ${s.duration}s</small></div>
+    <div class="actions"><button class="btn small" data-action="edit">Edit</button></div>`;
+  el.querySelector('[data-action=edit]').onclick = ()=>{editScene(s.id)};
+  // drag handlers
+  el.addEventListener('dragstart', e=>{dragSourceSceneId = s.id;e.dataTransfer.setData('text/plain', s.id);el.style.opacity='0.4'})
+  el.addEventListener('dragend', e=>{dragSourceSceneId=null;el.style.opacity='1'})
+  el.addEventListener('dragover', e=>{e.preventDefault();el.style.boxShadow='0 8px 24px rgba(0,0,0,0.6)'});
+  el.addEventListener('dragleave', e=>{el.style.boxShadow='none'});
+  el.addEventListener('drop', e=>{e.preventDefault();el.style.boxShadow='none'; const id = e.dataTransfer.getData('text/plain'); reorderScenes(id, s.id)});
+  sceneList.appendChild(el);
+})
+}
+
+function addScene(title='New Scene',desc='',duration=5, thumb=null){const p = projects.find(x=>x.id===activeProjectId); if(!p) return; const s = {id:uid('sc'),title,desc,duration,thumb}; p.scenes.push(s); saveAll(); renderScenes(); renderTimeline(); projMeta.textContent = `${p.scenes.length} scenes • ${p.tempo}fps`}
+
+function editScene(id){const p = projects.find(x=>x.id===activeProjectId); if(!p) return; const s = p.scenes.find(x=>x.id===id); if(!s) return; sceneTitle.value = s.title; sceneDesc.value = s.desc; sceneDuration.value = s.duration; sceneThumb.value = ''; sceneTitle.dataset.editId = id}
+
+updateSceneBtn.addEventListener('click', ()=>{
+  const editId = sceneTitle.dataset.editId; if(!editId) return showHint('No scene selected'); const p = projects.find(x=>x.id===activeProjectId); const s = p.scenes.find(x=>x.id===editId); if(!s) return;
+  s.title = sceneTitle.value; s.desc = sceneDesc.value; s.duration = Number(sceneDuration.value) || 5;
+  // thumbnail upload
+  const file = sceneThumb.files[0]; if(file){const reader = new FileReader(); reader.onload = e=>{s.thumb = e.target.result; saveAll(); renderScenes(); renderTimeline(); showHint('Scene updated');}; reader.readAsDataURL(file);} else {saveAll(); renderScenes(); renderTimeline(); showHint('Scene updated')}
+})
+
+delSceneBtn.addEventListener('click', ()=>{
+  const editId = sceneTitle.dataset.editId; if(!editId) return; const p = projects.find(x=>x.id===activeProjectId); p.scenes = p.scenes.filter(x=>x.id!==editId); delete sceneTitle.dataset.editId; saveAll(); renderScenes(); renderTimeline(); projMeta.textContent = `${p.scenes.length} scenes • ${p.tempo}fps`; showHint('Scene deleted')
+})
+
+function reorderScenes(dragId, dropId){const p = projects.find(x=>x.id===activeProjectId); if(!p) return; const i = p.scenes.findIndex(s=>s.id===dragId); const j = p.scenes.findIndex(s=>s.id===dropId); if(i<0||j<0) return; const [sc] = p.scenes.splice(i,1); p.scenes.splice(j,0,sc); saveAll(); renderScenes(); renderTimeline();}
+
+// Timeline
+function renderTimeline(){timelineArea.innerHTML=''; const p = projects.find(x=>x.id===activeProjectId); if(!p) return; p.scenes.forEach(s=>{const el = document.createElement('div'); el.className='clip'; el.textContent = s.title + '\n' + s.duration + 's'; timelineArea.appendChild(el)})}
+
+// Assets
+assetInput.addEventListener('change', ()=>{
+  const files = Array.from(assetInput.files); const p = projects.find(x=>x.id===activeProjectId); if(!p) return;
+  files.forEach(f=>{const reader = new FileReader(); reader.onload = e=>{p.assets.push({id:uid('a'),name:f.name,type:f.type,data:e.target.result}); saveAll(); renderAssets();}; reader.readAsDataURL(f)})
+});
+
+function renderAssets(){assetList.innerHTML=''; const p = projects.find(x=>x.id===activeProjectId); if(!p) return; p.assets.forEach(a=>{const el = document.createElement('div'); el.style.width='86px'; el.style.height='86px'; el.style.borderRadius='8px'; el.style.overflow='hidden'; el.style.display='flex'; el.style.alignItems='center'; el.style.justifyContent='center'; el.style.border='1px solid rgba(255,255,255,0.03)'; if(a.type.startsWith('image')) el.innerHTML = `<img src="${a.data}" style="width:100%;height:100%;object-fit:cover">`; else el.textContent = a.name; assetList.appendChild(el)})}
+
+// Script -> scene
+addSceneFromScript.addEventListener('click', ()=>{
+  const text = scriptArea.value.trim(); if(!text) return showHint('No script text'); addScene('Scene '+(projects.find(x=>x.id===activeProjectId).scenes.length+1), text.slice(0,220),5); projects.find(x=>x.id===activeProjectId).script = scriptArea.value; saveAll(); renderScenes(); renderTimeline(); showHint('Scene created from script')
+})
+
+// Save / export / import
+saveBtn.addEventListener('click', ()=>{const p = projects.find(x=>x.id===activeProjectId); if(!p) return; p.name = projName.value; p.tempo = Number(projTempo.value); p.script = scriptArea.value; saveAll(); renderProjects(); projTitlePreview.textContent = p.name; showHint('Saved')})
+
+exportBtn.addEventListener('click', ()=>{if(!activeProjectId) return; const p = projects.find(x=>x.id===activeProjectId); const blob = new Blob([JSON.stringify(p, null, 2)], {type:'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = (p.name||'project') + '.mms.json'; a.click(); URL.revokeObjectURL(url); showHint('Exported')})
+
+importBtn.addEventListener('click', ()=>fileImport.click());
+fileImport.addEventListener('change', ()=>{const f = fileImport.files[0]; if(!f) return; const r = new FileReader(); r.onload = e=>{try{const obj = JSON.parse(e.target.result); // if it's a full project or array
+  if(Array.isArray(obj)) projects = obj.concat(projects); else if(obj.id) projects.unshift(obj); saveAll(); renderProjects(); selectProject(projects[0].id); showHint('Imported') }catch(err){showHint('Import failed') }}; r.readAsText(f)});
+
+// Tiny preview (just cycles scenes titles like a slide)
+document.getElementById('playPreview').addEventListener('click', ()=>{
+  const p = projects.find(x=>x.id===activeProjectId); if(!p||p.scenes.length===0) return showHint('No scenes to preview'); let i=0; const overlay = document.createElement('div'); overlay.style.position='fixed'; overlay.style.inset=0; overlay.style.background='rgba(2,6,23,0.9)'; overlay.style.display='flex'; overlay.style.alignItems='center'; overlay.style.justifyContent='center'; overlay.style.zIndex=9999; overlay.style.flexDirection='column'; overlay.addEventListener('click', ()=>{document.body.removeChild(overlay)})
+  const card = document.createElement('div'); card.style.background='#02121a'; card.style.padding='20px'; card.style.borderRadius='12px'; card.style.textAlign='center'; card.style.maxWidth='720px'; card.style.color='white'; const title = document.createElement('div'); title.style.fontSize='26px'; title.style.fontWeight=700; const desc = document.createElement('div'); desc.style.marginTop='6px'; desc.style.color='var(--muted)'; card.appendChild(title); card.appendChild(desc); overlay.appendChild(card); document.body.appendChild(overlay);
+  function step(){const s = p.scenes[i]; title.textContent = s.title; desc.textContent = s.desc||''; i++; if(i<p.scenes.length) setTimeout(step, Math.max(800, s.duration*200)); else setTimeout(()=>{document.body.removeChild(overlay)}, 900)}; step();
+})
+
+// Small helpers
+function escapeHtml(s){if(!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+function showHint(t){const f = document.querySelector('footer .hint'); if(!f) return; const old = f.textContent; f.textContent = t; setTimeout(()=>{f.textContent = old},1500)}
+
+// New / delete project
+newProjBtn.addEventListener('click', ()=>{newProject(prompt('Project name','Untitled Project')||'Untitled Project')});
+document.getElementById('deleteProjBtn').addEventListener('click', ()=>{if(!activeProjectId) return; if(confirm('Delete project?')) deleteActiveProject();});
+
+// Shuffle scenes
+document.getElementById('shuffleScenes').addEventListener('click', ()=>{const p = projects.find(x=>x.id===activeProjectId); if(!p) return; for(let i=p.scenes.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[p.scenes[i],p.scenes[j]]=[p.scenes[j],p.scenes[i]]} saveAll(); renderScenes(); renderTimeline(); showHint('Shuffled')});
+
+// keyboard shortcuts
+window.addEventListener('keydown', e=>{
+  const cmd = e.ctrlKey || e.metaKey;
+  if(cmd && e.key.toLowerCase() === 's'){e.preventDefault(); saveBtn.click()}
+  if(cmd && e.key.toLowerCase() === 'e'){e.preventDefault(); exportBtn.click()}
+  if(cmd && e.key.toLowerCase() === 'n'){e.preventDefault(); newProjBtn.click()}
+});
+
+// bootstrap default project
+if(!projects || projects.length===0){newProject('My First Project'); projects[0].script = "INT. ROOM - DAY\n\nAlice sits with a cup of coffee.\nShe looks out the window, deep in thought."; projects[0].scenes.push({id:uid('sc'),title:'Opening',desc:'Alice opens introspection',duration:6,thumb:null}); projects[0].scenes.push({id:uid('sc'),title:'Phone Call',desc:'A tense phone call.',duration:4,thumb:null}); saveAll();}
+
+renderProjects(); if(!activeProjectId) selectProject(projects[0].id);
+
+</script>
+</body>
+</html>
