@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>IQ Brick Breaker Toy</title>
+<style>
+  body { margin:0; background:#0d0d0d; color:#fff; text-align:center; font-family:sans-serif; }
+  canvas { display:block; margin:20px auto; border:0; box-shadow: 0 0 30px #0ff; border-radius: 15px; background: linear-gradient(135deg,#111,#222); }
+  #info { margin-top:10px; font-size:18px; color:#0ff; text-shadow:0 0 10px #0ff; }
+</style>
+</head>
+<body>
+
+<h1 style="color:#0ff; text-shadow:0 0 10px #0ff;">IQ Brick Breaker Toy</h1>
+<p style="color:#0ff;">This is a toy game. Playful IQ-style brick breaker. Not a real IQ test!</p>
+
+<canvas id="gameCanvas" width="600" height="400"></canvas>
+<div id="info">Level: 1 | IQ Score: 80</div>
+
+<script>
+const canvas=document.getElementById('gameCanvas');
+const ctx=canvas.getContext('2d');
+
+// --- Game Variables ---
+let ballRadius=10, x=canvas.width/2, y=canvas.height-30, dx=3, dy=-3;
+let paddleHeight=12, paddleWidth=120, paddleX=(canvas.width-paddleWidth)/2;
+let rightPressed=false, leftPressed=false;
+let brickRowCount=3, brickColumnCount=5, brickWidth=100, brickHeight=22;
+let brickPadding=12, brickOffsetTop=35, brickOffsetLeft=40;
+let bricks=[], level=1, iqScore=80, maxIQ=160;
+let currentSequence=[], sequenceIndex=0;
+let inMiniGame=false, miniGameType="", miniSequence=[], miniIndex=0, mathAnswer=0;
+
+// --- Particle trail ---
+let particles=[];
+class Particle {
+    constructor(x,y){
+        this.x=x; this.y=y;
+        this.alpha=1;
+        this.size=Math.random()*3+1;
+        this.dx=(Math.random()-0.5)*1.5;
+        this.dy=(Math.random()-0.5)*1.5;
+    }
+    update(){
+        this.x+=this.dx; this.y+=this.dy; this.alpha-=0.03;
+    }
+    draw(){
+        ctx.fillStyle=`rgba(0,255,255,${this.alpha})`;
+        ctx.beginPath();
+        ctx.arc(this.x,this.y,this.size,0,Math.PI*2);
+        ctx.fill();
+    }
+}
+
+// --- Colors & Glow ---
+const neonColors=['#ff3f3f','#3fbfff','#3fff6e','#fff03f'];
+function getBrickColor(r,c){return neonColors[(r+c)%neonColors.length];}
+
+// --- Init Bricks ---
+function resetBricks(){ bricks=[]; for(let c=0;c<brickColumnCount;c++){ bricks[c]=[]; for(let r=0;r<brickRowCount;r++){ bricks[c][r]={x:0,y:0,status:1,color:getBrickColor(r,c)}; } } generateSequence(); }
+
+// --- Event Listeners ---
+document.addEventListener("keydown",e=>{ if(e.key=="Right"||e.key=="ArrowRight") rightPressed=true; else if(e.key=="Left"||e.key=="ArrowLeft") leftPressed=true; if(inMiniGame&&miniGameType=="math"){ if(parseInt(e.key)==mathAnswer){iqScore+=5; alert("Correct! IQ bonus awarded!"); endMiniGame();} }});
+document.addEventListener("keyup",e=>{ if(e.key=="Right"||e.key=="ArrowRight") rightPressed=false; else if(e.key=="Left"||e.key=="ArrowLeft") leftPressed=false;});
+canvas.addEventListener("click",e=>{ if(inMiniGame&&miniGameType=="memory"){ let rect=canvas.getBoundingClientRect(); let mx=e.clientX-rect.left, my=e.clientY-rect.top; for(let i=0;i<miniSequence.length;i++){ let sq=miniSequence[i]; if(mx>sq.x && mx<sq.x+50 && my>sq.y && my<sq.y+50){ if(i==miniIndex){ miniIndex++; if(miniIndex>=miniSequence.length){ iqScore+=5; alert("Memory sequence correct! IQ bonus awarded!"); endMiniGame();} } else { alert("Wrong square! Mini-game failed."); endMiniGame(); } }}});
+
+// --- Draw Functions ---
+function drawBall(){ 
+    ctx.beginPath(); ctx.arc(x,y,ballRadius,0,Math.PI*2); ctx.fillStyle="#0ff"; ctx.shadowColor="#0ff"; ctx.shadowBlur=20; ctx.fill(); ctx.closePath(); 
+}
+function drawPaddle(){ 
+    ctx.beginPath(); ctx.rect(paddleX,canvas.height-paddleHeight-10,paddleWidth,paddleHeight); ctx.fillStyle="#0ff"; ctx.shadowColor="#0ff"; ctx.shadowBlur=20; ctx.fill(); ctx.closePath(); 
+}
+function drawBricks(){ 
+    for(let c=0;c<brickColumnCount;c++){ for(let r=0;r<brickRowCount;r++){ if(bricks[c][r].status==1){ let brickX=c*(brickWidth+brickPadding)+brickOffsetLeft; let brickY=r*(brickHeight+brickPadding)+brickOffsetTop; bricks[c][r].x=brickX; bricks[c][r].y=brickY; ctx.beginPath(); ctx.rect(brickX,brickY,brickWidth,brickHeight); ctx.fillStyle=(currentSequence.length>0 && currentSequence[sequenceIndex]==r*brickColumnCount+c)?"#fff":bricks[c][r].color; ctx.shadowColor=(currentSequence.length>0 && currentSequence[sequenceIndex]==r*brickColumnCount+c)?"#fff":bricks[c][r].color; ctx.shadowBlur=15; ctx.fill(); ctx.closePath(); }}}}
+
+// --- IQ Puzzle ---
+function generateSequence(){ currentSequence=[]; sequenceIndex=0; if(level<=2){for(let i=0;i<brickRowCount*brickColumnCount;i++) currentSequence.push(i);} else if(level<=4){for(let i=0;i<brickRowCount*brickColumnCount;i++) if(isPrime(i)) currentSequence.push(i);} else{ let arr=[]; for(let i=0;i<brickRowCount*brickColumnCount;i++) arr.push(i); currentSequence=shuffleArray(arr); } }
+function isPrime(n){ if(n<2) return false; for(let i=2;i<=Math.sqrt(n);i++){if(n%i==0) return false;} return true; }
+function shuffleArray(a){ for(let i=a.length-1;i>0;i--){ let j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+// --- Collision ---
+function collisionDetection(){ for(let c=0;c<brickColumnCount;c++){ for(let r=0;r<brickRowCount;r++){ let b=bricks[c][r]; if(b.status==1 && x>b.x && x<b.x+brickWidth && y>b.y && y<b.y+brickHeight){ dy=-dy; let idx=r*brickColumnCount+c; if(currentSequence.length>0){ if(idx==currentSequence[sequenceIndex]){ b.status=0; sequenceIndex++; increaseIQ(); checkLevelUp(); } else { alert("Wrong brick! Sequence resets."); resetLevelPuzzle(); } } else { b.status=0; increaseIQ(); checkLevelUp(); } }}}}
+function increaseIQ(){ iqScore+=1+Math.floor(level/2); if(iqScore>maxIQ) iqScore=maxIQ; document.getElementById("info").textContent=`Level: ${level} | IQ Score: ${iqScore}`; }
+function checkLevelUp(){ let allCleared=true; for(let c=0;c<brickColumnCount;c++){for(let r=0;r<brickRowCount;r++){if(bricks[c][r].status==1) allCleared=false;}} if(allCleared){ level++; brickRowCount=Math.min(5,brickRowCount+1); dx*=1.1; dy*=1.1; startMiniGame(); } }
+function resetLevelPuzzle(){ resetBricks(); sequenceIndex=0; }
+
+// --- Mini-game ---
+function startMiniGame(){ inMiniGame=true; miniGameType=Math.random()<0.5?"memory":"math"; if(miniGameType=="memory"){ generateMemoryGame(); drawMiniGame(); } else{ generateMathGame(); drawMiniGame(); } }
+function endMiniGame(){ inMiniGame=false; resetBricks(); }
+function generateMemoryGame(){ miniSequence=[]; miniIndex=0; for(let i=0;i<3+level;i++){ miniSequence.push({x:Math.random()*(canvas.width-50), y:Math.random()*(canvas.height-50)}); } alert("Memory mini-game: Click the squares in order!"); }
+function generateMathGame(){ let a=Math.floor(Math.random()*10+level), b=Math.floor(Math.random()*10+level); mathAnswer=a+b; alert(`Math mini-game: Solve ${a} + ${b} using your keyboard!`); }
+function drawMiniGame(){ ctx.clearRect(0,0,canvas.width,canvas.height); if(miniGameType=="memory"){ for(let i=0;i<miniSequence.length;i++){ ctx.fillStyle="#0ff"; ctx.shadowColor="#0ff"; ctx.shadowBlur=20; ctx.fillRect(miniSequence[i].x,miniSequence[i].y,50,50); } } else { ctx.fillStyle="#0ff"; ctx.font="30px sans-serif"; ctx.fillText(`Solve: ??? + ??? (check alert)`,50,200); } }
+
+// --- Main Draw Loop ---
+function draw(){
+    if(!inMiniGame){
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        drawBricks(); drawBall(); drawPaddle(); collisionDetection();
+
+        // Add particle trail
+        particles.push(new Particle(x,y));
+        particles.forEach((p,i)=>{ p.update(); p.draw(); if(p.alpha<=0) particles.splice(i,1); });
+
+        if(x+dx>canvas.width-ballRadius || x+dx<ballRadius) dx=-dx;
+        if(y+dy<ballRadius) dy=-dy;
+        else if(y+dy>canvas.height-ballRadius-10){ if(x>paddleX && x<paddleX+paddleWidth) dy=-dy; else{ alert(`Game Over! Your final toy IQ: ${iqScore}`); document.location.reload(); } }
+        if(rightPressed && paddleX<canvas.width-paddleWidth) paddleX+=7;
+        if(leftPressed && paddleX>0) paddleX-=7;
+        x+=dx; y+=dy;
+    }
+    requestAnimationFrame(draw);
+}
+
+resetBricks();
+draw();
+</script>
+</body>
+</html>
