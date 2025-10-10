@@ -107,7 +107,7 @@
 
     function createParticles() {
       particles = [];
-      const count = +sliders.count.value;
+      const count = +sliders.count.value/100;
       const palette = getPalette();
       for (let i = 0; i < count; i++) {
         const x = Math.random() * w / 2;
