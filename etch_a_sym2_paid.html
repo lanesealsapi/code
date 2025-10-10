@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Rorschach Particle Generator — Cinderella Mode</title>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+      background: radial-gradient(circle at center, #0b0f1a 0%, #05070a 100%);
+      color: #e2e8f0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .controls {
+      position: fixed;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(10, 15, 25, 0.8);
+      backdrop-filter: blur(12px);
+      padding: 12px 16px;
+      border-radius: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      box-shadow: 0 0 30px rgba(255,255,255,0.1);
+    }
+
+    button, input[type=range], input[type=color] {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 6px 10px;
+    }
+
+    button:hover {
+      background: rgba(255,255,255,0.2);
+    }
+
+    label {
+      font-size: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      color: #cbd5e1;
+    }
+
+    canvas {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      display: block;
+      background: transparent;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="art"></canvas>
+  <div class="controls">
+    <label>🎨Color 1<input type="color" id="c1" value="#fbbf24"></label>
+    <label>🎨Color 2<input type="color" id="c2" value="#a78bfa"></label>
+    <label>🎨Color 3<input type="color" id="c3" value="#93c5fd"></label>
+    <label>✨Particles<input id="count" type="range" min="50" max="800" value="250"></label>
+    <label>🌟Size<input id="size" type="range" min="1" max="10" value="4"></label>
+    <label>💫Speed<input id="speed" type="range" min="1" max="10" value="4"></label>
+    <label>⚡Jitter<input id="jitter" type="range" min="0" max="10" value="2"></label>
+    <button id="trail">Motion Trail: Off</button>
+    <button id="save">Download PNG</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('art');
+    const ctx = canvas.getContext('2d');
+    const sliders = {
+      count: document.getElementById('count'),
+      size: document.getElementById('size'),
+      speed: document.getElementById('speed'),
+      jitter: document.getElementById('jitter'),
+    };
+    const colors = [document.getElementById('c1'), document.getElementById('c2'), document.getElementById('c3')];
+    const trailBtn = document.getElementById('trail');
+    const saveBtn = document.getElementById('save');
+
+    let particles = [];
+    let w, h;
+    let motionTrail = false;
+
+    function resize() {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    function getPalette() {
+      return colors.map(c => c.value);
+    }
+
+    function createParticles() {
+      particles = [];
+      const count = +sliders.count.value;
+      const palette = getPalette();
+      for (let i = 0; i < count; i++) {
+        const x = Math.random() * w / 2;
+        const y = Math.random() * h;
+        particles.push({
+          x, y,
+          vx: (Math.random() - 0.5),
+          vy: (Math.random() - 0.5),
+          r: +sliders.size.value * (0.5 + Math.random()),
+          color: palette[Math.floor(Math.random() * palette.length)],
+          alpha: 0.5 + Math.random() * 0.5,
+        });
+      }
+    }
+
+    function drawParticle(p) {
+      const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 3);
+      gradient.addColorStop(0, p.color);
+      gradient.addColorStop(1, 'transparent');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // mirror
+      const mx = w - p.x;
+      const my = p.y;
+      const mg = ctx.createRadialGradient(mx, my, 0, mx, my, p.r * 3);
+      mg.addColorStop(0, p.color);
+      mg.addColorStop(1, 'transparent');
+      ctx.fillStyle = mg;
+      ctx.beginPath();
+      ctx.arc(mx, my, p.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function updateParticles() {
+      const speed = +sliders.speed.value * 0.3;
+      const jitter = +sliders.jitter.value * 0.1;
+      for (const p of particles) {
+        p.vx += (Math.random() - 0.5) * jitter;
+        p.vy += (Math.random() - 0.5) * jitter;
+        p.x += p.vx * speed;
+        p.y += p.vy * speed;
+
+        if (p.y < 0 || p.y > h) p.vy *= -1;
+        if (p.x < 0 || p.x > w / 2) p.vx *= -1;
+      }
+    }
+
+    function animate() {
+      if (!motionTrail) {
+        ctx.clearRect(0, 0, w, h);
+      } else {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+        ctx.fillRect(0, 0, w, h);
+      }
+
+      ctx.globalCompositeOperation = 'lighter';
+      for (const p of particles) drawParticle(p);
+      ctx.globalCompositeOperation = 'source-over';
+
+      updateParticles();
+
+      requestAnimationFrame(animate);
+    }
+
+    function refresh() {
+      createParticles();
+    }
+
+    // Any change triggers refresh
+    Object.values(sliders).forEach(sl => sl.addEventListener('input', refresh));
+    colors.forEach(c => c.addEventListener('input', refresh));
+
+    trailBtn.addEventListener('click', () => {
+      motionTrail = !motionTrail;
+      trailBtn.textContent = `Motion Trail: ${motionTrail ? 'On' : 'Off'}`;
+    });
+
+    saveBtn.addEventListener('click', () => {
+      const link = document.createElement('a');
+      link.download = `cinderella_rorschach_${Date.now()}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    });
+
+    createParticles();
+    animate();
+  </script>
+</body>
+</html>
