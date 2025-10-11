@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Letter Punch Rhythm - Spaced Waves</title>
+<style>
+  body { margin:0; overflow:hidden; background:#111; font-family:'Arial'; color:#fff; display:flex; flex-direction:column; align-items:center; }
+  canvas { background:#222; display:block; margin:auto; }
+  #scoreboard { font-size:22px; margin:10px; text-shadow:0 0 5px #0ff; }
+  #combo { font-size:18px; margin-bottom:5px; color:#ff0; }
+</style>
+</head>
+<body>
+<div id="scoreboard">Score: 0 | High Score: 0</div>
+<div id="combo">Combo: 0</div>
+<canvas id="gameCanvas" width="600" height="800"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+let letters = [];
+let particles = [];
+let score = 0;
+let highScore = 0;
+let combo = 0;
+let speed = 1.5;
+let frameCount = 0;
+
+// Letter pattern cooldown
+let patternCooldown = 0;
+const patternDelay = 100; // frames between patterns
+
+const patterns = ["ASDFG","QWERT","ZXCVB","MNBVC","POIUY"];
+
+function drawTile(letter, x, y, scale=1){
+    ctx.save();
+    ctx.translate(x+25, y+25);
+    ctx.scale(scale, scale);
+    ctx.translate(-25, -25);
+    const grd = ctx.createLinearGradient(0,0,50,50);
+    grd.addColorStop(0,'#1abc9c');
+    grd.addColorStop(1,'#16a085');
+    ctx.fillStyle = grd;
+    ctx.shadowColor='#0ff';
+    ctx.shadowBlur=15;
+    ctx.fillRect(0,0,50,50);
+    ctx.strokeStyle='#fff';
+    ctx.lineWidth=2;
+    ctx.strokeRect(0,0,50,50);
+    ctx.fillStyle='#fff';
+    ctx.font='32px Arial';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.fillText(letter,25,25);
+    ctx.restore();
+}
+
+function spawnLetterPattern(){
+    const pattern = patterns[Math.floor(Math.random()*patterns.length)];
+    for(let i=0;i<pattern.length;i++){
+        const x = 100 + i*100;
+        letters.push({letter: pattern[i], x, y:-50, scale:1, bounce:0});
+    }
+}
+
+// Particles
+function createParticles(x,y,color='#0ff'){
+    for(let i=0;i<20;i++){
+        particles.push({x:x+25, y:y+25, vx:(Math.random()-0.5)*5, vy:(Math.random()-0.5)*5, alpha:1, size:Math.random()*4+2, color});
+    }
+}
+
+// Update
+function update(){
+    frameCount++;
+    if(patternCooldown>0){
+        patternCooldown--;
+    } else {
+        spawnLetterPattern();
+        patternCooldown = patternDelay; // reset cooldown
+    }
+
+    letters.forEach(l=>{
+        l.y += speed;
+        if(l.bounce>0){
+            l.scale = 1 + Math.sin(l.bounce*Math.PI)*0.4;
+            l.bounce -= 0.1;
+        } else l.scale=1;
+    });
+
+    letters = letters.filter(l=>{
+        if(l.y>canvas.height){
+            combo=0; score=Math.max(0,score-1); updateCombo();
+            return false;
+        }
+        return true;
+    });
+
+    particles.forEach(p=>{p.x+=p.vx; p.y+=p.vy; p.alpha-=0.03;});
+    particles = particles.filter(p=>p.alpha>0);
+
+    if(frameCount % 300 === 0){ speed += 0.2; }
+}
+
+// Draw
+function draw(){
+    ctx.fillStyle='rgba(0,0,0,0.3)';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    letters.forEach(l=>drawTile(l.letter,l.x,l.y,l.scale));
+    particles.forEach(p=>{
+        ctx.globalAlpha=p.alpha;
+        ctx.fillStyle=p.color;
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
+        ctx.fill();
+        ctx.globalAlpha=1;
+    });
+}
+
+// Key handling
+window.addEventListener('keydown',(e)=>{
+    const key = e.key.toUpperCase();
+    for(let i=0;i<letters.length;i++){
+        if(letters[i].letter===key){
+            letters[i].bounce=1;
+            createParticles(letters[i].x,letters[i].y);
+            letters.splice(i,1);
+            combo++;
+            score += combo;
+            if(score>highScore) highScore=score;
+            updateScore(); updateCombo();
+            return;
+        }
+    }
+    combo=0; updateCombo();
+});
+
+function updateScore(){ document.getElementById('scoreboard').innerText = `Score: ${score} | High Score: ${highScore}`; }
+function updateCombo(){ document.getElementById('combo').innerText = `Combo: ${combo}`; }
+
+function loop(){ update(); draw(); requestAnimationFrame(loop); }
+
+loop();
+</script>
+</body>
+</html>
