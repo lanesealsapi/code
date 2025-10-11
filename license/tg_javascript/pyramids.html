@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>3D Pyramid Drag & Drop</title>
+<style>
+  body { margin: 0; overflow: hidden; background: #222; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let pyramids = [];
+const NUM_PYRAMIDS = 5;
+
+// 3D to 2D projection
+function project(point, width, height, fov, viewDistance) {
+    const factor = fov / (viewDistance + point.z);
+    return {
+        x: point.x * factor + width / 2,
+        y: -point.y * factor + height / 2
+    };
+}
+
+// Pyramid constructor
+function Pyramid(x, y, z, size) {
+    this.pos = { x, y, z };
+    this.size = size;
+    this.vertices = [
+        { x: 0, y: size, z: 0 }, // top
+        { x: -size, y: -size, z: -size },
+        { x: size, y: -size, z: -size },
+        { x: size, y: -size, z: size },
+        { x: -size, y: -size, z: size }
+    ];
+    this.faces = [
+        [0,1,2],
+        [0,2,3],
+        [0,3,4],
+        [0,4,1],
+        [1,2,3,4]
+    ];
+}
+
+// Initialize pyramids
+for(let i=0;i<NUM_PYRAMIDS;i++){
+    pyramids.push(new Pyramid(
+        (Math.random()-0.5)*500,
+        (Math.random()-0.5)*500,
+        (Math.random()-0.5)*500,
+        50
+    ));
+}
+
+// Rotation around axes
+function rotate(point, ax, ay) {
+    let cosX = Math.cos(ax), sinX = Math.sin(ax);
+    let cosY = Math.cos(ay), sinY = Math.sin(ay);
+
+    let y = point.y * cosX - point.z * sinX;
+    let z = point.y * sinX + point.z * cosX;
+    point.y = y; point.z = z;
+
+    let x = point.x * cosY + point.z * sinY;
+    z = -point.x * sinY + point.z * cosY;
+    point.x = x; point.z = z;
+}
+
+// Drag and drop
+let dragging = null;
+let offset = {x:0, y:0, z:0};
+
+canvas.addEventListener('mousedown', e => {
+    const mouse = { x: e.clientX, y: e.clientY };
+    for(let p of pyramids){
+        const proj = project({x:p.pos.x, y:p.pos.y, z:p.pos.z}, canvas.width, canvas.height, 500, 500);
+        const dx = mouse.x - proj.x;
+        const dy = mouse.y - proj.y;
+        if(Math.sqrt(dx*dx+dy*dy)<50){
+            dragging = p;
+            offset.x = p.pos.x;
+            offset.y = p.pos.y;
+            offset.z = p.pos.z;
+            break;
+        }
+    }
+});
+canvas.addEventListener('mouseup', ()=>dragging=null);
+canvas.addEventListener('mousemove', e=>{
+    if(dragging){
+        const factor = 500/(500 + dragging.pos.z);
+        dragging.pos.x = (e.clientX - canvas.width/2)/factor;
+        dragging.pos.y = -(e.clientY - canvas.height/2)/factor;
+    }
+});
+
+// Scene rotation with right mouse
+let rotating = false;
+let lastMouse = {x:0, y:0};
+let rotX=0, rotY=0;
+
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('mousedown', e=>{
+    if(e.button===2){
+        rotating = true;
+        lastMouse.x = e.clientX;
+        lastMouse.y = e.clientY;
+    }
+});
+canvas.addEventListener('mouseup', e=>{
+    if(e.button===2) rotating=false;
+});
+canvas.addEventListener('mousemove', e=>{
+    if(rotating){
+        const dx = e.clientX - lastMouse.x;
+        const dy = e.clientY - lastMouse.y;
+        rotY += dx * 0.01;
+        rotX += dy * 0.01;
+        lastMouse.x = e.clientX;
+        lastMouse.y = e.clientY;
+    }
+});
+
+// Draw
+function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    for(let p of pyramids){
+        let projected = p.vertices.map(v=>{
+            let point = {x:v.x + p.pos.x, y:v.y + p.pos.y, z:v.z + p.pos.z};
+            rotate(point, rotX, rotY);
+            return project(point, canvas.width, canvas.height, 500, 500);
+        });
+        // Draw faces
+        for(let f of p.faces){
+            ctx.beginPath();
+            ctx.moveTo(projected[f[0]].x, projected[f[0]].y);
+            for(let i=1;i<f.length;i++){
+                ctx.lineTo(projected[f[i]].x, projected[f[i]].y);
+            }
+            ctx.closePath();
+            ctx.fillStyle = 'white';
+            ctx.fill();
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+    }
+    requestAnimationFrame(draw);
+}
+
+draw();
+</script>
+</body>
+</html>
