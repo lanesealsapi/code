@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Speech to Particles</title>
+<style>
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: black;
+    font-family: system-ui, sans-serif;
+    color: white;
+  }
+  #commands {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(30,30,30,0.7);
+    padding: 10px 15px;
+    border-radius: 10px;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  #commands h3 {
+    margin-top: 0;
+    font-size: 16px;
+  }
+  canvas {
+    display: block;
+  }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<div id="commands">
+  <h3>🎤 Speech Commands:</h3>
+  <strong>Colors:</strong><br>
+  red, orange, yellow, green, blue, indigo, violet<br><br>
+  <strong>Move:</strong><br>
+  left, right, up, down<br><br>
+  <em>Say a color or direction aloud!</em>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let W = canvas.width = window.innerWidth;
+let H = canvas.height = window.innerHeight;
+
+window.addEventListener('resize', () => {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+});
+
+class Particle {
+  constructor(x, y, color) {
+    this.x = x;
+    this.y = y;
+    this.color = color;
+    this.vx = (Math.random() - 0.5) * 2;
+    this.vy = (Math.random() - 0.5) * 2;
+    this.size = Math.random() * 2 + 1;
+  }
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    if (this.x < 0 || this.x > W) this.vx *= -1;
+    if (this.y < 0 || this.y > H) this.vy *= -1;
+  }
+  draw() {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+    ctx.fillStyle = this.color;
+    ctx.fill();
+  }
+}
+
+const particles = [];
+let currentColor = 'white';
+for (let i = 0; i < 200; i++) {
+  particles.push(new Particle(Math.random() * W, Math.random() * H, currentColor));
+}
+
+function animate() {
+  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  ctx.fillRect(0, 0, W, H);
+  for (let p of particles) {
+    p.update();
+    p.draw();
+  }
+  requestAnimationFrame(animate);
+}
+animate();
+
+function moveParticles(dx, dy) {
+  for (let p of particles) {
+    p.x += dx;
+    p.y += dy;
+  }
+}
+
+function changeColor(color) {
+  for (let p of particles) p.color = color;
+}
+
+function startRecognition() {
+  window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!window.SpeechRecognition) {
+    alert("Speech Recognition not supported in this browser. Try Chrome.");
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+  recognition.continuous = true;
+  recognition.interimResults = false;
+  recognition.lang = 'en-US';
+
+  recognition.onresult = (event) => {
+    const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
+    console.log('Heard:', transcript);
+    if (transcript.includes('red')) changeColor('red');
+    else if (transcript.includes('orange')) changeColor('orange');
+    else if (transcript.includes('yellow')) changeColor('yellow');
+    else if (transcript.includes('green')) changeColor('green');
+    else if (transcript.includes('blue')) changeColor('blue');
+    else if (transcript.includes('indigo')) changeColor('indigo');
+    else if (transcript.includes('violet')) changeColor('violet');
+
+    const step = 100;
+    if (transcript.includes('left')) moveParticles(-step, 0);
+    else if (transcript.includes('right')) moveParticles(step, 0);
+    else if (transcript.includes('up')) moveParticles(0, -step);
+    else if (transcript.includes('down')) moveParticles(0, step);
+  };
+
+  recognition.onerror = (e) => console.error(e);
+  recognition.onend = () => recognition.start(); // Auto restart
+  recognition.start();
+}
+
+// ✅ Request mic access once when page loads
+window.addEventListener('load', () => {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert("Microphone access not supported in this browser.");
+    return;
+  }
+
+  navigator.mediaDevices.getUserMedia({ audio: true })
+    .then(stream => {
+      // immediately stop tracks (SpeechRecognition handles mic)
+      stream.getTracks().forEach(t => t.stop());
+      startRecognition();
+    })
+    .catch(() => {
+      alert("Microphone permission denied. Please allow it and reload.");
+    });
+});
+</script>
+</body>
+</html>
