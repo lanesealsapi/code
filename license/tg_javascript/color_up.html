@@ -26,6 +26,18 @@
     margin-top: 0;
     font-size: 16px;
   }
+  #debug {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    right: 10px;
+    background: rgba(20, 20, 20, 0.7);
+    padding: 10px 15px;
+    border-radius: 10px;
+    font-size: 14px;
+    color: #0f0;
+    font-family: monospace;
+  }
   canvas {
     display: block;
   }
@@ -42,6 +54,8 @@
   left, right, up, down<br><br>
   <em>Say a color or direction aloud!</em>
 </div>
+
+<div id="debug">Listening...</div>
 
 <script>
 const canvas = document.getElementById('canvas');
@@ -114,33 +128,57 @@ function startRecognition() {
 
   const recognition = new SpeechRecognition();
   recognition.continuous = true;
-  recognition.interimResults = false;
+  recognition.interimResults = true;
   recognition.lang = 'en-US';
 
-  recognition.onresult = (event) => {
-    const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
-    console.log('Heard:', transcript);
-    if (transcript.includes('red')) changeColor('red');
-    else if (transcript.includes('orange')) changeColor('orange');
-    else if (transcript.includes('yellow')) changeColor('yellow');
-    else if (transcript.includes('green')) changeColor('green');
-    else if (transcript.includes('blue')) changeColor('blue');
-    else if (transcript.includes('indigo')) changeColor('indigo');
-    else if (transcript.includes('violet')) changeColor('violet');
+  const debugEl = document.getElementById('debug');
 
-    const step = 100;
-    if (transcript.includes('left')) moveParticles(-step, 0);
-    else if (transcript.includes('right')) moveParticles(step, 0);
-    else if (transcript.includes('up')) moveParticles(0, -step);
-    else if (transcript.includes('down')) moveParticles(0, step);
+  recognition.onresult = (event) => {
+    let interim = '';
+    let finalText = '';
+
+    for (let i = event.resultIndex; i < event.results.length; ++i) {
+      const transcript = event.results[i][0].transcript.toLowerCase();
+      if (event.results[i].isFinal) {
+        finalText += transcript + ' ';
+        processCommand(transcript);
+      } else {
+        interim += transcript;
+      }
+    }
+
+    debugEl.textContent = finalText || interim || 'Listening...';
   };
 
-  recognition.onerror = (e) => console.error(e);
-  recognition.onend = () => recognition.start(); // Auto restart
+  recognition.onerror = (e) => {
+    console.error(e);
+    debugEl.textContent = 'Error: ' + e.error;
+  };
+
+  recognition.onend = () => recognition.start(); // Restart if ended
   recognition.start();
 }
 
-// ✅ Request mic access once when page loads
+function processCommand(text) {
+  // regex with word boundaries to catch variations like "go left"
+  const match = (word) => new RegExp("\\b" + word + "\\b").test(text);
+
+  if (match('red')) changeColor('red');
+  else if (match('orange')) changeColor('orange');
+  else if (match('yellow')) changeColor('yellow');
+  else if (match('green')) changeColor('green');
+  else if (match('blue')) changeColor('blue');
+  else if (match('indigo')) changeColor('indigo');
+  else if (match('violet')) changeColor('violet');
+
+  const step = 100;
+  if (match('left')) moveParticles(-step, 0);
+  else if (match('right')) moveParticles(step, 0);
+  else if (match('up')) moveParticles(0, -step);
+  else if (match('down')) moveParticles(0, step);
+}
+
+// Ask for microphone once on load
 window.addEventListener('load', () => {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     alert("Microphone access not supported in this browser.");
@@ -149,7 +187,6 @@ window.addEventListener('load', () => {
 
   navigator.mediaDevices.getUserMedia({ audio: true })
     .then(stream => {
-      // immediately stop tracks (SpeechRecognition handles mic)
       stream.getTracks().forEach(t => t.stop());
       startRecognition();
     })
