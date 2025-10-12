@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Story Genie — Neon</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* Fonts */
+  @font-face {
+    font-family: 'SoraLocal';
+    src: local('Sora'), local('Inter'), local('system-ui');
+  }
+
+  :root{
+    --bg:#041027;          /* deep navy */
+    --card:#07172a;        /* slightly lighter */
+    --neon-blue: #00b0ff;
+    --neon-yellow: #ffd24d;
+    --muted: rgba(255,255,255,0.06);
+    --glass: rgba(255,255,255,0.02);
+    --radius:14px;
+    --gap:14px;
+  }
+
+  html,body{
+    height:100%;
+    margin:0;
+    background: radial-gradient(1200px 600px at 10% 10%, rgba(0,176,255,0.04), transparent 8%),
+                radial-gradient(1000px 500px at 90% 90%, rgba(255,210,77,0.03), transparent 8%),
+                linear-gradient(180deg,var(--bg) 0%, #0b1b30 100%);
+    color:#e9f6ff;
+    font-family: SoraLocal, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:36px;
+    box-sizing:border-box;
+  }
+
+  .app {
+    width:100%;
+    max-width:980px;
+    display:grid;
+    grid-template-columns: 360px 1fr;
+    gap: var(--gap);
+    align-items:start;
+  }
+
+  /* Left panel (logo + controls) */
+  .panel {
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    border-radius:var(--radius);
+    padding:20px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.6), 0 0 30px rgba(0,176,255,0.03);
+    border: 1px solid rgba(255,255,255,0.04);
+    position:relative;
+    overflow:hidden;
+  }
+
+  /* Neon logo container */
+  .logo {
+    display:flex;
+    gap:16px;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    padding:12px 6px;
+  }
+
+  /* inline neon SVG styles tuned with CSS variables */
+  .logo svg { width:160px; height:160px; filter: drop-shadow(0 6px 18px rgba(0,176,255,0.12)); }
+  .brand {
+    font-weight:700;
+    letter-spacing:4px;
+    font-size:18px;
+    color:var(--neon-yellow);
+    text-shadow:
+      0 2px 10px rgba(255,210,77,0.14),
+      0 0 18px rgba(255,210,77,0.10);
+  }
+
+  .tagline {
+    font-size:12px;
+    color:rgba(255,255,255,0.62);
+    margin-top:6px;
+    text-align:center;
+    max-width:220px;
+    line-height:1.2;
+  }
+
+  /* Controls */
+  .controls { margin-top:18px; display:flex; flex-direction:column; gap:10px; }
+  label { font-size:12px; color:rgba(255,255,255,0.6); margin-bottom:6px; display:block; }
+  select, input[type="range"] {
+    width:100%;
+    background:transparent;
+    color:inherit;
+    padding:10px;
+    border-radius:10px;
+    border:1px solid rgba(255,255,255,0.05);
+    backdrop-filter: blur(6px);
+    outline:none;
+  }
+
+  .mood-grid {
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .mood {
+    cursor:pointer;
+    padding:8px 10px;
+    border-radius:10px;
+    font-size:13px;
+    border:1px solid rgba(255,255,255,0.04);
+    background:linear-gradient(180deg, rgba(255,255,255,0.012), rgba(255,255,255,0.008));
+    transition: transform .14s ease, box-shadow .14s;
+  }
+  .mood.active {
+    box-shadow: 0 6px 30px rgba(0,176,255,0.08), 0 0 18px rgba(255,210,77,0.04);
+    transform: translateY(-4px);
+    border-color: rgba(255,255,255,0.08);
+  }
+
+  .big-btn {
+    margin-top:10px;
+    display:inline-flex;
+    gap:10px;
+    align-items:center;
+    justify-content:center;
+    width:100%;
+    padding:12px 14px;
+    border-radius:12px;
+    background: linear-gradient(90deg, rgba(0,176,255,0.14), rgba(255,210,77,0.06));
+    border: 1px solid rgba(255,255,255,0.06);
+    color:var(--neon-blue);
+    font-weight:700;
+    letter-spacing:1px;
+    cursor:pointer;
+    text-transform:uppercase;
+    box-shadow: 0 6px 28px rgba(0,176,255,0.06), 0 0 22px rgba(255,210,77,0.03);
+  }
+
+  /* Right panel: story and paths */
+  .canvas {
+    border-radius:var(--radius);
+    background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));
+    padding:22px;
+    min-height:420px;
+    box-shadow: 0 8px 36px rgba(1,6,10,0.6);
+    border: 1px solid rgba(255,255,255,0.03);
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+  }
+
+  .seed {
+    background:linear-gradient(180deg, rgba(0,176,255,0.02), rgba(255,210,77,0.01));
+    border-radius:12px;
+    padding:18px;
+    font-size:16px;
+    line-height:1.45;
+    color: #e8faff;
+    text-shadow: 0 1px 0 rgba(0,0,0,0.4);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+    border: 1px solid rgba(0,176,255,0.06);
+  }
+
+  .paths {
+    display:flex;
+    gap:12px;
+    flex-wrap:wrap;
+  }
+
+  .path-btn {
+    padding:12px 14px;
+    border-radius:12px;
+    border: 1px solid rgba(255,255,255,0.06);
+    background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(0,0,0,0.02));
+    cursor:pointer;
+    min-width:160px;
+    text-align:left;
+    transition: transform .12s, box-shadow .12s;
+    color: #dff7ff;
+  }
+  .path-btn:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 12px 34px rgba(0,176,255,0.06), 0 0 18px rgba(255,210,77,0.03);
+  }
+
+  .path-btn .title { font-weight:700; color:var(--neon-blue); margin-bottom:6px; }
+  .path-btn .desc { font-size:13px; color: rgba(255,255,255,0.7); }
+
+  .footer {
+    display:flex;
+    gap:10px;
+    align-items:center;
+    margin-top:auto;
+    justify-content:space-between;
+  }
+  .small {
+    font-size:12px;
+    color:rgba(255,255,255,0.5);
+  }
+
+  /* responsive */
+  @media (max-width:920px){
+    .app { grid-template-columns: 1fr; padding-bottom:40px; }
+    .logo svg { width:120px; height:120px; }
+  }
+</style>
+</head>
+<body>
+  <div class="app" role="application" aria-label="Story Genie Neon">
+    <aside class="panel" aria-hidden="false">
+      <div class="logo" role="img" aria-label="Story Genie neon bottle logo">
+        <!-- Inline SVG neon bottle (blue outline + yellow flame + sparkles) -->
+        <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <!-- Blue neon bottle outline -->
+          <defs>
+            <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+              <feMerge>
+                <feMergeNode in="coloredBlur"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+          </defs>
+          <g filter="url(#glow)">
+            <path d="M30 92h60c0-14-10-18-12-28-2-8 6-20 6-28 0-9-14-16-22-16s-22 7-22 16c0 8 8 20 6 28-2 10-12 14-12 28z"
+                  fill="none" stroke="none"/>
+            <!-- bottle stroke -->
+            <path d="M42 92c0-11 9-15 11-25 2-7-5-17-5-25 0-7 11-13 18-13s18 6 18 13c0 8-7 18-5 25 2 10 11 14 11 25"
+                  fill="none" stroke="#00b0ff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+            <!-- inner swirl -->
+            <path d="M60 70c6 0 8-8 2-12-6-4-10 4-2 8" fill="none" stroke="#00b0ff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <!-- flame -->
+            <path d="M64 28c6 6 2 12-2 18-4 6-2 2-6-2-2-2-1-8 4-14 5-6 6-6 4-2z" fill="none" stroke="#ffd24d" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+            <!-- sparkles -->
+            <g stroke="#ffd24d" stroke-width="2.2" stroke-linecap="round">
+              <path d="M82 36 l3 3 l-3 3 l-3-3z" fill="#ffd24d"/>
+              <path d="M38 34 l2 2 l-2 2 l-2-2z" fill="#ffd24d"/>
+              <path d="M72 46 l2 2 l-2 2 l-2-2z" fill="#ffd24d"/>
+            </g>
+          </g>
+        </svg>
+
+        <div>
+          <div class="brand">STORY GENIE</div>
+          <div class="tagline">neon prompts • branching paths • spark new directions</div>
+        </div>
+      </div>
+
+      <div class="controls" aria-hidden="false">
+        <div>
+          <label for="mood">Mood</label>
+          <div id="moodList" class="mood-grid" role="list">
+            <div class="mood" data-mood="surreal">Surreal</div>
+            <div class="mood" data-mood="dark">Dark</div>
+            <div class="mood active" data-mood="epic">Epic</div>
+            <div class="mood" data-mood="romantic">Romantic</div>
+            <div class="mood" data-mood="whimsical">Whimsical</div>
+            <div class="mood" data-mood="sci-fi">Sci-Fi</div>
+          </div>
+        </div>
+
+        <div>
+          <label for="focus">Focus (character / world / plot)</label>
+          <select id="focus" aria-label="Focus selector">
+            <option value="character">Character</option>
+            <option value="world">World</option>
+            <option value="plot">Plot</option>
+            <option value="theme">Theme</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="intensity">Neon intensity</label>
+          <input id="intensity" type="range" min="0" max="2" step="0.1" value="1" aria-label="Neon intensity">
+        </div>
+
+        <button id="generate" class="big-btn" title="Generate story seed">Generate Story</button>
+      </div>
+    </aside>
+
+    <main class="canvas" role="main">
+      <div id="seed" class="seed" aria-live="polite">Click "Generate Story" for a neon-lit prompt that branches into multiple paths.</div>
+
+      <div id="paths" class="paths" role="list" aria-label="Story paths">
+        <!-- path buttons inserted here -->
+      </div>
+
+      <div class="footer" role="toolbar">
+        <div class="small">Tip: click a path to evolve it. Re-generate to get fresh seeds.</div>
+        <div>
+          <button id="regen" class="path-btn" style="min-width:auto;padding:10px 12px;">Regenerate</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+<script>
+/* Story Genie Neon — Client JS */
+
+const characters = [
+  "a jaded detective","an AI poet","a runaway heir","a forgotten god",
+  "a time traveler stuck in a loop","a lonely android","a fearless child","a retired superhero"
+];
+const settings = [
+  "in a neon-lit city","on a drifting space colony","inside a dream that won't end",
+  "beneath an ancient forest","in a digital afterlife","on the last train of the world",
+  "in a crumbling seaside town","within a forbidden archive"
+];
+const goals = [
+  "trying to rewrite the past","searching for the truth","escaping a curse",
+  "hunting their own shadow","building something beautiful","fighting to remember",
+  "making a deal with fate","discovering what it means to feel"
+];
+const twists = [
+  "but the world itself starts to glitch","but their memories aren't their own",
+  "only to realize the villain is their future self","and love becomes their downfall",
+  "but the truth was never meant to be found","while time begins to collapse",
+  "until they awaken as someone else","and reality bends around their choice"
+];
+
+const pathPrompts = [
+  "What if they embrace the chaos instead of fighting it?",
+  "What if an unexpected ally appears — one they can't trust?",
+  "What if the setting itself is alive, responding to their emotions?",
+  "What if time resets but they remember everything?",
+  "What if love changes the rules of the world?",
+  "What if the story becomes self-aware?",
+  "What if a lie becomes the only path to safety?",
+  "What if the protagonist wakes as the antagonist?"
+];
+
+function rand(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+function moodTweaks(mood){
+  // small textual tweaks by mood
+  const map = {
+    epic: { tone: "epic", extras: ["a sweep of destiny", "a vast cost"] },
+    surreal: { tone: "surreal", extras: ["logic unspools", "dream-rules apply"] },
+    dark: { tone: "dark", extras: ["shadows whisper", "morals blur"] },
+    romantic: { tone: "romantic", extras: ["a fragile devotion", "a bittersweet promise"] },
+    whimsical: { tone: "whimsical", extras: ["odd coincidences", "a playful twist"] },
+    "sci-fi": { tone: "sci-fi", extras: ["tech mutates memory", "a protocol breaks"] }
+  };
+  return map[mood] || map.epic;
+}
+
+function generateBase(mood){
+  const mm = moodTweaks(mood);
+  const base = `${rand(characters)} ${rand(settings)}, ${rand(goals)} ${rand(twists)} — ${rand(mm.extras)}.`;
+  return base;
+}
+
+function renderSeed(text){
+  const seed = document.getElementById('seed');
+  // small neon fade animation
+  seed.style.opacity = 0;
+  setTimeout(()=> {
+    seed.innerHTML = `<strong style="color:var(--neon-yellow);">Seed:</strong> ${text}`;
+    seed.style.opacity = 1;
+  }, 120);
+}
+
+function renderPaths(mood, base){
+  const container = document.getElementById('paths');
+  container.innerHTML = '';
+  const choices = shuffle(pathPrompts).slice(0,3);
+  choices.forEach((c, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'path-btn';
+    btn.innerHTML = `<div class="title">${c}</div><div class="desc">Click to evolve this path into a short scene or twist.</div>`;
+    btn.onclick = () => evolvePath(c, mood, base);
+    container.appendChild(btn);
+  });
+}
+
+function evolvePath(choice, mood, base){
+  // Create an "evolved" small paragraph — small generator
+  const mm = moodTweaks(mood);
+  const seeds = [
+    `${base} ${choice} In its wake, ${rand(characters)} finds a token that changes everything.`,
+    `${choice} The world answers — but at a cost: ${rand(goals)}.`,
+    `${choice} Suddenly, ${rand(characters)} must choose between truth and survival — ${rand(mm.extras)}.`
+  ];
+  renderSeed(seeds[Math.floor(Math.random()*seeds.length)]);
+}
+
+function shuffle(a){ return a.map(v=>({v,r:Math.random()})).sort((x,y)=>x.r-y.r).map(x=>x.v); }
+
+/* UI wiring */
+const moodList = document.getElementById('moodList');
+let currentMood = 'epic'; // default
+moodList.querySelectorAll('.mood').forEach(el=>{
+  el.addEventListener('click', ()=>{
+    moodList.querySelectorAll('.mood').forEach(m=>m.classList.remove('active'));
+    el.classList.add('active');
+    currentMood = el.dataset.mood;
+  });
+});
+
+document.getElementById('generate').addEventListener('click', ()=> {
+  const base = generateBase(currentMood);
+  renderSeed(base);
+  renderPaths(currentMood, base);
+  pulseNeon();
+});
+
+document.getElementById('regen').addEventListener('click', ()=> {
+  document.getElementById('generate').click();
+});
+
+/* intensity slider affects visual glow */
+document.getElementById('intensity').addEventListener('input', (e)=>{
+  const v = parseFloat(e.target.value);
+  document.querySelectorAll('.logo svg').forEach(svg=>{
+    svg.style.filter = `drop-shadow(0 6px ${6*v + 6}px rgba(0,176,255,${0.06*v}))`;
+  });
+  // subtle text glow changes
+  document.querySelectorAll('.brand').forEach(b=>{
+    b.style.textShadow = `0 2px ${10*v}px rgba(255,210,77,${0.12*v}), 0 0 ${18*v}px rgba(255,210,77,${0.08*v})`;
+  });
+});
+
+/* tiny pulse animation when generating */
+function pulseNeon(){
+  const logo = document.querySelector('.logo svg');
+  logo.animate([
+    { transform: 'scale(1)', opacity:1 },
+    { transform: 'scale(1.06)', opacity:0.98 },
+    { transform: 'scale(1)', opacity:1 }
+  ], { duration:420, easing:'cubic-bezier(.2,.9,.3,1)' });
+}
+
+/* initialize */
+(function(){
+  // initial seed
+  const initial = generateBase(currentMood);
+  renderSeed(initial);
+  renderPaths(currentMood, initial);
+})();
+</script>
+</body>
+</html>
