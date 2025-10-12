@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>O.P. Construct A Bear</title>
+<style>
+  body {
+    font-family: 'Comic Sans MS', sans-serif;
+    background: #ffe4e1;
+    text-align: center;
+    padding: 20px;
+    overflow-x: hidden;
+  }
+  h1 { color: #ff69b4; }
+  .bear-container {
+    position: relative;
+    width: 250px;
+    height: 250px;
+    margin: 20px auto;
+  }
+  .bear-body {
+    width: 200px;
+    height: 200px;
+    background-color: #a0522d;
+    border-radius: 50%;
+    position: absolute;
+    left: 25px;
+    top: 25px;
+    transition: background-color 0.3s;
+  }
+  .ear {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    position: absolute;
+    top: -20px;
+    background-color: inherit;
+  }
+  .ear.left { left: -10px; }
+  .ear.right { right: -10px; }
+  .emoji-accessory {
+    position: absolute;
+    font-size: 32px;
+    cursor: grab;
+    user-select: none;
+  }
+  #bearName {
+    font-size: 24px;
+    margin-top: 10px;
+    font-weight: bold;
+    color: #ff4500;
+  }
+  button { padding: 10px 20px; font-size: 16px; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<h1>O.P. Build-A-Bear Simulator</h1>
+
+<label>Choose bear color: 
+  <select id="color">
+    <option value="#a0522d">Brown</option>
+    <option value="#ffcccb">Pink</option>
+    <option value="#ffff99">Yellow</option>
+    <option value="#d3d3d3">Gray</option>
+    <option value="#8a2be2">Purple</option>
+  </select>
+</label>
+
+<br><br>
+<label>Give your bear a name: 
+  <input type="text" id="name" placeholder="FluffStar">
+</label>
+
+<br><br>
+<button onclick="buildBear()">Build Bear!</button>
+
+<div class="bear-container">
+  <div class="bear-body" id="bearBody">
+    <div class="ear left" id="earLeft"></div>
+    <div class="ear right" id="earRight"></div>
+  </div>
+</div>
+<div id="bearName"></div>
+
+<h3>Drag-and-Drop Emoji Decorations:</h3>
+<div>
+  <span class="emoji-accessory" draggable="true">🎀</span>
+  <br>
+  <span class="emoji-accessory" draggable="true">🧢</span>
+  <br>
+  <span class="emoji-accessory" draggable="true">👓</span>
+  <br>
+  <span class="emoji-accessory" draggable="true">🧣</span>
+  <br>
+  <span class="emoji-accessory" draggable="true">🍭</span>
+  <br>
+  <span class="emoji-accessory" draggable="true">✨</span>
+  <br>
+  <span class="emoji-accessory" draggable="true">🌈</span>
+</div>
+
+<script>
+function buildBear() {
+  const color = document.getElementById('color').value;
+  const name = document.getElementById('name').value || "Bear";
+
+  const bearBody = document.getElementById('bearBody');
+  const earLeft = document.getElementById('earLeft');
+  const earRight = document.getElementById('earRight');
+
+  bearBody.style.backgroundColor = color;
+  earLeft.style.backgroundColor = color;
+  earRight.style.backgroundColor = color;
+
+  document.getElementById('bearName').innerText = "Meet " + name + "!";
+}
+
+// Drag-and-drop logic
+const emojis = document.querySelectorAll('.emoji-accessory');
+emojis.forEach(e => {
+  e.addEventListener('dragstart', dragStart);
+});
+
+const bearContainer = document.querySelector('.bear-container');
+bearContainer.addEventListener('dragover', e => e.preventDefault());
+bearContainer.addEventListener('drop', dropEmoji);
+
+function dragStart(e) {
+  e.dataTransfer.setData('text/plain', e.target.innerText);
+}
+
+function dropEmoji(e) {
+  e.preventDefault();
+  const emoji = document.createElement('div');
+  emoji.innerText = e.dataTransfer.getData('text/plain');
+  emoji.className = 'emoji-accessory';
+  emoji.style.left = e.offsetX - 16 + 'px';
+  emoji.style.top = e.offsetY - 16 + 'px';
+  bearContainer.appendChild(emoji);
+
+  makeDraggable(emoji);
+}
+
+// Make dropped emojis draggable inside the bear container
+function makeDraggable(el) {
+  el.onmousedown = function(e) {
+    e.preventDefault();
+    let shiftX = e.clientX - el.getBoundingClientRect().left;
+    let shiftY = e.clientY - el.getBoundingClientRect().top;
+
+    function moveAt(pageX, pageY) {
+      el.style.left = pageX - bearContainer.getBoundingClientRect().left - shiftX + 'px';
+      el.style.top = pageY - bearContainer.getBoundingClientRect().top - shiftY + 'px';
+    }
+
+    function onMouseMove(e) {
+      moveAt(e.pageX, e.pageY);
+    }
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.onmouseup = function() {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.onmouseup = null;
+    };
+  };
+  el.ondragstart = () => false;
+}
+</script>
+
+</body>
+</html>
