@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interactive Magical Emoji Fresco ✨</title>
+<style>
+  body {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #1e1b2b;
+    font-family: sans-serif;
+    overflow: hidden;
+    color: #fff;
+  }
+  canvas {
+    border: 5px solid #8b5e3c;
+    margin-top: 20px;
+    background: #2b2540;
+    box-shadow: 0 0 30px rgba(255,255,255,0.2);
+  }
+  .controls {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 300px;
+  }
+  .controls label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 16px;
+  }
+  input[type=range] {
+    width: 100%;
+  }
+</style>
+</head>
+<body>
+
+<h1>Interactive Magical Emoji Fresco ✨</h1>
+
+<div class="controls">
+  <label>
+    Density
+    <span id="densityVal">100</span>
+  </label>
+  <input type="range" id="densitySlider" min="50" max="300" value="100">
+  
+  <label>
+    Animation
+    <span id="animationVal">1</span>
+  </label>
+  <input type="range" id="animationSlider" min="0.2" max="3" step="0.1" value="1">
+</div>
+
+<canvas id="fresco" width="600" height="600"></canvas>
+
+<script>
+const canvas = document.getElementById('fresco');
+const ctx = canvas.getContext('2d');
+
+const emojis = ["🌙","⭐","🌀","✨"];
+let tiles = [];
+
+let density = parseInt(document.getElementById('densitySlider').value);
+let velocityFactor = parseFloat(document.getElementById('animationSlider').value);
+
+const densitySlider = document.getElementById('densitySlider');
+const animationSlider = document.getElementById('animationSlider');
+const densityVal = document.getElementById('densityVal');
+const animationVal = document.getElementById('animationVal');
+
+densitySlider.addEventListener('input', () => {
+  density = parseInt(densitySlider.value);
+  densityVal.textContent = density;
+  adjustDensity();
+});
+
+animationSlider.addEventListener('input', () => {
+  velocityFactor = parseFloat(animationSlider.value);
+  animationVal.textContent = velocityFactor;
+  adjustVelocity();
+});
+
+// Initialize tiles based on density
+function initializeFresco() {
+  tiles = [];
+  const gridWidth = Math.floor(Math.sqrt(density));
+  const gridHeight = Math.ceil(density / gridWidth);
+
+  const tileWidth = canvas.width / gridWidth;
+  const tileHeight = canvas.height / gridHeight;
+
+  for (let x = 0; x < gridWidth; x++) {
+    for (let y = 0; y < gridHeight; y++) {
+      tiles.push(createTile(x * tileWidth, y * tileHeight, tileWidth, tileHeight));
+    }
+  }
+}
+
+// Create a single tile
+function createTile(x, y, tileWidth, tileHeight) {
+  return {
+    emoji: emojis[Math.floor(Math.random() * emojis.length)],
+    x: x + (Math.random() - 0.5) * tileWidth * 0.4,
+    y: y + (Math.random() - 0.5) * tileHeight * 0.4,
+    size: tileHeight * (0.8 + Math.random() * 0.4),
+    alpha: 0.4 + Math.random() * 0.6,
+    dx: (Math.random() - 0.5) * 0.2 * velocityFactor,
+    dy: (Math.random() - 0.5) * 0.2 * velocityFactor,
+    dAlpha: (Math.random() - 0.5) * 0.004,
+    scale: 1 + Math.random() * 0.3,
+    dScale: (Math.random() - 0.5) * 0.002
+  };
+}
+
+// Adjust velocity of all tiles dynamically
+function adjustVelocity() {
+  for (let tile of tiles) {
+    tile.dx = (tile.dx > 0 ? 1 : -1) * 0.2 * velocityFactor * Math.random();
+    tile.dy = (tile.dy > 0 ? 1 : -1) * 0.2 * velocityFactor * Math.random();
+  }
+}
+
+// Adjust density dynamically
+function adjustDensity() {
+  const current = tiles.length;
+  if (current < density) {
+    // Add new tiles
+    const extra = density - current;
+    const gridWidth = Math.floor(Math.sqrt(density));
+    const gridHeight = Math.ceil(density / gridWidth);
+    const tileWidth = canvas.width / gridWidth;
+    const tileHeight = canvas.height / gridHeight;
+
+    for (let i = 0; i < extra; i++) {
+      const x = Math.floor(Math.random() * gridWidth) * tileWidth;
+      const y = Math.floor(Math.random() * gridHeight) * tileHeight;
+      tiles.push(createTile(x, y, tileWidth, tileHeight));
+    }
+  } else if (current > density) {
+    // Remove excess tiles
+    tiles.splice(0, current - density);
+  }
+}
+
+function drawFresco() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  for (let tile of tiles) {
+    ctx.save();
+    ctx.globalAlpha = tile.alpha;
+    ctx.translate(tile.x + tile.size/2, tile.y + tile.size/2);
+    ctx.scale(tile.scale, tile.scale);
+
+    ctx.font = `${tile.size}px serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.shadowColor = "#fff";
+    ctx.shadowBlur = 10 * tile.alpha;
+    ctx.fillText(tile.emoji, 0, 0);
+    ctx.restore();
+
+    // Update positions
+    tile.x += tile.dx;
+    tile.y += tile.dy;
+    tile.alpha += tile.dAlpha;
+    tile.scale += tile.dScale;
+
+    // Bounce softly
+    if (tile.x < 0 || tile.x > canvas.width - tile.size) tile.dx *= -1;
+    if (tile.y < 0 || tile.y > canvas.height - tile.size) tile.dy *= -1;
+    if (tile.alpha > 1 || tile.alpha < 0.3) tile.dAlpha *= -1;
+    if (tile.scale > 1.2 || tile.scale < 0.8) tile.dScale *= -1;
+  }
+
+  requestAnimationFrame(drawFresco);
+}
+
+// Initialize and start
+initializeFresco();
+drawFresco();
+</script>
+
+</body>
+</html>
