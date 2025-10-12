@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Dolphin vs Squid & Octopus</title>
+<style>
+body{margin:0;overflow:hidden;background:linear-gradient(to bottom,#87CEEB,#1E90FF);}
+canvas{display:block;}
+#score{position:absolute;top:10px;left:10px;font-size:24px;color:white;text-shadow:1px 1px 5px #000;}
+</style>
+</head>
+<body>
+<div id="score">Score: 0</div>
+<canvas id="c"></canvas>
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d');
+canvas.width=innerWidth;canvas.height=innerHeight;
+let score=0,lastFishTime=0,comboActive=false,comboTimer=0;
+
+// Dolphin player
+const dolphin={x:canvas.width/2,y:canvas.height/2,size:40,speed:6,emoji:'🐬',trail:[]};
+
+// Sparkle particles
+const sparkles=[];
+
+// Enemies
+const enemies=[];const enemyEmojis=['🦑','🐙'];
+for(let i=0;i<5;i++){const size=40,x=Math.random()*(canvas.width-size),y=Math.random()*(canvas.height-size),speed=Math.random()*2+1,emoji=enemyEmojis[Math.floor(Math.random()*2)],dx=Math.random()*2-1,dy=Math.random()*2-1;enemies.push({x,y,size,speed,emoji,dx,dy})}
+
+// Fish collectibles
+const fishList=[];
+function createFish(){const size=30,x=Math.random()*(canvas.width-size),y=Math.random()*(canvas.height-size);fishList.push({x,y,size,emoji:'🐟'})}
+for(let i=0;i<3;i++) createFish();
+
+// Power-up dolphin
+const powerUps=[];
+function createPower(){const size=35,x=Math.random()*(canvas.width-size),y=Math.random()*(canvas.height-size);powerUps.push({x,y,size,emoji:'✨'})}
+for(let i=0;i<1;i++) createPower();
+
+// Controls
+const keys={};
+addEventListener('keydown',e=>keys[e.key]=true);
+addEventListener('keyup',e=>keys[e.key]=false);
+
+function update(){
+  // Dolphin movement with speed boost
+  let speed=dolphin.speed;
+  if(comboActive) speed*=1.5; // boost
+  if(keys['ArrowUp']||keys['w'])dolphin.y-=speed;
+  if(keys['ArrowDown']||keys['s'])dolphin.y+=speed;
+  if(keys['ArrowLeft']||keys['a'])dolphin.x-=speed;
+  if(keys['ArrowRight']||keys['d'])dolphin.x+=speed;
+  dolphin.x=Math.max(0,Math.min(canvas.width-dolphin.size,dolphin.x));
+  dolphin.y=Math.max(0,Math.min(canvas.height-dolphin.size,dolphin.y));
+
+  // Ripple trail
+  dolphin.trail.push({x:dolphin.x,y:dolphin.y,alpha:1});
+  if(dolphin.trail.length>20)dolphin.trail.shift();
+
+  // Sparkle particles during combo
+  if(comboActive){sparkles.push({x:dolphin.x+dolphin.size/2+Math.random()*10-5,y:dolphin.y+Math.random()*10-5,alpha:1})}
+  for(let i=sparkles.length-1;i>=0;i--){sparkles[i].alpha-=0.05;if(sparkles[i].alpha<=0)sparkles.splice(i,1)}
+
+  // Enemies move unless combo active
+  if(!comboActive) enemies.forEach(e=>{
+    e.x+=e.dx*e.speed;e.y+=e.dy*e.speed;
+    if(e.x<0||e.x>canvas.width-e.size)e.dx*=-1;
+    if(e.y<0||e.y>canvas.height-e.size)e.dy*=-1;
+    if(Math.abs(dolphin.x-e.x)<dolphin.size && Math.abs(dolphin.y-e.y)<dolphin.size){alert("Game Over! Score: "+score);location.reload();}
+  });
+
+  // Fish collection
+  const now=Date.now();
+  for(let i=fishList.length-1;i>=0;i--){const f=fishList[i];if(Math.abs(dolphin.x-f.x)<dolphin.size && Math.abs(dolphin.y-f.y)<dolphin.size){
+    score++;document.getElementById('score').innerText="Score: "+score;fishList.splice(i,1);createFish();
+    // Combo logic
+    if(now-lastFishTime<2000){comboActive=true;comboTimer=100;} lastFishTime=now;
+  }}
+
+  // Power-up collection
+  for(let i=powerUps.length-1;i>=0;i--){const p=powerUps[i];if(Math.abs(dolphin.x-p.x)<dolphin.size && Math.abs(dolphin.y-p.y)<dolphin.size){score+=5;document.getElementById('score').innerText="Score: "+score;powerUps.splice(i,1);createPower()}}
+
+  // Combo countdown
+  if(comboActive){comboTimer--;if(comboTimer<=0)comboActive=false;}
+}
+
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Ripple trail
+  dolphin.trail.forEach(t=>{ctx.font=dolphin.size+"px Arial";ctx.globalAlpha=t.alpha;ctx.fillText('💦',t.x,t.y+dolphin.size);t.alpha-=0.05});
+  ctx.globalAlpha=1;
+
+  // Dolphin
+  ctx.font=dolphin.size+"px Arial";ctx.fillText(dolphin.emoji,dolphin.x,dolphin.y+dolphin.size);
+
+  // Combo sunglasses
+  if(comboActive){ctx.font="30px Arial";ctx.fillText('😎',dolphin.x+dolphin.size/4,dolphin.y-10);}
+
+  // Sparkles
+  sparkles.forEach(s=>{ctx.globalAlpha=s.alpha;ctx.font="20px Arial";ctx.fillText('✨',s.x,s.y)});
+  ctx.globalAlpha=1;
+
+  // Enemies wobble
+  enemies.forEach(e=>{ctx.font=e.size+"px Arial";ctx.fillText(e.emoji,e.x+Math.sin(Date.now()/200)*5,e.y+Math.cos(Date.now()/200)*5+e.size)});
+
+  // Fish
+  fishList.forEach(f=>{ctx.font=f.size+"px Arial";ctx.fillText(f.emoji,f.x,f.y+f.size)});
+
+  // Power-ups
+  powerUps.forEach(p=>{ctx.font=p.size+"px Arial";ctx.fillText(p.emoji,p.x,p.y+p.size)});
+}
+
+function loop(){update();draw();requestAnimationFrame(loop)}
+loop();
+</script>
+</body>
+</html>
