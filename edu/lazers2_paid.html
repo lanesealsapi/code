@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Rave Laser Show 3D</title>
+  <style>
+    :root{
+      --bg:#04040a;
+      --panel-bg: rgba(255,255,255,0.04);
+      font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+    }
+    html,body{height:100%;margin:0;background:var(--bg);color:white;overflow:hidden}
+    canvas{display:block;width:100vw;height:100vh}
+    .ui{
+      position:fixed;left:18px;top:18px;backdrop-filter: blur(6px) saturate(1.2);
+      background:var(--panel-bg);border-radius:12px;padding:12px 14px;box-shadow:0 6px 30px rgba(0,0,0,0.6);
+      max-width:340px;z-index:10;font-size:13px
+    }
+    .ui h1{margin:0 0 8px 0;font-size:14px;letter-spacing:0.6px}
+    .row{display:flex;gap:8px;align-items:center;margin:8px 0}
+    .row label{min-width:74px;opacity:0.9}
+    input[type=range]{flex:1}
+    select{background:transparent;border:1px solid rgba(255,255,255,0.06);color:white;padding:6px;border-radius:8px}
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div class="ui">
+    <h1>Rave Laser Show 3D</h1>
+    <div class="row"><label>BPM</label><input id="bpm" type="range" min="40" max="240" value="120"><div id="bpmVal">120</div></div>
+    <div class="row"><label>Beams</label><input id="count" type="range" min="3" max="60" value="18"><div id="countVal">18</div></div>
+    <div class="row"><label>Speed</label><input id="speed" type="range" min="0" max="2" step="0.01" value="0.9"><div id="speedVal">0.90</div></div>
+    <div class="row"><label>Spread</label><input id="spread" type="range" min="0" max="1.2" step="0.01" value="0.6"><div id="spreadVal">0.60</div></div>
+    <div class="row"><label>Depth</label><input id="depth" type="range" min="0" max="1" step="0.01" value="0.5"><div id="depthVal">0.50</div></div>
+    <div class="row"><label>Palette</label>
+      <select id="palette">
+        <option value="neon">Neon (Cyan/Magenta)</option>
+        <option value="uv">UV (Purple/Blue)</option>
+        <option value="warm">Warm (Orange/Hot Pink)</option>
+        <option value="rainbow">Rainbow</option>
+      </select>
+    </div>
+  </div>
+  <script>
+  (()=>{
+    const canvas=document.getElementById('c');const ctx=canvas.getContext('2d');
+    let w=innerWidth,h=innerHeight;canvas.width=w;canvas.height=h;
+    const UI={bpm:document.getElementById('bpm'),count:document.getElementById('count'),speed:document.getElementById('speed'),spread:document.getElementById('spread'),depth:document.getElementById('depth'),palette:document.getElementById('palette')};
+    const vals={bpmVal:document.getElementById('bpmVal'),countVal:document.getElementById('countVal'),speedVal:document.getElementById('speedVal'),spreadVal:document.getElementById('spreadVal'),depthVal:document.getElementById('depthVal')};
+
+    function updateUI(){
+      vals.bpmVal.textContent=UI.bpm.value;
+      vals.countVal.textContent=UI.count.value;
+      vals.speedVal.textContent=parseFloat(UI.speed.value).toFixed(2);
+      vals.spreadVal.textContent=parseFloat(UI.spread.value).toFixed(2);
+      vals.depthVal.textContent=parseFloat(UI.depth.value).toFixed(2);
+      resetBeams();
+    }
+    Object.values(UI).forEach(e=>e.addEventListener('input',updateUI));
+
+    function rand(a,b){return Math.random()*(b-a)+a}
+    let beams=[];
+    function pickPalette(name,i,t){
+      if(name==='neon')return i%2?'#00f6ff':'#ff00e1';
+      if(name==='uv')return i%2?'#8a2be2':'#2bdcff';
+      if(name==='warm')return i%2?'#ff7a18':'#ff2d95';
+      if(name==='rainbow'){
+        const rainbow=['#ff3b30','#ff9500','#ffd60a','#32d74b','#0a84ff','#5e5ce6','#ff2d95'];
+        return rainbow[Math.floor(t*rainbow.length)%rainbow.length];
+      }
+      return '#fff';
+    }
+
+    function resetBeams(){
+      beams=[];
+      for(let i=0;i<parseInt(UI.count.value);i++){
+        beams.push({angle:rand(0,Math.PI*2),length:rand(w*0.3,w*0.8),width:rand(1,3),z:rand(0,1),colorSeed:Math.random(),phase:rand(0,Math.PI*2)});
+      }
+    }
+    resetBeams();
+
+    function hexToRgba(hex,a){const c=hex.replace('#','');const bigint=parseInt(c,16);const r=(bigint>>16)&255;const g=(bigint>>8)&255;const b=bigint&255;return `rgba(${r},${g},${b},${a})`;}
+
+    function draw(now){
+      const bpm=parseFloat(UI.bpm.value);
+      const beat=Math.sin(now/1000*bpm/60*Math.PI*2)*0.5+0.5;
+      ctx.fillStyle='rgba(4,4,10,0.25)';ctx.fillRect(0,0,w,h);
+      ctx.save();ctx.translate(w/2,h/2);
+      const spread=parseFloat(UI.spread.value);const depthSpread=parseFloat(UI.depth.value);
+      beams.forEach((b,i)=>{
+        b.phase+=0.02*parseFloat(UI.speed.value);
+        b.angle+=Math.sin(b.phase)*0.002;
+        const len=b.length*(0.8+0.2*Math.sin(b.phase));
+        const z=(Math.sin(b.phase*0.7)+1)/2; b.z=(b.z*0.8)+(z*0.2);
+        const scale=1+(b.z-0.5)*depthSpread*2;
+        const brightness=0.3+0.7*b.z;
+        const a=b.angle+Math.sin(now*0.001+i)*spread;
+        const x2=Math.cos(a)*len*scale;const y2=Math.sin(a)*len*scale;
+        const col=pickPalette(UI.palette.value,i,(now/1000+b.colorSeed));
+        ctx.save();ctx.globalCompositeOperation='lighter';
+        for(let g=12;g>0;g-=3){
+          ctx.lineWidth=b.width*(g/6)*scale;
+          ctx.strokeStyle=hexToRgba(col,(0.05*(g/6))*brightness);
+          ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(x2,y2);ctx.stroke();
+        }
+        ctx.lineWidth=b.width*scale;
+        ctx.strokeStyle=hexToRgba(col,0.9*brightness);
+        ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(x2,y2);ctx.stroke();
+        ctx.fillStyle=`rgba(255,255,255,${brightness*0.6})`;
+        ctx.beginPath();ctx.arc(x2,y2,2+4*b.z,0,Math.PI*2);ctx.fill();
+        ctx.restore();
+      });
+      ctx.restore();
+      requestAnimationFrame(draw);
+    }
+    requestAnimationFrame(draw);
+  })();
+  </script>
+</body>
+</html>
