@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sparkler Stick — Color Picker Version</title>
+  <style>
+    html,body{height:100%;margin:0;background:#050507;overflow:hidden;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial}
+    #ui{
+      position:fixed;left:16px;top:16px;z-index:10;color:#fff;backdrop-filter:blur(6px);padding:10px;border-radius:10px;
+      background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));box-shadow:0 6px 18px rgba(0,0,0,0.6);
+      min-width:240px
+    }
+    #ui label{display:block;font-size:13px;opacity:0.9;margin-bottom:6px}
+    #ui input[type=range], #ui input[type=color]{width:100%}
+    #ui .row{display:flex;gap:8px;align-items:center}
+    #note{font-size:12px;opacity:0.8;margin-top:8px}
+    canvas{display:block}
+    button{border:0;padding:8px 10px;border-radius:8px;background:#111;color:#fff;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <label>Emission length: <span id="lenLabel">900</span> ms</label>
+    <input id="len" type="range" min="100" max="2000" step="50" value="900">
+    <label>Choose Spark Color:</label>
+    <input id="colorPicker" type="color" value="#ff8c00">
+    <div class="row" style="margin-top:8px">
+      <button id="toggle">Hold to emit</button>
+      <button id="clear">Clear</button>
+    </div>
+    <div id="note">Hold mouse or touch to wave the sparkler. You can now choose a custom spark color!</div>
+  </div>
+  <canvas id="c"></canvas>
+
+  <script>
+(function(){
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  let DPR = Math.max(1, window.devicePixelRatio || 1);
+  function resize(){
+    DPR = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width = Math.floor(innerWidth * DPR);
+    canvas.height = Math.floor(innerHeight * DPR);
+    canvas.style.width = innerWidth + 'px';
+    canvas.style.height = innerHeight + 'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  addEventListener('resize',resize);
+  resize();
+
+  const lenInput = document.getElementById('len');
+  const lenLabel = document.getElementById('lenLabel');
+  const colorPicker = document.getElementById('colorPicker');
+  const toggleBtn = document.getElementById('toggle');
+  const clearBtn = document.getElementById('clear');
+
+  let particleLife = Number(lenInput.value);
+  let userColor = colorPicker.value;
+
+  lenLabel.textContent = particleLife;
+  lenInput.addEventListener('input', ()=>{ particleLife = Number(lenInput.value); lenLabel.textContent = particleLife; });
+  colorPicker.addEventListener('input', ()=>{ userColor = colorPicker.value; });
+
+  let emitting = false;
+  let pointer = {x: innerWidth/2, y: innerHeight/2, vx:0, vy:0, px: innerWidth/2, py: innerHeight/2};
+
+  toggleBtn.addEventListener('mousedown', ()=>{ emitting = true; toggleBtn.textContent = 'Emitting'; });
+  toggleBtn.addEventListener('mouseup', ()=>{ emitting = false; toggleBtn.textContent = 'Hold to emit'; });
+  toggleBtn.addEventListener('mouseleave', ()=>{ emitting = false; toggleBtn.textContent = 'Hold to emit'; });
+  toggleBtn.addEventListener('touchstart', (e)=>{ e.preventDefault(); emitting = true; toggleBtn.textContent = 'Emitting'; });
+  toggleBtn.addEventListener('touchend', ()=>{ emitting = false; toggleBtn.textContent = 'Hold to emit'; });
+  clearBtn.addEventListener('click', ()=>{ particles = []; });
+
+  let isDown = false;
+  window.addEventListener('pointerdown', (e)=>{ isDown = true; updatingPointer(e); });
+  window.addEventListener('pointerup', ()=>{ isDown = false; pointer.vx = 0; pointer.vy = 0; });
+  window.addEventListener('pointermove', updatingPointer);
+
+  function updatingPointer(e){
+    const x = e.clientX || (e.touches && e.touches[0].clientX) || pointer.x;
+    const y = e.clientY || (e.touches && e.touches[0].clientY) || pointer.y;
+    pointer.vx = x - pointer.px;
+    pointer.vy = y - pointer.py;
+    pointer.px = x; pointer.py = y;
+    pointer.x = x; pointer.y = y;
+  }
+
+  const maxParticles = 1200;
+  let particles = [];
+  const defaultColors = ['#ffffff', '#ffd966', '#ff8c00'];
+
+  function randRange(a,b){ return a + Math.random()*(b-a); }
+
+  class Particle{
+    constructor(x,y){ this.reset(x,y); }
+    reset(x,y){
+      this.x = x; this.y = y;
+      const angle = Math.atan2(pointer.vy, pointer.vx) + randRange(-0.4,0.4);
+      const speed = randRange(1.2,6.0);
+      this.vx = Math.cos(angle)*speed + randRange(-0.4,0.4);
+      this.vy = Math.sin(angle)*speed + randRange(-0.8,0.8);
+      this.size = randRange(1.2,3.2);
+      const blend = Math.random();
+      this.color = blend > 0.6 ? userColor : defaultColors[Math.floor(Math.random()*defaultColors.length)];
+      this.age = 0;
+      this.life = particleLife * 0.65 + randRange(-particleLife*0.2, particleLife*0.2);
+      this.opacity = 1;
+      this.glow = Math.max(4, this.size * 3 + Math.random() * 8);
+    }
+    update(dt){
+      this.age += dt;
+      const t = this.age / this.life;
+      this.vy += 0.003 * dt;
+      this.vx *= 0.998;
+      this.vy *= 0.998;
+      this.x += this.vx * 0.06 * dt;
+      this.y += this.vy * 0.06 * dt;
+      this.opacity = Math.max(0, 1 - t*t*1.3);
+      this.renderSize = this.size * (1 - t*0.7);
+    }
+    isLive(){ return this.age >= this.life; }
+    draw(ctx){
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = this.opacity;
+      ctx.shadowBlur = this.glow;
+      ctx.shadowColor = this.color;
+      ctx.fillStyle = this.color;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.renderSize, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function emitBurst(x,y,count){ for(let i=0;i<count;i++){ if(particles.length<maxParticles) particles.push(new Particle(x,y)); }}
+
+  let last = performance.now();
+  let emitAccumulator = 0;
+  function loop(now){
+    const dt = Math.min(40, now - last); last = now;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(5,5,7,0.25)';
+    ctx.fillRect(0,0,canvas.width/DPR,canvas.height/DPR);
+
+    const isEmitting = isDown || emitting;
+    if(isEmitting){
+      const baseRate = 360;
+      const speedFactor = Math.min(4, (Math.abs(pointer.vx)+Math.abs(pointer.vy))/8 + 0.5);
+      const rate = baseRate * speedFactor;
+      emitAccumulator += rate * (dt/1000);
+      const emitCount = Math.floor(emitAccumulator); emitAccumulator -= emitCount;
+      for(let i=0;i<emitCount;i++){
+        if(particles.length<maxParticles) particles.push(new Particle(pointer.x, pointer.y));
+      }
+      if(Math.random()<0.04) emitBurst(pointer.x, pointer.y, 4);
+    }
+
+    for(let i=particles.length-1;i>=0;i--){
+      const p=particles[i];
+      p.update(dt);
+      if(p.isLive()) particles.splice(i,1);
+      else p.draw(ctx);
+    }
+
+    drawStick(ctx);
+    requestAnimationFrame(loop);
+  }
+
+  function drawStick(ctx){
+    ctx.save();
+    const tx=pointer.x, ty=pointer.y;
+    const backX=tx - (pointer.vx*1.4 + 16);
+    const backY=ty - (pointer.vy*1.4 + 16);
+    ctx.lineCap='round';
+    ctx.lineWidth=6;
+    const g=ctx.createLinearGradient(backX, backY, tx, ty);
+    g.addColorStop(0,'#4b2e16');
+    g.addColorStop(1,'#7b4f2a');
+    ctx.strokeStyle=g;
+    ctx.beginPath();ctx.moveTo(backX,backY);ctx.lineTo(tx,ty);ctx.stroke();
+
+    ctx.globalCompositeOperation='lighter';
+    ctx.shadowBlur=24;ctx.shadowColor='rgba(255,200,100,0.9)';
+    ctx.beginPath();ctx.arc(tx,ty,5,0,Math.PI*2);ctx.fillStyle='#fff5dd';ctx.fill();
+    ctx.restore();
+  }
+
+  requestAnimationFrame(loop);
+  emitBurst(canvas.width/DPR/2, canvas.height/DPR/2, 40);
+})();
+  </script>
+</body>
+</html>
