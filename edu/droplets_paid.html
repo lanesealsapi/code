@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Fluid Expanding Wave — standalone</title>
+<style>
+  :root{ --bg:#071023; --ui-bg:rgba(255,255,255,0.06); --accent:#6ee7b7; }
+  html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:#e6eef8}
+  .wrap{display:grid;grid-template-columns:1fr 320px;gap:18px;height:100vh;padding:18px;box-sizing:border-box}
+  .stage{position:relative;border-radius:12px;overflow:hidden;box-shadow:0 6px 30px rgba(0,0,0,0.6);}
+  canvas{display:block;width:100%;height:100%}
+  .panel{padding:14px;background:linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.02));border-radius:12px;backdrop-filter:blur(6px);}
+  h2{margin:0 0 8px 0;font-size:16px}
+  label{display:block;font-size:13px;margin:10px 0 6px}
+  .row{display:flex;align-items:center;gap:8px}
+  input[type=range]{width:100%}
+  .small{font-size:12px;color:#bcd3ef}
+  .controls{display:grid;gap:8px}
+  .btn{padding:8px 12px;border-radius:8px;border:none;background:var(--accent);color:#08301f;font-weight:600;cursor:pointer}
+  .btn.secondary{background:transparent;border:1px solid rgba(255,255,255,0.08);color:#dff5ef}
+  .footer{margin-top:10px;font-size:12px;color:#9fb6d9}
+  .value{min-width:56px;text-align:right;font-variant-numeric:tabular-nums}
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .sample{height:28px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;padding:4px}
+  input[type=color]{border:none;background:transparent;padding:0;height:28px;width:44px}
+  .note{font-size:12px;color:#9fb6d9;margin-top:8px}
+  @media (max-width:900px){.wrap{grid-template-columns:1fr;grid-auto-rows:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="stage" id="stage">
+    <canvas id="c"></canvas>
+  </div>
+  <div class="panel">
+    <div class="topbar"><h2>Fluid Wave Controls</h2><div class="sample" title="Background color"><input id="bgColor" type="color" value="#071023"></div></div>
+
+    <div class="controls">
+      <label>Amplitude <span class="value" id="ampVal">120</span></label>
+      <div class="row"><input id="amplitude" type="range" min="10" max="400" step="1" value="120"></div>
+
+      <label>Wavelength (spacing) <span class="value" id="wlVal">60</span></label>
+      <div class="row"><input id="wavelength" type="range" min="10" max="250" step="1" value="60"></div>
+
+      <label>Speed (px/s) <span class="value" id="spdVal">180</span></label>
+      <div class="row"><input id="speed" type="range" min="20" max="800" step="1" value="180"></div>
+
+      <label>Decay (how fast rings fade) <span class="value" id="decVal">0.012</span></label>
+      <div class="row"><input id="decay" type="range" min="0.001" max="0.04" step="0.001" value="0.012"></div>
+
+      <label>Thickness multiplier <span class="value" id="thVal">1.0</span></label>
+      <div class="row"><input id="thickness" type="range" min="0.2" max="3" step="0.05" value="1"></div>
+
+      <label>Z-fade (far rings darker) <span class="value" id="zVal">0.9</span></label>
+      <div class="row"><input id="zfade" type="range" min="0" max="1" step="0.01" value="0.9"></div>
+
+      <label>Color / Tint</label>
+      <div class="row"><input id="tint" type="color" value="#6ee7b7"><div class="small">Use tint to color the rings</div></div>
+
+      <label>Rendering quality <span class="value" id="stepVal">2</span> (px step)</label>
+      <div class="row"><input id="step" type="range" min="1" max="6" step="1" value="2"></div>
+
+      <div class="row" style="margin-top:6px;">
+        <button id="dropBtn" class="btn">Drop center ripple</button>
+        <button id="stopBtn" class="btn secondary">Pause</button>
+      </div>
+
+      <div class="note">Tip: click anywhere on the canvas to drop a ripple at that point. The default ripple spawns from center on load.</div>
+      <div class="footer">Written as a standalone HTML — adjust sliders and press <strong>Drop center ripple</strong>.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  let DPR = window.devicePixelRatio || 1;
+
+  const ui = {
+    amplitude: document.getElementById('amplitude'), ampVal: document.getElementById('ampVal'),
+    wavelength: document.getElementById('wavelength'), wlVal: document.getElementById('wlVal'),
+    speed: document.getElementById('speed'), spdVal: document.getElementById('spdVal'),
+    decay: document.getElementById('decay'), decVal: document.getElementById('decVal'),
+    thickness: document.getElementById('thickness'), thVal: document.getElementById('thVal'),
+    zfade: document.getElementById('zfade'), zVal: document.getElementById('zVal'),
+    tint: document.getElementById('tint'), bgColor: document.getElementById('bgColor'),
+    step: document.getElementById('step'), stepVal: document.getElementById('stepVal'),
+    dropBtn: document.getElementById('dropBtn'), stopBtn: document.getElementById('stopBtn')
+  };
+
+  const settings = () => ({
+    amplitude:+ui.amplitude.value,
+    wavelength:+ui.wavelength.value,
+    speed:+ui.speed.value,
+    decay:+ui.decay.value,
+    thickness:+ui.thickness.value,
+    zfade:+ui.zfade.value,
+    tint:ui.tint.value,
+    bg:ui.bgColor.value,
+    step:+ui.step.value
+  });
+
+  function resize(){
+    DPR = window.devicePixelRatio || 1;
+    canvas.width = canvas.clientWidth * DPR;
+    canvas.height = canvas.clientHeight * DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  // make canvas fill its parent
+  function fitCanvas(){
+    const stage = document.getElementById('stage');
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    resize();
+  }
+
+  window.addEventListener('resize', ()=>{ fitCanvas(); });
+  fitCanvas();
+
+  // Wave list
+  const waves = [];
+  function spawnWave(x,y,opts={}){
+    waves.push({x,y,t0:performance.now(),...opts});
+  }
+
+  // default spawn center ripple on load
+  function spawnCenter(){
+    const r = canvas.getBoundingClientRect();
+    spawnWave(r.width/2, r.height/2, {amplitude:settings().amplitude});
+  }
+
+  // UI bindings
+  function bindUI(){
+    function link(slider, display, fmt=val=>val){ slider.addEventListener('input', ()=>{ display.textContent = fmt(slider.value); }); }
+    link(ui.amplitude, ui.ampVal);
+    link(ui.wavelength, ui.wlVal);
+    link(ui.speed, ui.spdVal);
+    link(ui.decay, ui.decVal, v=>Number(v).toFixed(3));
+    link(ui.thickness, ui.thVal, v=>Number(v).toFixed(2));
+    link(ui.zfade, ui.zVal, v=>Number(v).toFixed(2));
+    link(ui.step, ui.stepVal);
+
+    ui.dropBtn.addEventListener('click', ()=>{
+      const r = canvas.getBoundingClientRect();
+      const s = settings();
+      spawnWave(r.width/2, r.height/2, {amplitude:s.amplitude});
+    });
+
+    let anim = true;
+    ui.stopBtn.addEventListener('click', ()=>{
+      anim = !anim;
+      ui.stopBtn.textContent = anim ? 'Pause' : 'Resume';
+      running = anim;
+      if(anim) requestAnimationFrame(loop);
+    });
+
+    canvas.addEventListener('click', (e)=>{
+      const r = canvas.getBoundingClientRect();
+      const x = e.clientX - r.left; const y = e.clientY - r.top;
+      spawnWave(x,y,{amplitude:settings().amplitude});
+    });
+
+    ui.bgColor.addEventListener('input', ()=>{ document.body.style.background = ui.bgColor.value; });
+  }
+  bindUI();
+
+  // drawing function: we sample concentric radii with a step and compute intensity from a damped sinusoid
+  let last = performance.now();
+  let running = true;
+
+  function drawWave(wave, now, maxRadius){
+    const s = settings();
+    const elapsed = (now - wave.t0)/1000; // seconds
+    const phaseShift = 0; // can be used later
+    const centerX = wave.x, centerY = wave.y;
+
+    // We'll draw rings by stepping radius outward from 0 to maxRadius
+    const step = Math.max(1, Math.round(s.step));
+    for(let r=0;r<maxRadius;r+=step){
+      const local = r - elapsed * s.speed; // position of waveform at radius r
+      // amplitude envelope: damp with exponential using decay
+      const env = Math.exp(-s.decay * r);
+      // wave function: sinusoidal rings with wavelength
+      const waveVal = Math.sin((r - elapsed*s.speed) * (2*Math.PI / s.wavelength) + phaseShift);
+      // intensity from amplitude * envelope * waveVal (abs) so peaks are visible
+      const intensity = (wave.amplitude||s.amplitude) * env * Math.max(0, waveVal);
+      if(intensity < 0.6) continue; // skip tiny values for perf
+
+      // z-depth fade: further radius -> darker/less bright
+      const zFactor = 1 - (r / maxRadius) * s.zfade;
+      const alpha = Math.min(1, intensity/200) * zFactor;
+      const width = Math.max(0.6, (s.thickness * (1 + env*2)) * (1 + (intensity/200)) ) * (DPR>1?1:1);
+
+      // set stroke style using tint and alpha, also multiply by zFactor to darken
+      const col = hexToRgb(s.tint);
+      ctx.beginPath();
+      ctx.lineWidth = width;
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = `rgba(${Math.round(col.r* zFactor)},${Math.round(col.g* zFactor)},${Math.round(col.b* zFactor)},1)`;
+      ctx.arc(centerX, centerY, r, 0, Math.PI*2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // helper hex->rgb
+  function hexToRgb(hex){
+    const h = hex.replace('#','');
+    const bigint = parseInt(h,16);
+    if(h.length===6){
+      return {r:(bigint>>16)&255, g:(bigint>>8)&255, b:bigint&255};
+    } else { // 3-digit
+      const r = parseInt(h[0]+h[0],16);
+      const g = parseInt(h[1]+h[1],16);
+      const b = parseInt(h[2]+h[2],16);
+      return {r,g,b};
+    }
+  }
+
+  function clear(bg){
+    ctx.clearRect(0,0,canvas.width/DPR,canvas.height/DPR);
+    // subtle radial background to help z-depth
+    const r = Math.max(canvas.width, canvas.height);
+    const g = ctx.createRadialGradient(canvas.width/ (2*DPR), canvas.height/(2*DPR), r*0.02, canvas.width/(2*DPR), canvas.height/(2*DPR), r*0.7);
+    const rgb = hexToRgb(bg);
+    g.addColorStop(0, `rgba(${rgb.r},${rgb.g},${rgb.b},1)`);
+    g.addColorStop(1, `rgba(3,6,12,1)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,canvas.width/DPR,canvas.height/DPR);
+  }
+
+  function loop(now){
+    if(!running) return;
+    const s = settings();
+    const rect = canvas.getBoundingClientRect();
+    const maxRadius = Math.hypot(rect.width, rect.height);
+    clear(s.bg);
+
+    // remove old waves that fully faded
+    for(let i=waves.length-1;i>=0;i--){
+      const w = waves[i];
+      const age = (now - w.t0)/1000;
+      if(age * s.speed - maxRadius > 200 || Math.exp(-s.decay * (age * s.speed)) < 0.001) waves.splice(i,1);
+    }
+
+    // draw each
+    waves.forEach(w => drawWave(w, now, maxRadius));
+
+    // subtle overlay to darken distant areas to give z-depth
+    // (not too strong)
+    ctx.save();
+    ctx.globalCompositeOperation = 'overlay';
+    ctx.globalAlpha = 0.06 * s.zfade;
+    ctx.fillStyle = '#00111a';
+    ctx.fillRect(0,0,rect.width,rect.height);
+    ctx.restore();
+
+    requestAnimationFrame(loop);
+  }
+
+  // init
+  spawnCenter();
+  requestAnimationFrame(loop);
+
+  // ensure canvas resizes to parent changes
+  // use ResizeObserver for accurate behavior
+  const ro = new ResizeObserver(()=>{ resize(); });
+  ro.observe(document.getElementById('stage'));
+
+})();
+</script>
+</body>
+</html>
