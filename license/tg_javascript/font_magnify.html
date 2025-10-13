@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Font Magnifier</title>
+  <style>
+    :root{
+      --bg:#ffffff;
+      --fg:#111;
+      --accent:#0066cc;
+      --glass-border:rgba(0,0,0,0.6);
+    }
+    html,body{height:100%;margin:0;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial;}
+    .app{display:flex;gap:12px;height:100%;padding:12px;box-sizing:border-box;background:var(--bg);color:var(--fg)}
+    .left, .right{display:flex;flex-direction:column;gap:12px}
+    .left{flex:1;min-width:260px}
+    .right{width:420px;max-width:45%}
+    textarea{width:100%;height:100%;min-height:240px;resize:vertical;padding:10px;font-size:18px;line-height:1.4}
+    canvas{width:100%;height:60vh;border:1px solid #ddd;background:#fff;display:block}
+    label{display:flex;gap:8px;align-items:center}
+    .controls{display:grid;grid-template-columns:1fr 64px;gap:8px}
+    input[type=range]{width:100%}
+    .small{font-size:13px;color:#444}
+    .footer{font-size:13px;color:#555}
+    button{padding:8px 10px;border-radius:8px;border:1px solid #ccc;background:#f7f7f7}
+    .accent{background:var(--accent);color:#fff;border:none}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="left">
+      <h2>Font Magnifier</h2>
+      <p class="small">Type or paste text below. Move the circular magnifier over the canvas to zoom a region of the page. Keyboard accessible.</p>
+      <textarea id="text" aria-label="Text to display">This is a sample block of text to demonstrate the font magnifier. You can paste or type any text here — the magnifier will zoom into the canvas rendering. Use the controls on the right to adjust the magnifier size, zoom, and behaviour.
+
+Tip: turn on High Contrast or Invert Colors if you need stronger visibility.
+
+Use Arrow keys to move the magnifier when "Follow mouse" is OFF. Press spacebar to toggle follow mode when focused on canvas.</textarea>
+
+      <canvas id="preview" tabindex="0" aria-label="Text preview canvas"></canvas>
+
+      <div class="footer">Keyboard: Tab to controls. When canvas focused, press Space to toggle follow mode, Arrow keys move magnifier (when follow is off).</div>
+    </div>
+
+    <div class="right">
+      <h3>Magnifier Controls</h3>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="controls">
+          <label for="zoom">Zoom</label>
+          <div style="text-align:right"><span id="zoomVal">2.0×</span></div>
+          <input id="zoom" type="range" min="1" max="6" step="0.1" value="2">
+        </div>
+
+        <div class="controls">
+          <label for="size">Size</label>
+          <div style="text-align:right"><span id="sizeVal">180px</span></div>
+          <input id="size" type="range" min="60" max="420" step="2" value="180">
+        </div>
+
+        <div class="controls">
+          <label for="fontSize">Base font</label>
+          <div style="text-align:right"><span id="fontVal">18px</span></div>
+          <input id="fontSize" type="range" min="12" max="48" step="1" value="18">
+        </div>
+
+        <label><input id="follow" type="checkbox" checked> Follow mouse</label>
+        <label><input id="invert" type="checkbox"> Invert colors</label>
+        <label><input id="contrast" type="checkbox"> High contrast (bold)</label>
+
+        <label for="family">Font family</label>
+        <select id="family" aria-label="Font family">
+          <option>System</option>
+          <option>Serif</option>
+          <option>Sans-serif</option>
+          <option>Monospace</option>
+          <option>Arial</option>
+          <option>Georgia</option>
+        </select>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button id="reset">Reset</button>
+          <button id="center" class="accent">Center magnifier</button>
+        </div>
+
+        <div class="small">Accessibility: the canvas is keyboard-focusable. Use Space to toggle follow mode. When Follow is off, use arrow keys to nudge magnifier.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // Font Magnifier - single-file JS
+  (function(){
+    const canvas = document.getElementById('preview');
+    const ctx = canvas.getContext('2d');
+
+    const textEl = document.getElementById('text');
+    const zoomEl = document.getElementById('zoom');
+    const sizeEl = document.getElementById('size');
+    const fontEl = document.getElementById('fontSize');
+    const followEl = document.getElementById('follow');
+    const invertEl = document.getElementById('invert');
+    const contrastEl = document.getElementById('contrast');
+    const familyEl = document.getElementById('family');
+    const resetBtn = document.getElementById('reset');
+    const centerBtn = document.getElementById('center');
+    const zoomVal = document.getElementById('zoomVal');
+    const sizeVal = document.getElementById('sizeVal');
+    const fontVal = document.getElementById('fontVal');
+
+    let dpr = Math.max(window.devicePixelRatio || 1, 1);
+
+    // state
+    const state = {
+      zoom: parseFloat(zoomEl.value),
+      size: parseInt(sizeEl.value,10),
+      fontSize: parseInt(fontEl.value,10),
+      follow: followEl.checked,
+      invert: invertEl.checked,
+      contrast: contrastEl.checked,
+      family: familyEl.value,
+      x: 150,
+      y: 150,
+      dragging: false
+    };
+
+    function resizeCanvas(){
+      const rect = canvas.getBoundingClientRect();
+      dpr = Math.max(window.devicePixelRatio || 1, 1);
+      canvas.width = Math.round(rect.width * dpr);
+      canvas.height = Math.round(rect.height * dpr);
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = rect.height + 'px';
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      draw();
+    }
+
+    // Draw wrapped text into the canvas and magnifier overlay
+    function draw(){
+      const w = canvas.width / dpr;
+      const h = canvas.height / dpr;
+
+      // background
+      ctx.save();
+      ctx.clearRect(0,0,w,h);
+
+      if(state.invert){
+        ctx.fillStyle = '#111';
+        ctx.fillRect(0,0,w,h);
+      } else {
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0,0,w,h);
+      }
+
+      // text style
+      const fontFamily = (()=>{
+        switch(state.family){
+          case 'Serif': return 'Georgia, serif';
+          case 'Sans-serif': return 'system-ui, sans-serif';
+          case 'Monospace': return 'Menlo, monospace';
+          case 'Arial': return 'Arial, Helvetica, sans-serif';
+          case 'Georgia': return 'Georgia, serif';
+          default: return 'system-ui, -apple-system, "Segoe UI", Roboto';
+        }
+      })();
+
+      let baseFont = (state.contrast ? '700 ' : '400 ') + state.fontSize + 'px ' + fontFamily;
+      ctx.font = baseFont;
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = state.invert ? '#fff' : '#111';
+
+      // wrap text
+      const padding = 12;
+      const maxWidth = w - padding*2;
+      const lines = wrapText(ctx, textEl.value, maxWidth);
+
+      // draw lines
+      const lineHeight = Math.round(state.fontSize * 1.32);
+      let y = padding;
+      for(let i=0;i<lines.length;i++){
+        ctx.fillText(lines[i], padding, y);
+        y += lineHeight;
+      }
+
+      // magnifier
+      const radius = state.size / 2;
+      const cx = state.x;
+      const cy = state.y;
+
+      // Draw magnified region inside circular clip
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI*2);
+      ctx.clip();
+
+      // replicate background (so magnified view has same background color)
+      if(state.invert) ctx.fillStyle = '#111'; else ctx.fillStyle = '#fff';
+      ctx.fillRect(0,0,w,h);
+
+      // apply scaling and translate so that point under cursor stays under cursor when zoomed
+      ctx.translate(cx, cy);
+      ctx.scale(state.zoom, state.zoom);
+      ctx.translate(-cx, -cy);
+
+      // redraw text inside clip with same font but will be scaled visually
+      ctx.font = baseFont;
+      ctx.fillStyle = state.invert ? '#fff' : '#111';
+      y = padding;
+      for(let i=0;i<lines.length;i++){
+        ctx.fillText(lines[i], padding, y);
+        y += lineHeight;
+      }
+
+      ctx.restore();
+
+      // magnifier border / glass effect
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI*2);
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+      ctx.stroke();
+
+      // highlight rim
+      ctx.beginPath();
+      ctx.arc(cx - radius*0.15, cy - radius*0.15, radius*0.9, -0.8, -0.2);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.stroke();
+
+      // optional handle (short decorative handle)
+      ctx.beginPath();
+      const hx = cx + radius*0.7;
+      const hy = cy + radius*0.7;
+      ctx.moveTo(cx + radius*0.5, cy + radius*0.5);
+      ctx.lineTo(hx, hy);
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function wrapText(context, text, maxWidth){
+      const paragraphs = text.split('\n');
+      const lines = [];
+      for(const p of paragraphs){
+        let words = p.split(' ');
+        let line = '';
+        for(let n = 0; n < words.length; n++){
+          const testLine = line + (line ? ' ' : '') + words[n];
+          const metrics = context.measureText(testLine);
+          if(metrics.width > maxWidth && line){
+            lines.push(line);
+            line = words[n];
+          } else {
+            line = testLine;
+          }
+        }
+        lines.push(line);
+      }
+      return lines;
+    }
+
+    // update UI labels
+    function updateLabels(){
+      zoomVal.textContent = state.zoom.toFixed(1) + '×';
+      sizeVal.textContent = state.size + 'px';
+      fontVal.textContent = state.fontSize + 'px';
+    }
+
+    // input handlers
+    zoomEl.addEventListener('input', e=>{ state.zoom = parseFloat(e.target.value); updateLabels(); draw(); });
+    sizeEl.addEventListener('input', e=>{ state.size = parseInt(e.target.value,10); updateLabels(); draw(); });
+    fontEl.addEventListener('input', e=>{ state.fontSize = parseInt(e.target.value,10); updateLabels(); draw(); });
+    followEl.addEventListener('change', e=>{ state.follow = e.target.checked; draw(); });
+    invertEl.addEventListener('change', e=>{ state.invert = e.target.checked; draw(); });
+    contrastEl.addEventListener('change', e=>{ state.contrast = e.target.checked; draw(); });
+    familyEl.addEventListener('change', e=>{ state.family = e.target.value; draw(); });
+
+    textEl.addEventListener('input', ()=>{ draw(); });
+
+    resetBtn.addEventListener('click', ()=>{
+      zoomEl.value = 2; sizeEl.value = 180; fontEl.value = 18; followEl.checked = true; invertEl.checked = false; contrastEl.checked = false; familyEl.value = 'System';
+      state.zoom = 2; state.size = 180; state.fontSize = 18; state.follow = true; state.invert = false; state.contrast = false; state.family = 'System'; updateLabels(); draw();
+    });
+
+    centerBtn.addEventListener('click', ()=>{
+      state.x = (canvas.width/dpr)/2; state.y = (canvas.height/dpr)/2; draw();
+    });
+
+    // pointer interactions
+    canvas.addEventListener('pointerdown', (e)=>{
+      canvas.setPointerCapture(e.pointerId);
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left);
+      const y = (e.clientY - rect.top);
+      const dx = x - state.x; const dy = y - state.y;
+      if(Math.hypot(dx,dy) <= state.size/2){
+        state.dragging = true;
+        state.dragOffset = {x:dx, y:dy};
+      } else {
+        // if clicked anywhere, move magnifier there
+        state.x = x; state.y = y; draw();
+      }
+    });
+
+    canvas.addEventListener('pointermove', (e)=>{
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left);
+      const y = (e.clientY - rect.top);
+      if(state.dragging){
+        state.x = x - state.dragOffset.x; state.y = y - state.dragOffset.y; draw();
+      } else if(state.follow){
+        state.x = x; state.y = y; draw();
+      }
+    });
+
+    canvas.addEventListener('pointerup', (e)=>{ state.dragging = false; canvas.releasePointerCapture && canvas.releasePointerCapture(e.pointerId); });
+    canvas.addEventListener('pointercancel', ()=>{ state.dragging = false; });
+
+    // touch: allow pinch to change zoom? We'll keep simple: two-finger move toggles follow
+    // keyboard accessibility while canvas focused
+    canvas.addEventListener('keydown', (e)=>{
+      if(e.code === 'Space'){
+        e.preventDefault(); state.follow = !state.follow; followEl.checked = state.follow; draw();
+      }
+      const nudge = (e.shiftKey ? 10 : 4);
+      if(!state.follow){
+        if(e.key === 'ArrowLeft'){ state.x = Math.max(0, state.x - nudge); e.preventDefault(); draw(); }
+        if(e.key === 'ArrowRight'){ state.x = Math.min(canvas.width/dpr, state.x + nudge); e.preventDefault(); draw(); }
+        if(e.key === 'ArrowUp'){ state.y = Math.max(0, state.y - nudge); e.preventDefault(); draw(); }
+        if(e.key === 'ArrowDown'){ state.y = Math.min(canvas.height/dpr, state.y + nudge); e.preventDefault(); draw(); }
+      }
+    });
+
+    // mouse leave stops following
+    canvas.addEventListener('mouseleave', ()=>{ if(!state.dragging && state.follow){ /* optionally keep */ } });
+
+    // initial placement: center
+    function initPosition(){
+      const rect = canvas.getBoundingClientRect();
+      state.x = rect.width/2; state.y = rect.height/2;
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    // set initial
+    requestAnimationFrame(()=>{
+      resizeCanvas();
+      initPosition();
+      updateLabels();
+      draw();
+    });
+
+  })();
+  </script>
+</body>
+</html>
