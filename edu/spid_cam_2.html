@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sexy Webcam Grid Particles</title>
+<style>
+  body {
+    margin: 0;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    color: #fff;
+    font-family: sans-serif;
+    overflow: hidden;
+  }
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(5, 100px);
+    grid-template-rows: repeat(5, 75px);
+    gap: 2px;
+    margin-bottom: 10px;
+  }
+  canvas {
+    width: 100%;
+    height: 100%;
+    background: #111;
+  }
+  select {
+    padding: 5px 10px;
+    font-size: 16px;
+    margin-bottom: 10px;
+    background: #222;
+    color: #fff;
+    border: 1px solid #555;
+  }
+</style>
+</head>
+<body>
+
+<select id="effectSelect">
+  <option value="1" selected>Motion Trails</option>
+  <option value="2">Color Sampling</option>
+  <option value="3">Diagonal Wave</option>
+</select>
+
+<div id="grid"></div>
+<video id="webcam" autoplay playsinline style="display:none;"></video>
+
+<script>
+const grid = document.getElementById('grid');
+const video = document.getElementById('webcam');
+const effectSelect = document.getElementById('effectSelect');
+const rows = 5;
+const cols = 5;
+const numCells = rows * cols;
+const canvases = [];
+const frameBuffer = [];
+const maxBufferSize = numCells * 2;
+let particles = [];
+
+// Create 9x9 canvases
+for (let i = 0; i < numCells; i++) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 320;
+  canvas.height = 240;
+  grid.appendChild(canvas);
+  canvases.push(canvas.getContext('2d'));
+}
+
+// Access webcam
+navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+  .then(stream => {
+    video.srcObject = stream;
+    video.onloadedmetadata = () => video.play();
+    requestAnimationFrame(drawGrid);
+  })
+  .catch(err => console.error("Webcam error: ", err));
+
+function drawGrid() {
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = video.videoWidth || 320;
+  tempCanvas.height = video.videoHeight || 240;
+  const tempCtx = tempCanvas.getContext('2d');
+  tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+
+  frameBuffer.push(tempCanvas);
+  if (frameBuffer.length > maxBufferSize) frameBuffer.shift();
+
+  for (let i = 0; i < numCells; i++) {
+    const ctx = canvases[i];
+    ctx.fillStyle = "rgba(0,0,0,0.2)"; // soft trails
+    ctx.fillRect(0,0,ctx.canvas.width,ctx.canvas.height);
+
+    const delayIndex = Math.floor((i / numCells) * frameBuffer.length);
+    const frame = frameBuffer[delayIndex];
+    if (frame) ctx.drawImage(frame, 0, 0, ctx.canvas.width, ctx.canvas.height);
+  }
+
+  updateParticles();
+  requestAnimationFrame(drawGrid);
+}
+
+// Particle system
+function updateParticles() {
+  const effect = parseInt(effectSelect.value);
+
+  for (let i = 0; i < numCells; i++) {
+    const ctx = canvases[i];
+    const w = ctx.canvas.width;
+    const h = ctx.canvas.height;
+    const delayIndex = Math.floor((i / numCells) * frameBuffer.length);
+    const frame = frameBuffer[delayIndex];
+    if (!frame) continue;
+
+    const frameData = frame.getContext('2d').getImageData(0,0,w,h);
+
+    if (effect === 1) { // Motion Trails
+      if (delayIndex > 0) {
+        const prevFrame = frameBuffer[Math.max(delayIndex-1,0)].getContext('2d').getImageData(0,0,w,h);
+        for (let j = 0; j < 300; j++) {
+          const x = Math.floor(Math.random() * w);
+          const y = Math.floor(Math.random() * h);
+          const idx = (y*w + x)*4;
+          const diff = Math.abs(frameData.data[idx]-prevFrame.data[idx]) +
+                       Math.abs(frameData.data[idx+1]-prevFrame.data[idx+1]) +
+                       Math.abs(frameData.data[idx+2]-prevFrame.data[idx+2]);
+          if (diff > 40) {
+            particles.push({
+              x, y, ctx,
+              vx: (Math.random()-0.5)*1.5, vy: (Math.random()-0.5)*1.5,
+              alpha: 1,
+              size: Math.random()*2+1,
+              color: `rgb(${frameData.data[idx]},${frameData.data[idx+1]},${frameData.data[idx+2]})`
+            });
+          }
+        }
+      }
+    } else if (effect === 2) { // Color Sampling
+      for (let j = 0; j < 4; j++) {
+        const x = Math.floor(Math.random() * w);
+        const y = Math.floor(Math.random() * h);
+        const idx = (y*w + x)*4;
+        particles.push({
+          x, y, ctx,
+          vx: (Math.random()-0.5)*1, vy: (Math.random()-0.5)*1,
+          alpha: 1,
+          size: Math.random()*2+1.5,
+          color: `rgb(${frameData.data[idx]},${frameData.data[idx+1]},${frameData.data[idx+2]})`
+        });
+      }
+    } else if (effect === 3) { // Diagonal Wave
+      const waveFactor = Math.sin(Date.now()/600 + i/3);
+      for (let j = 0; j < 3; j++) {
+        particles.push({
+          x: w/2, y: h/2, ctx,
+          vx: waveFactor*(Math.random()*2-1), vy: waveFactor*(Math.random()*2-1),
+          alpha: 1,
+          size: Math.random()*2+1,
+          color: `hsl(${i*12},100%,50%)`
+        });
+      }
+    }
+  }
+
+  // Draw & decay particles
+  for (let p of particles) {
+    p.ctx.beginPath();
+    const gradient = p.ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size*2);
+    gradient.addColorStop(0, `rgba(${p.color.includes('rgb') ? p.color.match(/\d+/g).join(',') : p.color},${p.alpha})`);
+    gradient.addColorStop(1, `rgba(0,0,0,0)`);
+    p.ctx.fillStyle = gradient;
+    p.ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+    p.ctx.fill();
+
+    // smooth movement
+    p.x += p.vx;
+    p.y += p.vy;
+    p.alpha -= 0.015;
+  }
+
+  particles = particles.filter(p => p.alpha > 0);
+}
+</script>
+</body>
+</html>
