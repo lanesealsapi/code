@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Alive Neon Linked Ring – Interactive</title>
+<style>
+  body {
+    margin: 0;
+    font-family: sans-serif;
+    background: radial-gradient(circle at center, #050505 60%, #000);
+    color: #0ff;
+    overflow: hidden;
+  }
+  #controls {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    background: rgba(0,0,0,0.5);
+    padding: 10px 15px;
+    border-radius: 12px;
+    backdrop-filter: blur(4px);
+    font-size: 13px;
+    z-index: 10;
+  }
+  #controls label {
+    display: block;
+    margin-top: 6px;
+  }
+  #controls input[type=range] {
+    width: 140px;
+  }
+  canvas {
+    display: block;
+  }
+</style>
+</head>
+<body>
+<div id="controls">
+  <label>Nodes: <input id="nodes" type="range" min="6" max="40" value="16"></label>
+  <label>Streams: <input id="streams" type="range" min="1" max="20" value="10"></label>
+  <label>Speed: <input id="speed" type="range" min="1" max="100" value="30"></label>
+  <label><input id="bidirectional" type="checkbox" checked> Bidirectional Flow</label>
+  <label><input id="breathe" type="checkbox" checked> Breathing Effect</label>
+</div>
+
+<canvas id="ring"></canvas>
+
+<script>
+const canvas = document.getElementById('ring');
+const ctx = canvas.getContext('2d');
+let w, h;
+function resize() {
+  w = canvas.width = window.innerWidth;
+  h = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+const baseColors = ["#0ff", "#f0f", "#ff0", "#0f0", "#f80", "#08f"];
+let numNodes = 16;
+let streamCount = 10;
+let baseSpeed = 0.03;
+let allowBidirectional = true;
+let breathing = true;
+
+let radius = Math.min(w, h) * 0.33;
+let streams = [];
+
+function makeStreams() {
+  streams = [];
+  for (let i = 0; i < streamCount; i++) {
+    streams.push({
+      angle: Math.random() * Math.PI * 2,
+      speed: (Math.random() * 0.02 + baseSpeed/3) * 
+             (allowBidirectional && Math.random() < 0.5 ? -1 : 1),
+      color: baseColors[Math.floor(Math.random() * baseColors.length)],
+      trail: Math.floor(Math.random() * 3) + 2,
+    });
+  }
+}
+makeStreams();
+
+function drawNode(x, y, glowColor) {
+  ctx.beginPath();
+  ctx.arc(x, y, 8, 0, Math.PI * 2);
+  const grad = ctx.createRadialGradient(x, y, 0, x, y, 25);
+  grad.addColorStop(0, glowColor);
+  grad.addColorStop(1, "transparent");
+  ctx.fillStyle = grad;
+  ctx.shadowColor = glowColor;
+  ctx.shadowBlur = 25;
+  ctx.fill();
+}
+
+function drawLink(x1, y1, x2, y2, color) {
+  const grad = ctx.createLinearGradient(x1, y1, x2, y2);
+  grad.addColorStop(0, color);
+  grad.addColorStop(1, "black");
+  ctx.strokeStyle = grad;
+  ctx.lineWidth = 2.5;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+}
+
+function animate() {
+  ctx.clearRect(0, 0, w, h);
+  const cx = w / 2, cy = h / 2;
+
+  // Node positions
+  const nodes = [];
+  for (let i = 0; i < numNodes; i++) {
+    const a = (Math.PI * 2 * i) / numNodes;
+    nodes.push({
+      x: cx + Math.cos(a) * radius,
+      y: cy + Math.sin(a) * radius
+    });
+  }
+
+  // Backbone links
+  for (let i = 0; i < numNodes; i++) {
+    const n1 = nodes[i];
+    const n2 = nodes[(i + 1) % numNodes];
+    drawLink(n1.x, n1.y, n2.x, n2.y, "#066");
+  }
+
+  // Data streams
+  for (const s of streams) {
+    s.angle += s.speed;
+    if (s.angle < 0) s.angle += Math.PI * 2;
+    if (s.angle > Math.PI * 2) s.angle -= Math.PI * 2;
+
+    for (let j = 0; j < s.trail; j++) {
+      const t = s.angle - s.speed * j * 6;
+      const x = cx + Math.cos(t) * radius;
+      const y = cy + Math.sin(t) * radius;
+      const alpha = 1 - j / s.trail;
+      ctx.globalAlpha = alpha;
+      drawNode(x, y, s.color);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // Breathing motion
+  if (breathing) radius = Math.min(w, h) * 0.33 + Math.sin(Date.now() * 0.001) * 5;
+
+  requestAnimationFrame(animate);
+}
+animate();
+
+// --- Controls ---
+document.getElementById("nodes").oninput = e => {
+  numNodes = parseInt(e.target.value);
+};
+document.getElementById("streams").oninput = e => {
+  streamCount = parseInt(e.target.value);
+  makeStreams();
+};
+document.getElementById("speed").oninput = e => {
+  baseSpeed = parseInt(e.target.value) / 1000;
+  makeStreams();
+};
+document.getElementById("bidirectional").onchange = e => {
+  allowBidirectional = e.target.checked;
+  makeStreams();
+};
+document.getElementById("breathe").onchange = e => {
+  breathing = e.target.checked;
+};
+</script>
+</body>
+</html>
