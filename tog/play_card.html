@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Playing Card Template — L.A.x NIL Card</title>
+  <style>
+    :root{
+      --card-width: 360px;
+      --card-radius: 14px;
+      --border: #111;
+      --accent: #00d4ff;
+      --bg: #fbf6ef;
+      --text: #111;
+      --muted: #666;
+    }
+
+    *{box-sizing:border-box}
+    body{
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      min-height:100vh;
+      margin:0;
+      background: linear-gradient(180deg,#0f1724 0%, #071023 100%);
+      color:var(--text);
+      padding:20px;
+    }
+
+    .card {
+      width: min(var(--card-width), 92vw);
+      background: var(--bg);
+      border-radius: var(--card-radius);
+      padding: 18px;
+      border: 3px solid var(--border);
+      box-shadow: 0 10px 30px rgba(2,6,23,0.6);
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap:12px;
+    }
+
+    .card-header{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+    }
+    .rank{
+      font-weight:700;
+      font-size:28px;
+      letter-spacing:2px;
+    }
+    .name{
+      font-weight:800;
+      font-size:20px;
+      text-transform:uppercase;
+    }
+
+    /* image placeholder */
+    .image-area{
+      background: linear-gradient(180deg, rgba(0,0,0,0.03), rgba(0,0,0,0.02));
+      border-radius:10px;
+      border: 2px dashed rgba(0,0,0,0.12);
+      height: 420px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      position:relative;
+      overflow:hidden;
+    }
+
+    .image-area img{
+      max-width:100%;
+      max-height:100%;
+      object-fit:contain;
+      display:block;
+    }
+
+    .placeholder{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:8px;
+      color:var(--muted);
+      text-align:center;
+      padding:18px;
+    }
+
+    .upload-btn{
+      background:transparent;
+      border:1px solid var(--border);
+      padding:8px 12px;
+      border-radius:8px;
+      cursor:pointer;
+      font-weight:600;
+      color:var(--text);
+    }
+
+    .stats{
+      display:flex;
+      gap:10px;
+      justify-content:space-between;
+      margin-top:8px;
+    }
+    .stat{
+      background:linear-gradient(180deg, rgba(255,255,255,0.7), rgba(255,255,255,0.9));
+      border-radius:8px;
+      padding:8px 10px;
+      width:calc(25% - 7.5px);
+      text-align:center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .stat .label{font-size:11px;color:var(--muted);text-transform:uppercase;}
+    .stat .value{font-weight:800;font-size:18px;margin-top:6px;}
+
+    .card-footer{
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      align-items:center;
+    }
+
+    input[type="file"]{display:none}
+
+    /* small devices */
+    @media (max-width:420px){
+      .image-area{height:320px}
+      .stat{width:48%}
+      .stats{flex-wrap:wrap}
+    }
+  </style>
+</head>
+<body>
+  <article class="card" aria-label="Playing card template for L.A.x">
+    <header class="card-header">
+      <div class="rank">A ♠</div>
+      <div class="name" contenteditable="true" aria-label="Player name">L.A.x</div>
+    </header>
+
+    <section class="image-area" id="imageArea" aria-label="Image placeholder — click to upload or drop an image">
+      <!-- If you want to prefill an image, replace src="" with your file path -->
+      <img id="cardImage" src="" alt="" style="display:none" />
+      <div class="placeholder" id="placeholder">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" aria-hidden>
+          <path d="M7 7h10v10H7z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M4 20h16" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+        <div><strong>Drop an image here</strong></div>
+        <div style="font-size:13px;color:var(--muted)">or click to upload (PNG/JPG)</div>
+        <label class="upload-btn" for="imageInput" style="margin-top:8px">Choose image</label>
+        <input id="imageInput" type="file" accept="image/*" />
+      </div>
+    </section>
+
+    <div class="stats" aria-hidden="false">
+      <div class="stat">
+        <div class="label">Speed</div>
+        <div class="value" contenteditable="true">92</div>
+      </div>
+      <div class="stat">
+        <div class="label">Agility</div>
+        <div class="value" contenteditable="true">88</div>
+      </div>
+      <div class="stat">
+        <div class="label">Strength</div>
+        <div class="value" contenteditable="true">85</div>
+      </div>
+      <div class="stat">
+        <div class="label">Style</div>
+        <div class="value" contenteditable="true">99</div>
+      </div>
+    </div>
+
+    <footer class="card-footer">
+      <small style="color:var(--muted)">NIL card • editable</small>
+      <div>
+        <button id="downloadBtn" class="upload-btn" title="Download card as PNG">Download PNG</button>
+      </div>
+    </footer>
+  </article>
+
+  <script>
+    // Simple image upload + drag-drop and preview
+    const imageInput = document.getElementById('imageInput');
+    const imageArea = document.getElementById('imageArea');
+    const cardImage = document.getElementById('cardImage');
+    const placeholder = document.getElementById('placeholder');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const card = document.querySelector('.card');
+
+    function showImage(file){
+      const reader = new FileReader();
+      reader.onload = e => {
+        cardImage.src = e.target.result;
+        cardImage.style.display = 'block';
+        placeholder.style.display = 'none';
+      }
+      reader.readAsDataURL(file);
+    }
+
+    imageInput.addEventListener('change', (ev) => {
+      const file = ev.target.files && ev.target.files[0];
+      if(!file) return;
+      showImage(file);
+    });
+
+    imageArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      imageArea.style.borderColor = '#0097b2';
+    });
+    imageArea.addEventListener('dragleave', (e) => {
+      imageArea.style.borderColor = 'rgba(0,0,0,0.12)';
+    });
+    imageArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      imageArea.style.borderColor = 'rgba(0,0,0,0.12)';
+      const file = e.dataTransfer.files && e.dataTransfer.files[0];
+      if(file) showImage(file);
+    });
+
+    // Click area also triggers file picker
+    imageArea.addEventListener('click', () => imageInput.click());
+
+    // Simple download using HTML2Canvas-like approach (native fallback: open image in new tab)
+    // NOTE: This uses the browser's svg/canvas approach to capture the card. For a more robust export,
+    // you may include html2canvas or dom-to-image libraries.
+    downloadBtn.addEventListener('click', async () => {
+      // Basic fallback: capture the main image if present and open it.
+      if(cardImage && cardImage.src){
+        // Create a temporary canvas same size as card element
+        const rect = card.getBoundingClientRect();
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(rect.width * devicePixelRatio);
+        canvas.height = Math.round(rect.height * devicePixelRatio);
+        const ctx = canvas.getContext('2d');
+        ctx.scale(devicePixelRatio, devicePixelRatio);
+        // draw white background
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#fff';
+        ctx.fillRect(0,0,rect.width,rect.height);
+
+        // draw the image preview into canvas centered
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          // approx fit the preview area
+          const area = document.querySelector('.image-area').getBoundingClientRect();
+          const areaRelX = area.left - rect.left;
+          const areaRelY = area.top - rect.top;
+          const areaW = area.width;
+          const areaH = area.height;
+
+          // fill with image scaled to contain
+          const scale = Math.min(areaW / img.width, areaH / img.height);
+          const iw = img.width * scale;
+          const ih = img.height * scale;
+          const ix = areaRelX + (areaW - iw)/2;
+          const iy = areaRelY + (areaH - ih)/2;
+
+          ctx.drawImage(img, ix, iy, iw, ih);
+
+          // simple text draw (name + stats)
+          ctx.font = "700 20px Inter, Arial";
+          ctx.fillStyle = "#000";
+          ctx.fillText(document.querySelector('.name').innerText, 18, 28);
+
+          // Create link to download
+          const link = document.createElement('a');
+          link.href = canvas.toDataURL('image/png');
+          link.download = 'LAX_card.png';
+          link.click();
+        }
+        img.src = cardImage.src;
+      } else {
+        alert('No image uploaded yet. Drop or select an image in the placeholder first.');
+      }
+    });
+  </script>
+</body>
+</html>
