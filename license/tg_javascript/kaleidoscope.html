@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Kaleidoscope Visualizer</title>
+  <style>
+    :root{
+      --bg:#0b1020;
+      --panel:#0f1724cc;
+      --accent:#7c3aed;
+      --muted:#9aa4b2;
+      --glass: rgba(255,255,255,0.03);
+    }
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--bg),#071023);font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial}
+    .app{display:grid;grid-template-columns:340px 1fr;height:100vh;gap:18px;padding:18px}
+    .panel{background:var(--panel);backdrop-filter: blur(6px);border-radius:14px;padding:14px;color:#e6eef8;box-shadow:0 6px 30px rgba(2,6,23,0.6)}
+    .canvas-wrap{position:relative;border-radius:14px;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,0.02)}
+    canvas{display:block;width:100%;height:100%}
+    h1{font-size:16px;margin:0 0 10px 0}
+    label{display:block;font-size:12px;color:var(--muted);margin-top:10px}
+    input[type=range]{width:100%;margin-top:6px}
+    .row{display:flex;gap:10px;align-items:center}
+    .small{font-size:13px;color:var(--muted)}
+    .controls{display:flex;flex-direction:column}
+    .control-row{display:flex;gap:10px;align-items:center}
+    .btn{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px 10px;border-radius:8px;color:inherit;cursor:pointer}
+    .btn:hover{transform:translateY(-1px)}
+    .toggle{display:inline-flex;align-items:center;gap:8px}
+    .footer{margin-top:14px;font-size:12px;color:var(--muted)}
+    .canvas-container{height:calc(100vh - 36px);border-radius:14px;overflow:hidden}
+    .control-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    input[type=file]{display:none}
+    .file-label{cursor:pointer}
+    .range-value{min-width:48px;text-align:right;font-variant-numeric:tabular-nums}
+    .top-controls{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+    .credit{font-size:11px;color:var(--muted);margin-top:10px}
+    .brand{display:flex;gap:8px;align-items:center}
+    .logo{width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#06b6d4);display:inline-flex;align-items:center;justify-content:center;font-weight:700;color:#041024}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="panel">
+      <div class="brand"><div class="logo">K</div><div><h1>Kaleidoscope Visualizer</h1><div class="small">HTML Canvas • real-time • interactive</div></div></div>
+      <div class="controls">
+        <label>Source</label>
+        <div class="control-row">
+          <button class="btn" id="useGenerated">Generated</button>
+          <button class="btn" id="useImage">Upload Image</button>
+          <button class="btn" id="useCam">Use Webcam</button>
+          <input id="fileInput" type="file" accept="image/*">
+        </div>
+
+        <label>Segments & symmetry <span class="small">(mirrored slices)</span></label>
+        <div class="control-row">
+          <input id="segments" type="range" min="2" max="48" value="12">
+          <div class="range-value" id="segmentsVal">12</div>
+        </div>
+
+        <label>Rotation speed (deg/s)</label>
+        <div class="control-row">
+          <input id="speed" type="range" min="-180" max="180" value="10">
+          <div class="range-value" id="speedVal">10</div>
+        </div>
+
+        <label>Scale / Zoom</label>
+        <div class="control-row">
+          <input id="scale" type="range" min="0.1" max="3" step="0.01" value="1">
+          <div class="range-value" id="scaleVal">1.00</div>
+        </div>
+
+        <label>Blend mode</label>
+        <div class="control-row">
+          <select id="blendMode" class="btn">
+            <option value="source-over">Normal</option>
+            <option value="lighter">Additive</option>
+            <option value="multiply">Multiply</option>
+            <option value="screen">Screen</option>
+            <option value="overlay">Overlay</option>
+          </select>
+        </div>
+
+        <label>Colors / Effects</label>
+        <div class="control-row">
+          <input id="hue" type="range" min="-180" max="180" value="0">
+          <div class="range-value" id="hueVal">0</div>
+        </div>
+
+        <label>Motion Trail</label>
+        <div class="control-row">
+          <input id="trail" type="range" min="0" max="0.98" step="0.01" value="0.85">
+          <div class="range-value" id="trailVal">0.85</div>
+        </div>
+
+        <label>Quality</label>
+        <div class="control-row">
+          <select id="quality" class="btn">
+            <option value="1">High</option>
+            <option value="2">Medium</option>
+            <option value="3">Low</option>
+          </select>
+        </div>
+
+        <div class="top-controls">
+          <button class="btn" id="pauseBtn">Pause</button>
+          <button class="btn" id="randomize">Randomize</button>
+          <button class="btn" id="snapshot">Snapshot</button>
+        </div>
+
+        <div class="footer">Tip: try webcam + fewer segments for a trippy live effect. Use snapshot to save PNG.</div>
+        <div class="credit">Built with Canvas • Resize the window to adapt.</div>
+      </div>
+    </aside>
+
+    <main class="canvas-wrap">
+      <div class="canvas-container canvas-wrap">
+        <canvas id="stage"></canvas>
+      </div>
+    </main>
+  </div>
+
+  <script>
+  // Kaleidoscope Visualizer - single-file
+  (function(){
+    const canvas = document.getElementById('stage');
+    const ctx = canvas.getContext('2d');
+    let dpr = Math.max(1, window.devicePixelRatio || 1);
+
+    // Controls
+    const segmentsEl = document.getElementById('segments');
+    const segmentsVal = document.getElementById('segmentsVal');
+    const speedEl = document.getElementById('speed');
+    const speedVal = document.getElementById('speedVal');
+    const scaleEl = document.getElementById('scale');
+    const scaleVal = document.getElementById('scaleVal');
+    const hueEl = document.getElementById('hue');
+    const hueVal = document.getElementById('hueVal');
+    const trailEl = document.getElementById('trail');
+    const trailVal = document.getElementById('trailVal');
+    const blendEl = document.getElementById('blendMode');
+    const qualityEl = document.getElementById('quality');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const randomizeBtn = document.getElementById('randomize');
+    const snapshotBtn = document.getElementById('snapshot');
+    const useGenBtn = document.getElementById('useGenerated');
+    const useImageBtn = document.getElementById('useImage');
+    const useCamBtn = document.getElementById('useCam');
+    const fileInput = document.getElementById('fileInput');
+
+    let W = 800, H = 600;
+    let running = true;
+
+    // Source - offscreen
+    const srcCanvas = document.createElement('canvas');
+    const srcCtx = srcCanvas.getContext('2d');
+    let srcPatternMode = 'generated'; // generated | image | camera
+    let srcImage = null;
+    let camStream = null;
+    let camVideo = null;
+
+    // Animation state
+    let last = performance.now();
+    let angle = 0; // degrees
+
+    function resize(){
+      const rect = canvas.getBoundingClientRect();
+      W = Math.max(100, Math.floor(rect.width));
+      H = Math.max(100, Math.floor(rect.height));
+      canvas.width = Math.floor(W * dpr);
+      canvas.height = Math.floor(H * dpr);
+      canvas.style.width = W + 'px';
+      canvas.style.height = H + 'px';
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+
+      // source canvas sized based on quality to save CPU
+      const q = Number(qualityEl.value);
+      const scaleFactor = q===1?1:q===2?0.6:0.4;
+      srcCanvas.width = Math.max(100, Math.floor(W * scaleFactor));
+      srcCanvas.height = Math.max(100, Math.floor(H * scaleFactor));
+    }
+
+    window.addEventListener('resize', debounce(resize, 120));
+    resize();
+
+    // UI bindings
+    segmentsEl.addEventListener('input', ()=>{segmentsVal.textContent = segmentsEl.value});
+    speedEl.addEventListener('input', ()=>{speedVal.textContent = speedEl.value});
+    scaleEl.addEventListener('input', ()=>{scaleVal.textContent = Number(scaleEl.value).toFixed(2)});
+    hueEl.addEventListener('input', ()=>{hueVal.textContent = hueEl.value});
+    trailEl.addEventListener('input', ()=>{trailVal.textContent = trailEl.value});
+
+    pauseBtn.addEventListener('click', ()=>{running = !running; pauseBtn.textContent = running? 'Pause':'Resume'; if(running) last = performance.now();});
+    randomizeBtn.addEventListener('click', randomize);
+    snapshotBtn.addEventListener('click', takeSnapshot);
+
+    useGenBtn.addEventListener('click', ()=>{stopCamera(); srcPatternMode='generated';});
+    useImageBtn.addEventListener('click', ()=>{fileInput.click();});
+    useCamBtn.addEventListener('click', ()=>{startCamera();});
+    fileInput.addEventListener('change', handleFile);
+
+    // Helpers
+    function debounce(fn, t){let id; return (...a)=>{clearTimeout(id); id=setTimeout(()=>fn(...a), t)}}
+
+    function randomize(){
+      segmentsEl.value = Math.floor(3 + Math.random()*30);
+      speedEl.value = Math.floor(-90 + Math.random()*180);
+      scaleEl.value = (0.5 + Math.random()*2).toFixed(2);
+      hueEl.value = Math.floor(-180 + Math.random()*360);
+      trailEl.value = (0.6 + Math.random()*0.35).toFixed(2);
+      qualityEl.value = [1,2,3][Math.floor(Math.random()*3)];
+      segmentsVal.textContent = segmentsEl.value;
+      speedVal.textContent = speedEl.value;
+      scaleVal.textContent = scaleEl.value;
+      hueVal.textContent = hueEl.value;
+      trailVal.textContent = trailEl.value;
+    }
+
+    function takeSnapshot(){
+      const data = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = data; a.download = 'kaleidoscope.png';
+      a.click();
+    }
+
+    function handleFile(e){
+      const f = e.target.files && e.target.files[0];
+      if(!f) return;
+      const url = URL.createObjectURL(f);
+      const img = new Image();
+      img.onload = ()=>{srcImage = img; srcPatternMode='image'; URL.revokeObjectURL(url)};
+      img.src = url;
+    }
+
+    async function startCamera(){
+      try{
+        if(camStream) return;
+        camStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}, audio:false});
+        camVideo = document.createElement('video');
+        camVideo.srcObject = camStream; camVideo.muted=true; camVideo.playsInline=true; await camVideo.play();
+        srcPatternMode='camera';
+      }catch(err){console.warn('Camera denied or unavailable',err);}
+    }
+    function stopCamera(){
+      if(camStream){camStream.getTracks().forEach(t=>t.stop()); camStream=null; camVideo=null;}
+    }
+
+    // Generated source drawing (animated noise / shapes)
+    let genSeed = Math.random()*9999;
+    function drawGeneratedSource(t){
+      const sctx = srcCtx;
+      const w = srcCanvas.width; const h = srcCanvas.height;
+      // fade slightly to create motion
+      sctx.save();
+      sctx.fillStyle = 'rgba(8,10,18,0.18)';
+      sctx.fillRect(0,0,w,h);
+      sctx.restore();
+
+      // moving blobs
+      const blobs = 6;
+      for(let i=0;i<blobs;i++){
+        const x = w*0.5 + Math.sin((t*0.001*(0.6+i*0.13))+i*1.3+genSeed)*w*0.4;
+        const y = h*0.5 + Math.cos((t*0.001*(0.7+i*0.11))+i*0.9+genSeed*1.2)*h*0.35;
+        const r = Math.max(w,h)*0.18*(0.6 + (i%3)/4);
+        const grad = sctx.createRadialGradient(x,y,0,x,y,r);
+        const hue = ((i*40 + t*0.02) % 360 + Number(hueEl.value))|0;
+        grad.addColorStop(0, `hsla(${hue},80%,65%,0.95)`);
+        grad.addColorStop(0.5, `hsla(${(hue+60)%360},70%,45%,0.35)`);
+        grad.addColorStop(1, `rgba(0,0,0,0)`);
+        sctx.beginPath(); sctx.fillStyle = grad; sctx.arc(x,y,r,0,Math.PI*2); sctx.fill();
+      }
+
+      // moving lines
+      sctx.save(); sctx.globalAlpha = 0.05; sctx.lineWidth = 2;
+      for(let i=0;i<8;i++){
+        sctx.beginPath();
+        sctx.moveTo(0, h*(i/8 + 0.02*Math.sin(t*0.001+i)));
+        sctx.quadraticCurveTo(w*0.5 + Math.sin(t*0.0007+i)*w*0.12, h*0.5, w, h*(i/8 + 0.02*Math.cos(t*0.001+i)));
+        sctx.strokeStyle = `hsl(${(t*0.02 + i*30 + Number(hueEl.value))%360} 80% 60%)`;
+        sctx.stroke();
+      }
+      sctx.restore();
+    }
+
+    // Main render loop
+    function render(now){
+      const dt = Math.min(60, (now - last) / 1000); // seconds
+      last = now;
+      if(!running){ requestAnimationFrame(render); return; }
+
+      // update angle
+      angle += Number(speedEl.value) * dt; // degrees per second
+      angle %= 360;
+
+      // draw source
+      if(srcPatternMode==='generated'){
+        drawGeneratedSource(now);
+      }else if(srcPatternMode==='image' && srcImage){
+        // draw a centered cover image
+        const sctx = srcCtx; const w=srcCanvas.width, h=srcCanvas.height;
+        sctx.save(); sctx.clearRect(0,0,w,h);
+        const iw=srcImage.width, ih=srcImage.height;
+        const scale = Math.max(w/iw, h/ih);
+        const iw2=iw*scale, ih2=ih*scale;
+        sctx.drawImage(srcImage, (w-iw2)/2, (h-ih2)/2, iw2, ih2);
+        sctx.restore();
+      }else if(srcPatternMode==='camera' && camVideo && camVideo.readyState>=2){
+        const sctx = srcCtx; const w=srcCanvas.width, h=srcCanvas.height;
+        sctx.save(); sctx.clearRect(0,0,w,h);
+        const vw=camVideo.videoWidth, vh=camVideo.videoHeight;
+        if(vw && vh){
+          const scale = Math.max(w/vw, h/vh);
+          const vw2 = vw*scale, vh2 = vh*scale;
+          sctx.drawImage(camVideo, (w-vw2)/2, (h-vh2)/2, vw2, vh2);
+        }
+        sctx.restore();
+      }
+
+      // main kaleidoscope composition
+      const segs = Math.max(2, parseInt(segmentsEl.value));
+      const sliceAngle = (Math.PI*2)/segs; // radians per slice
+      const mirror = true; // mirrored slices for classic kaleidoscope
+      const cx = W/2, cy = H/2;
+
+      ctx.save();
+      // trail effect: draw translucent rect over canvas to create persistence
+      const trail = Number(trailEl.value);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = `rgba(6,8,16,${1-trail})`;
+      ctx.fillRect(0,0,W,H);
+
+      ctx.globalCompositeOperation = blendEl.value;
+      ctx.translate(cx, cy);
+      ctx.rotate(angle * Math.PI/180);
+      ctx.scale(Number(scaleEl.value), Number(scaleEl.value));
+
+      // create pattern from source canvas clipped into wedge
+      // We'll draw each slice by copying an appropriately transformed portion of srcCanvas
+      const sW = srcCanvas.width, sH = srcCanvas.height;
+
+      for(let i=0;i<segs;i++){
+        ctx.save();
+        const ang = i * sliceAngle;
+        ctx.rotate(ang);
+
+        // clip to triangular wedge
+        ctx.beginPath();
+        ctx.moveTo(0,0);
+        ctx.lineTo(Math.cos(sliceAngle/2)*Math.max(W,H)*1.5, Math.sin(sliceAngle/2)*Math.max(W,H)*1.5);
+        ctx.lineTo(Math.cos(-sliceAngle/2)*Math.max(W,H)*1.5, Math.sin(-sliceAngle/2)*Math.max(W,H)*1.5);
+        ctx.closePath();
+        ctx.clip();
+
+        // compute transformation from srcCanvas to wedge
+        // draw the srcCanvas centered and scaled to cover
+        // We will optionally flip every other slice for mirror effect
+        ctx.save();
+        if(mirror && (i%2===1)) ctx.scale(-1,1);
+        // draw source as pattern: center to origin
+        ctx.drawImage(srcCanvas, -sW/2, -sH/2, sW, sH);
+
+        // color shift using globalComposite or filter
+        if(Number(hueEl.value)!==0){
+          // a cheap hue shift: draw a transparent overlay in multiply/overlay modes
+          // (true hue rotation is expensive — this is a nice approximation)
+          ctx.globalCompositeOperation = 'hue';
+        }
+        ctx.restore();
+
+        ctx.restore();
+      }
+
+      ctx.restore();
+
+      requestAnimationFrame(render);
+    }
+
+    // Start the loop
+    requestAnimationFrame(render);
+
+    // keyboard shortcuts
+    window.addEventListener('keydown', (e)=>{
+      if(e.key===' '){ running=!running; pauseBtn.textContent=running? 'Pause':'Resume'; if(running) last = performance.now(); e.preventDefault(); }
+      if(e.key==='s'){ takeSnapshot(); }
+      if(e.key==='r'){ randomize(); }
+    });
+
+    // cleanup when leaving
+    window.addEventListener('beforeunload', ()=>{ stopCamera(); });
+
+    // initial randomize for variety
+    randomize();
+
+  })();
+  </script>
+</body>
+</html>
