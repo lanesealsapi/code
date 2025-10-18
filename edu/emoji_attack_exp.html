@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tron Gamer Car Game</title>
+<style>
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: #111;
+    font-family: sans-serif;
+  }
+
+  #gameCanvas {
+    display: block;
+    background: #222;
+  }
+
+  .instructions {
+    position: absolute;
+    top: 10px;
+    width: 100%;
+    text-align: center;
+    color: rgba(255,255,255,0.3);
+    font-size: 18px;
+  }
+</style>
+</head>
+<body>
+<div class="instructions">Arrow Up = Jump | Space near obstacle = Fragment | Avoid collisions</div>
+<canvas id="gameCanvas" width="800" height="400"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+let car = { x: 100, y: 300, width: 80, height: 40, dy: 0, jumping: false };
+let obstacles = [];
+let fragments = [];
+let trail = []; // For neon trail
+let gravity = 0.8;
+let speed = 5;
+let jumpPower = -15;
+
+let score = 0;
+let health = 3;
+let gameTime = 0;
+
+// Emoji sets
+const emojiSets = [
+  ['🔥'],           // Start
+  ['👻','💀','🤖'],// Mid
+  ['💀💀']          // End stacked
+];
+
+// Controls
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'ArrowUp') {
+    if (!car.jumping) {
+      car.dy = jumpPower;
+      car.jumping = true;
+    }
+  }
+  if (e.code === 'Space') {
+    obstacles.forEach((obs, i) => {
+      if (obs.x < car.x + car.width + 30 && obs.x > car.x) {
+        for (let j = 0; j < 5; j++) {
+          fragments.push({
+            x: obs.x + 10,
+            y: obs.y + 10,
+            dx: (Math.random() - 0.5) * 10,
+            dy: (Math.random() - 1.5) * 10
+          });
+        }
+        obstacles.splice(i, 1);
+        score += 10;
+      }
+    });
+  }
+});
+
+// Collision helper
+function checkCollision(rect1, rect2) {
+  return (
+    rect1.x < rect2.x + rect2.width &&
+    rect1.x + rect1.width > rect2.x &&
+    rect1.y < rect2.y + rect2.height &&
+    rect1.y + rect1.height > rect2.y
+  );
+}
+
+// Draw neon Tron-style car
+function drawCar(car) {
+  // Add position to trail
+  trail.push({ x: car.x, y: car.y, width: car.width, height: car.height });
+  if (trail.length > 20) trail.shift(); // keep last 20 positions
+
+  // Draw trail
+  for (let i=0; i<trail.length; i++) {
+    const t = trail[i];
+    const alpha = i / trail.length * 0.5;
+    ctx.strokeStyle = `rgba(0,255,255,${alpha})`;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(t.x, t.y + t.height);
+    ctx.lineTo(t.x + 20, t.y);
+    ctx.lineTo(t.x + t.width - 20, t.y);
+    ctx.lineTo(t.x + t.width, t.y + t.height);
+    ctx.closePath();
+    ctx.stroke();
+  }
+
+  // Car body
+  ctx.strokeStyle = '#0ff';
+  ctx.lineWidth = 3;
+  ctx.fillStyle = 'magenta';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(car.x, car.y + car.height);
+  ctx.lineTo(car.x + 20, car.y);
+  ctx.lineTo(car.x + car.width - 20, car.y);
+  ctx.lineTo(car.x + car.width, car.y + car.height);
+  ctx.closePath();
+  ctx.stroke();
+
+  // Wheels
+  ctx.fillStyle = '#0ff';
+  ctx.beginPath();
+  ctx.arc(car.x + 15, car.y + car.height, 10, 0, Math.PI*2);
+  ctx.arc(car.x + car.width - 15, car.y + car.height, 10, 0, Math.PI*2);
+  ctx.fill();
+
+}
+
+// Spawn obstacles
+function spawnObstacle() {
+  const height = 80 + Math.random() * 40;
+  let emoji;
+  if (gameTime < 20) {
+    emoji = emojiSets[0][0];
+  } else if (gameTime < 40) {
+    emoji = emojiSets[1][Math.floor(Math.random()*emojiSets[1].length)];
+  } else {
+    emoji = emojiSets[2][0];
+  }
+  obstacles.push({ x: canvas.width, y: 380 - height, width: 50, height: height, face: emoji });
+}
+
+setInterval(spawnObstacle, 1500);
+
+// Game loop
+function gameLoop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Update game time and speed
+  gameTime += 0.01;
+  speed = 5 + Math.floor(gameTime/10);
+
+  // Draw ground
+  ctx.fillStyle = '#333';
+  ctx.fillRect(0, 380, canvas.width, 20);
+
+  // Update car
+  car.dy += gravity;
+  car.y += car.dy;
+  if (car.y > 300) {
+    car.y = 300;
+    car.dy = 0;
+    car.jumping = false;
+  }
+
+  // Draw car with neon trail
+  drawCar(car);
+
+  // Draw obstacles
+  ctx.font = '40px serif';
+  obstacles.forEach((obs, index) => {
+    obs.x -= speed;
+    ctx.fillText(obs.face, obs.x, obs.y + obs.height);
+
+    // Collision
+    if (checkCollision(car, obs)) {
+      obstacles.splice(index,1);
+      health -= 1;
+    }
+  });
+
+  // Draw fragments
+  fragments.forEach((f, i) => {
+    f.x += f.dx;
+    f.y += f.dy;
+    f.dy += 0.5;
+    ctx.fillStyle = 'orange';
+    ctx.fillRect(f.x, f.y, 10, 10);
+    if (f.y > canvas.height) fragments.splice(i,1);
+  });
+
+  // Score
+  ctx.fillStyle = 'white';
+  ctx.font = '20px sans-serif';
+  ctx.fillText('Score: ' + score, 10, 30);
+
+  // Health bar
+  for (let i=0; i<health; i++) {
+    ctx.fillStyle = 'lime';
+    ctx.fillRect(10 + i*35, 50, 30, 20);
+  }
+
+  // Game over
+  if (health <= 0) {
+    ctx.fillStyle = 'white';
+    ctx.font = '40px sans-serif';
+    ctx.fillText('GAME OVER', canvas.width/2 - 120, 200);
+    return;
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>
