@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Neon Swirl-Fireworks</title>
+<style>
+  body { margin:0; background:#000; color:#fff; font-family:sans-serif; }
+  canvas { display:block; }
+  #controls { position:fixed; top:10px; left:10px; z-index:10; }
+  label { margin-right:10px; }
+</style>
+</head>
+<body>
+<div id="controls">
+  <label>Color 1: <input type="color" id="color1" value="#00ffff"></label>
+  <label>Color 2: <input type="color" id="color2" value="#ff00ff"></label>
+  <label>Background: 
+    <select id="bgColor">
+      <option value="#000000">Black</option>
+      <option value="#2f4f4f">Slate Grey</option>
+    </select>
+  </label>
+</div>
+<canvas id="canvas"></canvas>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const centerX = canvas.width/2;
+const centerY = canvas.height/2;
+const eyeRadius = 10;
+
+let color1 = document.getElementById('color1').value;
+let color2 = document.getElementById('color2').value;
+let bgColor = document.getElementById('bgColor').value;
+
+document.getElementById('color1').addEventListener('input', e => { color1 = e.target.value; updateParticleColors(); });
+document.getElementById('color2').addEventListener('input', e => { color2 = e.target.value; updateParticleColors(); });
+document.getElementById('bgColor').addEventListener('change', e => { bgColor = e.target.value; });
+
+function hexToHSL(hex) {
+  let r=parseInt(hex.substr(1,2),16)/255,
+      g=parseInt(hex.substr(3,2),16)/255,
+      b=parseInt(hex.substr(5,2),16)/255;
+  let max=Math.max(r,g,b), min=Math.min(r,g,b), h=0,s=0,l=(max+min)/2;
+  if(max!=min){
+    let d=max-min;
+    s=l>0.5?d/(2-max-min):d/(max+min);
+    switch(max){
+      case r: h=(g-b)/d + (g<b?6:0); break;
+      case g: h=(b-r)/d +2; break;
+      case b: h=(r-g)/d +4; break;
+    }
+    h*=60;
+  }
+  return {h,s,l};
+}
+
+function lerp(a,b,t){ return a+(b-a)*t; }
+
+class Particle {
+  constructor() { 
+    this.reset(); 
+  }
+  reset() {
+    this.radius = Math.random()*100 + eyeRadius;
+    this.angle = Math.random()*2*Math.PI;
+    this.size = Math.random()*2 + 3;
+    this.baseSpeed = 0.02 + Math.random()*0.02;
+    this.colorCache = []; // precomputed gradient colors
+    this.updateColorCache();
+  }
+  updateColorCache(){
+    this.colorCache = [];
+    for(let t=0;t<=1;t+=0.01){
+      const c1 = hexToHSL(color1);
+      const c2 = hexToHSL(color2);
+      const hue = lerp(c1.h,c2.h,t);
+      const sat = lerp(c1.s*100,c2.s*100,t);
+      const light = lerp(c1.l*100,c2.l*100,t);
+      this.colorCache.push(`hsl(${hue},${sat}%,${light}%)`);
+    }
+  }
+  getColor(){
+    const t = Math.min(this.radius/300,1);
+    return this.colorCache[Math.floor(t*100)];
+  }
+  update() {
+    let speedFactor = Math.min((eyeRadius/this.radius)**1.5,2)*20;
+    this.angle += this.baseSpeed*speedFactor;
+    this.radius += 0.5*Math.sqrt(this.radius/50);
+    if(this.radius > Math.max(canvas.width,canvas.height)/2) this.reset();
+  }
+  draw() {
+    const x = centerX + Math.cos(this.angle)*this.radius;
+    const y = centerY + Math.sin(this.angle)*this.radius;
+
+    const color = this.getColor();
+    ctx.shadowBlur = 12;  // neon glow
+    ctx.shadowColor = color;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x,y,this.size,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.lineWidth = this.size;
+    ctx.strokeStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x - Math.cos(this.angle)*6, y - Math.sin(this.angle)*6);
+    ctx.lineTo(x,y);
+    ctx.stroke();
+  }
+}
+
+const particles = [];
+for(let i=0;i<280;i++) particles.push(new Particle());
+
+function updateParticleColors(){
+  particles.forEach(p=>p.updateColorCache());
+}
+
+function animate(){
+  ctx.fillStyle = bgColor; // slightly transparent for trails
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  ctx.beginPath();
+  ctx.arc(centerX,centerY,eyeRadius,0,Math.PI*2);
+  ctx.fillStyle = bgColor=='#000000' ? 'rgba(0,0,0,0.4)' : 'rgba(47,79,79,1.0)';
+  ctx.fill();
+
+  particles.forEach(p=>{ p.update(); p.draw(); });
+  requestAnimationFrame(animate);
+}
+animate();
+
+window.addEventListener('resize', ()=>{
+  canvas.width=window.innerWidth;
+  canvas.height=window.innerHeight;
+});
+</script>
+</body>
+</html>
