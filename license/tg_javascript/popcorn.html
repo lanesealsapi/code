@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Popcorn Pop</title>
+<style>
+  body { margin:0; background:#222; overflow:hidden; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; }
+  canvas { display:block; }
+  button { position:absolute; top:20px; left:20px; padding:10px 15px; font-size:16px; cursor:pointer; }
+</style>
+</head>
+<body>
+<button id="speedBtn">Slow</button>
+<canvas id="c"></canvas>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d');
+let w=c.width=window.innerWidth,h=c.height=window.innerHeight;
+
+let speed = 0.5; // slow default
+const popcornCount = 80;
+
+class Popcorn{
+  constructor(){
+    this.reset();
+  }
+  reset(){
+    this.x=w/2+Math.random()*60-30;
+    this.y=h;
+    this.vx=Math.random()*3-1.5;
+    this.vy=-Math.random()*6-2;
+    this.size=Math.random()*6+4;
+    this.gravity=0.15*speed;
+    this.color='white';
+    this.shapeOffset = Array.from({length:5},()=>Math.random()*this.size);
+  }
+  update(){
+    this.vy+=this.gravity;
+    this.x+=this.vx*speed;
+    this.y+=this.vy*speed;
+    if(this.y>h) this.reset();
+  }
+  draw(){
+    ctx.beginPath();
+    for(let i=0;i<5;i++){
+      let angle=(i/5)*Math.PI*2;
+      let r=this.size+this.shapeOffset[i];
+      ctx.lineTo(this.x+Math.cos(angle)*r, this.y+Math.sin(angle)*r);
+    }
+    ctx.closePath();
+    ctx.fillStyle=this.color;
+    ctx.fill();
+  }
+}
+
+let pops=[];
+for(let i=0;i<popcornCount;i++) pops.push(new Popcorn());
+
+function animate(){
+  ctx.fillStyle='rgba(34,34,34,0.3)';
+  ctx.fillRect(0,0,w,h);
+  pops.forEach(p=>{ p.update(); p.draw(); });
+  requestAnimationFrame(animate);
+}
+
+animate();
+
+window.addEventListener('resize',()=>{ w=c.width=window.innerWidth; h=c.height=window.innerHeight; });
+
+document.getElementById('speedBtn').addEventListener('click',()=>{
+  if(speed===0.5){ speed=1.5; document.getElementById('speedBtn').textContent='Fast'; }
+  else { speed=0.5; document.getElementById('speedBtn').textContent='Slow'; }
+});
+</script>
+</body>
+</html>
