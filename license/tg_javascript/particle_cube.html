@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Particle Cube</title>
+<style>
+  body { margin: 0; overflow: hidden; background: black; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="cube"></canvas>
+<script>
+const canvas = document.getElementById('cube');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let width = canvas.width;
+let height = canvas.height;
+
+const size = 200; // cube size
+const particlesPerFace = 200;
+let particles = [];
+
+const colors = [
+  'red',    // right
+  'green',  // left
+  'blue',   // top
+  'yellow', // bottom
+  'magenta',// front
+  'cyan'    // back
+];
+
+// Mouse rotation
+let rotX = 0;
+let rotY = 0;
+let isDragging = false;
+let lastX, lastY;
+
+canvas.addEventListener('mousedown', e => {
+  isDragging = true;
+  lastX = e.clientX;
+  lastY = e.clientY;
+});
+canvas.addEventListener('mouseup', e => { isDragging = false; });
+canvas.addEventListener('mousemove', e => {
+  if(isDragging){
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+    rotY += dx * 0.01;
+    rotX += dy * 0.01;
+    lastX = e.clientX;
+    lastY = e.clientY;
+  }
+});
+
+// Create cube particles
+function createFace(axis, value, color){
+  for(let i=0; i<particlesPerFace; i++){
+    const x = axis==='x'? value : (Math.random()-0.5)*size;
+    const y = axis==='y'? value : (Math.random()-0.5)*size;
+    const z = axis==='z'? value : (Math.random()-0.5)*size;
+    particles.push({x, y, z, color});
+  }
+}
+
+// Faces: right, left, top, bottom, front, back
+createFace('x',  size/2, colors[0]);
+createFace('x', -size/2, colors[1]);
+createFace('y',  size/2, colors[2]);
+createFace('y', -size/2, colors[3]);
+createFace('z',  size/2, colors[4]);
+createFace('z', -size/2, colors[5]);
+
+// 3D rotation functions
+function rotateX(p, angle){
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const y = p.y * cos - p.z * sin;
+  const z = p.y * sin + p.z * cos;
+  return {...p, y, z};
+}
+
+function rotateY(p, angle){
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const x = p.x * cos + p.z * sin;
+  const z = -p.x * sin + p.z * cos;
+  return {...p, x, z};
+}
+
+// Projection function
+function project(p){
+  const scale = 400 / (400 + p.z);
+  return {
+    x: width/2 + p.x * scale,
+    y: height/2 + p.y * scale,
+    scale
+  };
+}
+
+// Animation loop
+function animate(){
+  ctx.clearRect(0, 0, width, height);
+
+  for(let p of particles){
+    let rp = rotateX(p, rotX);
+    rp = rotateY(rp, rotY);
+    const proj = project(rp);
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(proj.x, proj.y, 2*proj.scale, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  requestAnimationFrame(animate);
+}
+
+animate();
+
+// Handle resize
+window.addEventListener('resize', () => {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  width = canvas.width;
+  height = canvas.height;
+});
+</script>
+</body>
+</html>
