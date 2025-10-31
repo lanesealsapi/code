@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Particle Ghost — Snappy Halloween</title>
+<style>
+  html,body { height:100%; margin:0; background:#0b0b12; overflow:hidden; font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+  canvas { display:block; width:100%; height:100%; }
+  .hud {
+    position:fixed;
+    left:16px;
+    top:16px;
+    color:#f7f7fb;
+    font-size:13px;
+    background:rgba(255,255,255,0.04);
+    padding:8px 10px;
+    border-radius:10px;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+  }
+  .hint { opacity:.8; font-size:12px; color:#dfe6ff; }
+  .controls { margin-top:6px; display:flex; gap:8px; align-items:center; }
+  .btn {
+    background:linear-gradient(180deg,#2a2a5a,#1b1b3b);
+    border-radius:8px; padding:6px 8px; color:#fff; cursor:pointer; border:1px solid rgba(255,255,255,0.06);
+    font-size:12px;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="hud" id="hud">
+  <div style="font-weight:600">Particle Ghost</div>
+  <div class="hint">Move the mouse — the ghost reacts. Click to make it boop!</div>
+  <div class="controls">
+    <div class="btn" id="toggleTrail">Toggle Trail</div>
+    <div class="btn" id="sizeDown">Smaller</div>
+    <div class="btn" id="sizeUp">Bigger</div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d', { alpha: true });
+  let DPR = Math.min(window.devicePixelRatio || 1, 2);
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.floor(innerWidth * DPR);
+    canvas.height = Math.floor(innerHeight * DPR);
+    canvas.style.width = innerWidth + 'px';
+    canvas.style.height = innerHeight + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  addEventListener('resize', resize);
+  resize();
+
+  // ---------- Config ----------
+  let cfg = {
+    baseSize: Math.max(72, Math.min(200, Math.floor(Math.min(innerWidth, innerHeight) * 0.12))),
+    particleCount: 220,
+    trail: true,
+    glowStrength: 30,
+    bodyColor: '255,245,255', // rgb
+    accentColor: '180,150,255',
+    bobSpeed: 0.8, // how fast it bobs
+    speed: 0.9, // how fast ghost moves overall
+  };
+
+  // ---------- Utilities ----------
+  function rand(min=0,max=1){ return Math.random()*(max-min)+min; }
+  function lerp(a,b,t){ return a + (b-a)*t; }
+
+  // Simple multi-octave noise-like function using sines for natural movement (cheap & snappy)
+  function flowNoise(t, seed=0){
+    return Math.sin(t*0.7 + seed*1.37) * 0.6
+         + Math.sin(t*1.3 - seed*0.9) * 0.3
+         + Math.sin(t*2.7 + seed*2.1) * 0.12;
+  }
+
+  // ---------- Ghost "agent" ----------
+  const ghost = {
+    x: innerWidth/2,
+    y: innerHeight/2,
+    vx: 0,
+    vy: 0,
+    t: 0,
+    size: cfg.baseSize,
+    attitude: 0.8, // 0..1 playful->calm
+    attractor: { x: innerWidth/2, y: innerHeight/2 },
+    update(dt) {
+      this.t += dt;
+      // wandering force (smooth)
+      const nx = flowNoise(this.t * 0.6, 1) * 0.9;
+      const ny = flowNoise(this.t * 0.6, -1) * 0.6;
+      // target motion is center + wandering + gentle bob
+      const targetX = this.attractor.x + nx * (innerWidth * 0.18) * (1 - this.attitude);
+      const targetY = this.attractor.y + ny * (innerHeight * 0.09) + Math.sin(this.t * cfg.bobSpeed) * this.size * 0.12;
+      // velocity toward target
+      const k = 0.06 * cfg.speed * (1 + (1-this.attitude));
+      this.vx += (targetX - this.x) * k;
+      this.vy += (targetY - this.y) * k;
+      // damping
+      this.vx *= 0.92;
+      this.vy *= 0.92;
+      // apply
+      this.x += this.vx * dt * 60;
+      this.y += this.vy * dt * 60;
+      // bounds (soft bounce)
+      const margin = this.size*1.6;
+      if (this.x < margin) { this.vx += (margin - this.x) * 0.06; }
+      if (this.x > innerWidth - margin) { this.vx += (innerWidth - margin - this.x) * 0.06; }
+      if (this.y < margin) { this.vy += (margin - this.y) * 0.05; }
+      if (this.y > innerHeight - margin) { this.vy += (innerHeight - margin - this.y) * 0.05; }
+    }
+  };
+
+  // ---------- Particles (make a ghost shape by initial distribution) ----------
+  class Particle {
+    constructor(i){
+      this.reset(i);
+    }
+    reset(i){
+      // angle around midline and radial distance define initial placement in ghost body
+      const a = rand(-Math.PI*0.55, Math.PI*0.55); // head curvature
+      const r = Math.sqrt(rand(0,1)) * (0.95 + rand(-0.15,0.15));
+      const verticalBias = rand(-0.15,1.15);
+      this.baseAngle = a;
+      this.baseR = r;
+      this.baseYOffset = verticalBias;
+      this.x = ghost.x + Math.cos(a)*r*cfg.baseSize;
+      this.y = ghost.y + Math.sin(a)*r*cfg.baseSize + verticalBias*cfg.baseSize*0.6;
+      this.s = rand(0.7,1.6);
+      this.life = rand(0.6,1);
+      this.phase = rand(0,Math.PI*2);
+      this.brightness = rand(0.6,1);
+      // tailiness (how far it can trail behind)
+      this.lag = rand(0.06, 0.36);
+    }
+    step(dt){
+      // particles orbit/flow around ghost center with small delays and bob
+      const t = ghost.t + this.phase;
+      // shape modifier: make a squishy body — lower particles further down (wavy skirt)
+      const skirt = Math.max(0, Math.sin((this.baseAngle+Math.PI/2)) * 0.6 + this.baseYOffset*0.2);
+      const radial = this.baseR * (1 + 0.08 * Math.sin(t*1.6 + this.baseAngle*3));
+      // target relative position from ghost center
+      const targetRelX = Math.cos(this.baseAngle) * radial * ghost.size * (1 + skirt*0.08);
+      const targetRelY = Math.sin(this.baseAngle) * radial * ghost.size * (1.0 + skirt*0.4) + this.baseYOffset * ghost.size * 0.55;
+      // apply lagged movement so particles trail
+      this.x += (ghost.x + targetRelX - this.x) * Math.min(1, this.lag*dt*60);
+      this.y += (ghost.y + targetRelY - this.y) * Math.min(1, this.lag*dt*60);
+      // small bob
+      this.y += Math.sin(t * cfg.bobSpeed * (0.8 + this.s*0.2)) * 0.4 * (1-this.baseR);
+    }
+    draw(ctx){
+      // draw a soft glowing particle
+      const distFromCenter = Math.hypot(this.x-ghost.x, this.y-ghost.y);
+      // size scales with depth
+      const size = (1.6 - this.baseR) * 2.4 * this.s * (ghost.size/120);
+      const alpha = this.brightness * (1 - Math.min(1, distFromCenter/(ghost.size*1.6))) * 0.95;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.beginPath();
+      const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, size*6);
+      grad.addColorStop(0, `rgba(${cfg.bodyColor},${alpha})`);
+      grad.addColorStop(0.4, `rgba(${cfg.bodyColor},${alpha*0.35})`);
+      grad.addColorStop(1, `rgba(0,0,0,0)`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(this.x - size*6, this.y - size*6, size*12, size*12);
+      ctx.restore();
+    }
+  }
+
+  let particles = [];
+  function buildParticles(){
+    particles = [];
+    for (let i=0;i<cfg.particleCount;i++){
+      particles.push(new Particle(i));
+    }
+  }
+  buildParticles();
+
+  // ---------- Interaction ----------
+  const mouse = { x: innerWidth/2, y: innerHeight/2, down:false };
+  window.addEventListener('mousemove', (e) => {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+    // gentle attractor to mouse when moved near; else ghost wanders
+    const d = Math.hypot(mouse.x-ghost.x, mouse.y-ghost.y);
+    if (d < 180) {
+      // playful when user is close
+      ghost.attitude = lerp(ghost.attitude, 0.25, 0.18);
+      ghost.attractor.x = lerp(ghost.attractor.x, mouse.x, 0.12);
+      ghost.attractor.y = lerp(ghost.attractor.y, mouse.y, 0.12);
+    } else {
+      ghost.attitude = lerp(ghost.attitude, 0.9, 0.03);
+      // slight drift back to center area
+      ghost.attractor.x = lerp(ghost.attractor.x, innerWidth/2, 0.006);
+      ghost.attractor.y = lerp(ghost.attractor.y, innerHeight/2, 0.006);
+    }
+  });
+  window.addEventListener('mousedown', (e) => {
+    mouse.down = true;
+    // BOOP: push ghost away and make playful
+    ghost.vx += (ghost.x - e.clientX) * 0.02;
+    ghost.vy += (ghost.y - e.clientY) * 0.02;
+    ghost.attitude = 0.2;
+  });
+  window.addEventListener('mouseup', () => { mouse.down = false; });
+
+  // ---------- Draw eyes & face ----------
+  function drawFace(ctx){
+    // Eyes relative to ghost center
+    const eyeOffsetX = ghost.size * 0.22;
+    const eyeOffsetY = -ghost.size * 0.08;
+    const eyeSize = Math.max(4, ghost.size * 0.08);
+    // pupil offset based on ghost velocity (gives expression)
+    const pvx = Math.max(-1, Math.min(1, ghost.vx*0.6));
+    const pvy = Math.max(-1, Math.min(1, ghost.vy*0.6));
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    // soft white eye glint
+    ctx.beginPath();
+    ctx.fillStyle = `rgba(255,255,255,0.98)`;
+    ctx.ellipse(ghost.x - eyeOffsetX, ghost.y + eyeOffsetY, eyeSize*0.9, eyeSize*1.2, 0, 0, Math.PI*2);
+    ctx.ellipse(ghost.x + eyeOffsetX, ghost.y + eyeOffsetY, eyeSize*0.9, eyeSize*1.2, 0, 0, Math.PI*2);
+    ctx.fill();
+    // dark pupils
+    ctx.beginPath();
+    ctx.fillStyle = `rgba(20,20,26,0.98)`;
+    ctx.ellipse(ghost.x - eyeOffsetX + pvx*2, ghost.y + eyeOffsetY + pvy*1.2, eyeSize*0.45, eyeSize*0.6, 0, 0, Math.PI*2);
+    ctx.ellipse(ghost.x + eyeOffsetX + pvx*2, ghost.y + eyeOffsetY + pvy*1.2, eyeSize*0.45, eyeSize*0.6, 0, 0, Math.PI*2);
+    ctx.fill();
+    // little wink/smile occasionally
+    if (Math.sin(ghost.t*2.2) > 0.98 && Math.random() > 0.7){
+      ctx.beginPath();
+      ctx.strokeStyle = `rgba(20,20,26,0.85)`;
+      ctx.lineWidth = Math.max(1, ghost.size*0.03);
+      ctx.lineCap = 'round';
+      ctx.moveTo(ghost.x - ghost.size*0.12, ghost.y + ghost.size*0.18);
+      ctx.quadraticCurveTo(ghost.x, ghost.y + ghost.size*0.32, ghost.x + ghost.size*0.12, ghost.y + ghost.size*0.18);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // ---------- Render loop ----------
+  let last = performance.now();
+  let frame = 0;
+  function loop(now){
+    const dt = Math.min(0.032, (now - last) / 1000);
+    last = now;
+    frame++;
+
+    // trail effect: paint semi-transparent rectangle to slowly fade previous frames
+    if (cfg.trail) {
+      ctx.fillStyle = 'rgba(8,8,14,0.18)';
+      ctx.fillRect(0,0,innerWidth,innerHeight);
+    } else {
+      ctx.clearRect(0,0,innerWidth,innerHeight);
+      ctx.fillStyle = '#07070b';
+      ctx.fillRect(0,0,innerWidth,innerHeight);
+    }
+
+    // update ghost
+    ghost.update(dt);
+
+    // subtle ambient glow behind ghost
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(ghost.x, ghost.y - ghost.size*0.2, ghost.size*0.2, ghost.x, ghost.y, ghost.size*3.6);
+    g.addColorStop(0, `rgba(${cfg.accentColor},0.06)`);
+    g.addColorStop(0.45, `rgba(${cfg.accentColor},0.02)`);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(ghost.x - ghost.size*3.6, ghost.y - ghost.size*3.6, ghost.size*7.2, ghost.size*7.2);
+    ctx.restore();
+
+    // update & draw particles
+    ctx.save();
+    for (let p of particles) {
+      p.step(dt);
+      p.draw(ctx);
+    }
+    ctx.restore();
+
+    // Draw soft body contour using composite operation to create a ghosty silhouette
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.beginPath();
+    // body ellipse-ish
+    ctx.ellipse(ghost.x, ghost.y - ghost.size*0.12, ghost.size*0.78, ghost.size*0.9, 0, Math.PI*1.05, Math.PI*1.95, true);
+    ctx.fillStyle = `rgba(${cfg.bodyColor},0.06)`;
+    ctx.fill();
+    ctx.restore();
+
+    // Draw wavy "skirt" at bottom using a few arcs
+    ctx.save();
+    ctx.globalCompositeOperation = 'overlay';
+    for (let i=0;i<6;i++){
+      const px = ghost.x + Math.cos(i*1.37 + ghost.t*0.9) * ghost.size * 0.28;
+      const py = ghost.y + ghost.size*0.62 + Math.sin(i*1.9 + ghost.t*1.7) * ghost.size*0.12;
+      const w = ghost.size * (0.22 + 0.06*Math.sin(i+ghost.t));
+      ctx.beginPath();
+      ctx.ellipse(px, py, w, w*0.6, 0, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(${cfg.bodyColor},0.045)`;
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // eyes and playful highlights
+    drawFace(ctx);
+
+    // small accent particles that pop occasionally (sparks)
+    if (frame % 8 === 0 && Math.random() > 0.86) {
+      const sx = ghost.x + rand(-ghost.size*0.6, ghost.size*0.6);
+      const sy = ghost.y + rand(-ghost.size*0.8, ghost.size*0.8);
+      const r = Math.max(2, ghost.size*0.03);
+      const ac = ctx.createRadialGradient(sx,sy,0,sx,sy,r*8);
+      ac.addColorStop(0, `rgba(${cfg.accentColor},0.9)`);
+      ac.addColorStop(0.5, `rgba(${cfg.accentColor},0.22)`);
+      ac.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = ac;
+      ctx.fillRect(sx-r*8, sy-r*8, r*16, r*16);
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  requestAnimationFrame(loop);
+
+  // ---------- Controls ----------
+  document.getElementById('toggleTrail').addEventListener('click', () => {
+    cfg.trail = !cfg.trail;
+    document.getElementById('toggleTrail').textContent = cfg.trail ? 'Trail: On' : 'Trail: Off';
+  });
+  document.getElementById('sizeDown').addEventListener('click', () => {
+    cfg.baseSize = Math.max(40, cfg.baseSize * 0.85 | 0);
+    ghost.size = cfg.baseSize;
+    buildParticles();
+  });
+  document.getElementById('sizeUp').addEventListener('click', () => {
+    cfg.baseSize = Math.min(360, cfg.baseSize * 1.18 | 0);
+    ghost.size = cfg.baseSize;
+    buildParticles();
+  });
+
+  // initialize hud button text
+  document.getElementById('toggleTrail').textContent = cfg.trail ? 'Trail: On' : 'Trail: Off';
+
+  // Keep ghost size synced
+  ghost.size = cfg.baseSize;
+
+  // small performance safety: reduce particle count on narrow screens
+  if (innerWidth < 600) {
+    cfg.particleCount = Math.max(80, Math.floor(cfg.particleCount * 0.5));
+    buildParticles();
+  }
+
+  // Make sure canvas covers when zoom/resizes change innerWidth/innerHeight
+  addEventListener('resize', () => {
+    ghost.x = innerWidth/2;
+    ghost.y = innerHeight/2;
+    ghost.attractor.x = innerWidth/2;
+    ghost.attractor.y = innerHeight/2;
+    ghost.size = cfg.baseSize;
+  });
+
+})();
+</script>
+</body>
+</html>
