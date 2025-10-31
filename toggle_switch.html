@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Divine Toggle — Snappy, Glowing Switch</title>
+<style>
+  :root{
+    --size: 96px;                 /* base toggle diameter */
+    --track-w: calc(var(--size) * 1.9);
+    --track-h: calc(var(--size) * 0.56);
+    --knob-size: calc(var(--track-h) * 1.12);
+    --bg-dark: #05060a;
+    --accent-a: #52e0ff;         /* cyan */
+    --accent-b: #ff7ad1;         /* pink */
+    --muted: rgba(255,255,255,0.06);
+    --glass: rgba(255,255,255,0.04);
+    --shadow: 0 6px 24px rgba(2,6,23,0.6);
+    --fast: 220ms;
+    --spr: cubic-bezier(.2,.9,.2,1);
+  }
+
+  /* Basic page */
+  html,body{
+    height:100%;
+    margin:0;
+    background: radial-gradient(1200px 600px at 10% 10%, rgba(82,224,255,0.07), transparent 8%),
+                radial-gradient(900px 400px at 90% 90%, rgba(255,122,209,0.06), transparent 10%),
+                var(--bg-dark);
+    color: #fff;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+    overflow:hidden;
+  }
+
+  .stage{
+    text-align:center;
+    gap:20px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
+
+  h1{
+    font-weight:600;
+    letter-spacing: -0.02em;
+    margin:0 0 8px;
+    font-size:20px;
+    color: #eaf6ff;
+    text-shadow: 0 6px 24px rgba(2,6,23,0.6);
+  }
+  p.sub{
+    margin:0 0 14px;
+    font-size:13px;
+    color: #cfefff88;
+  }
+
+  /* Toggle - accessible button-like element implemented as role="switch" */
+  .toggle{
+    width: var(--track-w);
+    height: var(--track-h);
+    border-radius: calc(var(--track-h) / 2);
+    position:relative;
+    display:inline-block;
+    cursor:pointer;
+    user-select:none;
+    -webkit-tap-highlight-color: transparent;
+    box-shadow: var(--shadow);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.00));
+    transition: transform var(--fast) var(--spr), box-shadow var(--fast) var(--spr);
+    padding: calc((var(--track-h) - var(--knob-size)) / 2);
+    box-sizing:border-box;
+    outline: none;
+    border: 1px solid rgba(255,255,255,0.035);
+    backdrop-filter: blur(6px);
+  }
+
+  .toggle:active { transform: translateY(1px) scale(0.997); }
+
+  /* track inner styling */
+  .toggle .track{
+    position:absolute;
+    inset:0;
+    border-radius:inherit;
+    display:block;
+    overflow:hidden;
+    background-image:
+      linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.00));
+  }
+
+  /* subtle stars and sparkles inside track */
+  .track::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    background-image:
+      radial-gradient(circle at 12% 30%, rgba(255,255,255,0.06) 0 1px, transparent 2px),
+      radial-gradient(circle at 88% 70%, rgba(255,255,255,0.05) 0 1px, transparent 2px);
+    opacity:0.9;
+    mix-blend-mode:screen;
+    pointer-events:none;
+  }
+
+  /* knob */
+  .knob{
+    width: var(--knob-size);
+    height: var(--knob-size);
+    border-radius:50%;
+    background: linear-gradient(180deg, #ffffff 0%, #e7f8ff 40%);
+    position:relative;
+    transform: translateX(0);
+    transition: transform var(--fast) var(--spr), box-shadow var(--fast) var(--spr), background var(--fast) var(--spr);
+    box-shadow: 0 6px 20px rgba(2,6,23,0.55), 0 0 18px rgba(0,0,0,0.18) inset;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    isolation:isolate;
+  }
+
+  /* inner glowing orb */
+  .knob .orb{
+    width:58%;
+    height:58%;
+    border-radius:50%;
+    background: radial-gradient(circle at 30% 30%, rgba(255,255,255,1), rgba(255,255,255,0.85) 10%, rgba(255,255,255,0.02) 60%);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.2) inset;
+  }
+
+  /* On state */
+  .toggle.on{
+    border-color: rgba(255,255,255,0.06);
+    box-shadow: 0 20px 80px rgba(80,120,255,0.08), 0 4px 24px rgba(0,0,0,0.55);
+  }
+  .toggle.on .track{
+    background: linear-gradient(90deg, rgba(82,224,255,0.12), rgba(255,122,209,0.12));
+  }
+  .toggle.on .knob{
+    background: linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(255,255,255,0.9) 40%);
+    transform: translateX(calc(var(--track-w) - var(--track-h)));
+    box-shadow:
+      0 18px 48px rgba(82,224,255,0.12),
+      0 0 36px rgba(82,224,255,0.16),
+      0 4px 18px rgba(0,0,0,0.35) inset;
+  }
+
+  /* multicolor glow under knob when on */
+  .toggle.on::after{
+    content:"";
+    position:absolute;
+    left:50%;
+    top:50%;
+    width: calc(var(--track-w) * 1.4);
+    height: calc(var(--track-w) * 1.4);
+    transform: translate(-50%,-50%);
+    pointer-events:none;
+    background:
+      radial-gradient( at 25% 35%, rgba(82,224,255,0.18) 0 6%, transparent 18%),
+      radial-gradient( at 75% 65%, rgba(255,122,209,0.17) 0 6%, transparent 18% );
+    filter: blur(28px) saturate(1.1);
+    opacity:0.95;
+    transition: opacity 420ms var(--spr), transform 420ms var(--spr);
+    mix-blend-mode: screen;
+  }
+
+  /* extra pulse animation while on */
+  .toggle.on .pulse {
+    position:absolute;
+    left:0; right:0; top:0; bottom:0;
+    pointer-events:none;
+    animation: pulse 1800ms infinite;
+    mix-blend-mode: screen;
+    opacity:0.9;
+  }
+  @keyframes pulse{
+    0% { transform: scale(0.88); opacity:0.9; }
+    60% { transform: scale(1.06); opacity:0.28; }
+    100% { transform: scale(1.18); opacity:0; }
+  }
+
+  /* focus ring for keyboard users */
+  .toggle:focus-visible{
+    box-shadow:
+      0 12px 48px rgba(82,224,255,0.06),
+      0 0 0 5px rgba(82,224,255,0.06),
+      var(--shadow);
+  }
+
+  /* little icon that changes color */
+  .knob svg {
+    width: 46%;
+    height: 46%;
+    transition: transform var(--fast) var(--spr), fill var(--fast) var(--spr);
+    transform-origin:center;
+    filter: drop-shadow(0 4px 10px rgba(0,0,0,0.35));
+  }
+  .toggle.on .knob svg { transform: rotate(-12deg) scale(1.02); }
+
+  /* subtle label */
+  .label{
+    display:inline-block;
+    font-size:14px;
+    padding:8px 12px;
+    border-radius:999px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+    border: 1px solid rgba(255,255,255,0.03);
+    color:#e7f8ffcc;
+    user-select:none;
+  }
+
+  /* respects reduced motion */
+  @media (prefers-reduced-motion: reduce){
+    .toggle, .knob, .knob svg, .toggle.on::after { transition: none !important; animation: none !important; }
+  }
+
+  /* responsive scale down for small screens */
+  @media (max-width:420px){
+    :root { --size: 72px; }
+  }
+</style>
+</head>
+<body>
+  <main class="stage" aria-live="polite">
+    <h1>Divine Toggle</h1>
+    <p class="sub">Snappy. Modern. Magical. Use space / enter or click to toggle.</p>
+
+    <!-- Accessible switch element -->
+    <div id="divineToggle"
+         class="toggle"
+         role="switch"
+         aria-checked="false"
+         tabindex="0"
+         title="Divine Toggle (press Space or Enter)">
+      <span class="track" aria-hidden="true"></span>
+
+      <span class="knob" aria-hidden="true">
+        <!-- tiny sparkle icon inside the knob -->
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <defs>
+            <linearGradient id="g" x1="0" x2="1">
+              <stop offset="0" stop-color="#52e0ff"/>
+              <stop offset="1" stop-color="#ff7ad1"/>
+            </linearGradient>
+          </defs>
+          <path d="M12 2l1.9 4.4L18.6 8l-4.2 1.7L12 14l-2.4-4.3L5.4 8l4.7-1.6L12 2z" fill="url(#g)"/>
+        </svg>
+        <span class="orb"></span>
+      </span>
+
+      <!-- pulsing overlay shown only when .on -->
+      <span class="pulse" aria-hidden="true"></span>
+    </div>
+
+    <div class="label" id="stateLabel">Off</div>
+  </main>
+
+<script>
+  (function(){
+    const el = document.getElementById('divineToggle');
+    const label = document.getElementById('stateLabel');
+
+    function setOn(on, opts = {announce: true}){
+      el.classList.toggle('on', !!on);
+      el.setAttribute('aria-checked', !!on);
+      label.textContent = on ? 'On — shining' : 'Off';
+      if (opts.announce) {
+        // update accessible announcement politely
+        el.setAttribute('aria-label', 'Divine toggle ' + (on ? 'on' : 'off'));
+      }
+    }
+
+    // toggle function with small haptic-ish timing (no actual haptics here)
+    function toggle(){
+      const now = el.getAttribute('aria-checked') === 'true';
+      setOn(!now);
+      // tiny, tasteful flash on body background when turned on
+      if (!now){
+        document.documentElement.animate([
+          { filter: 'brightness(1)' },
+          { filter: 'brightness(1.08)' },
+          { filter: 'brightness(1)' }
+        ], { duration: 420, easing: 'ease-out' });
+      }
+    }
+
+    // click
+    el.addEventListener('click', (e) => {
+      toggle();
+    });
+
+    // keyboard: Space or Enter toggles; Left/Right set off/on
+    el.addEventListener('keydown', (e) => {
+      if (e.key === ' ' || e.key === 'Spacebar' || e.key === 'Enter'){
+        e.preventDefault();
+        toggle();
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown'){
+        e.preventDefault();
+        setOn(false);
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp'){
+        e.preventDefault();
+        setOn(true);
+      }
+    });
+
+    // initialize
+    setOn(false);
+
+    // expose for debugging in console
+    window.__divineToggle = { el, setOn, toggle };
+
+  })();
+</script>
+</body>
+</html>
