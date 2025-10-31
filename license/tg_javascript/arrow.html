@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Homing Arrow — Snappy Maps Style</title>
+<style>
+  :root{
+    --arrow-size: 44px;       /* overall arrow/svg size */
+    --ring-size: 90px;        /* size of circle around arrow */
+    --ring-stroke: 2.5px;
+    --bg: #0b0b0c;
+    --accent: #7ee7c7;        /* main arrow color */
+    --accent-2: #64b5ff;      /* secondary highlight */
+    --shadow: 0 6px 18px rgba(0,0,0,0.45);
+  }
+
+  html,body{height:100%; margin:0; background:linear-gradient(180deg, #050606, #071019); font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;}
+  /* Full-screen canvas area to capture mouse movement */
+  .stage{
+    position:relative;
+    width:100%;
+    height:100vh;
+    overflow:hidden;
+    cursor: none; /* hide system cursor for effect — remove if you want cursor visible */
+  }
+
+  /* The ring around the arrow */
+  .ring {
+    position:absolute;
+    width:var(--ring-size);
+    height:var(--ring-size);
+    border-radius:50%;
+    box-sizing:border-box;
+    border: var(--ring-stroke) solid rgba(126,231,199,0.14);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    pointer-events:none;
+    transform: translate(-50%, -50%); /* center at left/top coords */
+    transition: box-shadow 160ms, transform 120ms;
+    will-change: transform, box-shadow;
+    filter: drop-shadow(0 8px 12px rgba(0,0,0,0.45));
+    backdrop-filter: blur(0.6px);
+  }
+
+  /* subtle ring inner glow */
+  .ring::after{
+    content: "";
+    position: absolute;
+    left: 50%; top: 50%;
+    width: calc(var(--ring-size) * 0.84);
+    height: calc(var(--ring-size) * 0.84);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle at 30% 30%, rgba(126,231,199,0.06), transparent 30%);
+    pointer-events:none;
+  }
+
+  /* arrow wrapper — we position this by left/top and rotate it */
+  .arrow {
+    position:absolute;
+    width: var(--arrow-size);
+    height: var(--arrow-size);
+    transform: translate(-50%,-50%) rotate(0deg);
+    transform-origin: 50% 50%;
+    pointer-events:none;
+    transition: filter 120ms;
+    will-change: transform, filter;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  /* SVG styles */
+  .arrow svg{ width:100%; height:100%; display:block; }
+  /* light hover-like "snappy" scale when moving fast (we'll toggle via JS) */
+  .arrow.fast { filter: drop-shadow(0 8px 24px rgba(100,181,255,0.12)); transform-origin:50% 50%; }
+
+  /* helper to show a faint core dot at the center of the ring */
+  .core-dot {
+    position:absolute;
+    width:6px; height:6px;
+    left:50%; top:50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255,255,255,0.85);
+    border-radius:50%;
+    pointer-events:none;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.45);
+    opacity:0.06;
+  }
+
+  /* Performance: reduce motion on low-power devices */
+  @media (prefers-reduced-motion: reduce) {
+    .arrow, .ring { transition: none; }
+  }
+
+  /* small instructions remove if you want full clean canvas */
+  .hint {
+    position: fixed;
+    left: 16px;
+    bottom: 14px;
+    color: rgba(255,255,255,0.65);
+    font-size:13px;
+    background: rgba(255,255,255,0.02);
+    padding:8px 10px;
+    border-radius:9px;
+    backdrop-filter: blur(6px);
+    pointer-events:none;
+  }
+</style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <!-- ring and arrow will be moved by JS -->
+    <div class="ring" id="ring">
+      <div class="core-dot"></div>
+    </div>
+
+    <div class="arrow" id="arrow" aria-hidden="true">
+      <!-- SVG arrow oriented to the right by default — tip points right -->
+      <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="true">
+        <!-- soft shadow under arrow -->
+        <defs>
+          <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="var(--accent)" stop-opacity="1"/>
+            <stop offset="100%" stop-color="var(--accent-2)" stop-opacity="1"/>
+          </linearGradient>
+          <filter id="f1" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="rgba(0,0,0,0.45)"/>
+          </filter>
+        </defs>
+
+        <!-- arrow group: design arrow pointing right. Coordinates chosen to center nicely inside box -->
+        <g transform="translate(10,10)">
+          <!-- tail -->
+          <path d="M5 50 L60 50 L60 62 L5 62 z" fill="url(#g1)" opacity="0.95" />
+          <!-- triangular tip -->
+          <path d="M60 30 L110 60 L60 90 z" fill="url(#g1)" stroke="rgba(0,0,0,0.15)" stroke-width="1"/>
+          <!-- thin inner highlight -->
+          <path d="M68 48 L100 60 L68 72 z" fill="rgba(255,255,255,0.12)" />
+        </g>
+      </svg>
+    </div>
+
+    <div class="hint">Move the mouse — arrow follows & points toward cursor</div>
+  </div>
+
+<script>
+/*
+ Snappy homing arrow:
+ - Arrow chases the mouse using linear interpolation for smoothness ("snappy" responsiveness).
+ - Rotation is recalculated each frame so the arrow tip always points to the current mouse position.
+ - The ring and arrow are positioned via left/top; transform: translate(-50%,-50%) keeps them centered.
+ - Pointer events are disabled (pointer-events:none) so this doesn't block user interaction.
+*/
+
+(function(){
+  const stage = document.getElementById('stage');
+  const arrowEl = document.getElementById('arrow');
+  const ringEl  = document.getElementById('ring');
+
+  // initial place at center
+  let pos = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+  let target = { x: pos.x, y: pos.y }; // mouse target
+  let velocity = { x: 0, y: 0 };
+  let lastMoveTime = performance.now();
+  let lastPos = { ...pos };
+
+  // tuning: lower ease => snappier (0.2 is very snappy). higher => laggier.
+  const EASE = 0.22;     // how aggressively the arrow moves towards the mouse
+  const MAX_STEP = 120;  // clamp movement per frame (pixels) to avoid big jumps if pointer teleports
+  const ROTATION_LERP = 0.28; // optional: lerp rotation for smoother twist (0 => instant, 1 => follow)
+  let currentRotation = 0; // degrees
+
+  // Mouse tracking
+  function onMove(e){
+    target.x = e.clientX;
+    target.y = e.clientY;
+    lastMoveTime = performance.now();
+  }
+
+  // Touch support
+  function onTouch(e){
+    if(e.touches && e.touches[0]) {
+      target.x = e.touches[0].clientX;
+      target.y = e.touches[0].clientY;
+      lastMoveTime = performance.now();
+    }
+  }
+
+  window.addEventListener('mousemove', onMove, { passive: true });
+  window.addEventListener('touchstart', onTouch, { passive: true });
+  window.addEventListener('touchmove', onTouch, { passive: true });
+
+  // Reposition on resize so initial center is correct
+  window.addEventListener('resize', () => {
+    // if arrow is offscreen after resize, clamp it
+    pos.x = Math.max(0, Math.min(window.innerWidth, pos.x));
+    pos.y = Math.max(0, Math.min(window.innerHeight, pos.y));
+  });
+
+  // animate
+  function rafLoop(now) {
+    // move position toward target with lerp
+    const dx = target.x - pos.x;
+    const dy = target.y - pos.y;
+    // clamp large jumps
+    const dist = Math.hypot(dx, dy);
+    const step = Math.min(MAX_STEP, dist);
+
+    // ease movement (snappy)
+    pos.x += dx * EASE;
+    pos.y += dy * EASE;
+
+    // compute rotation: angle from arrow position to mouse
+    const angleRad = Math.atan2(target.y - pos.y, target.x - pos.x);
+    const angleDeg = angleRad * 180 / Math.PI;
+
+    // optionally lerp rotation for nice twist
+    // small lerp gives a "springy" rotation; set ROTATION_LERP to 1 for instant rotation
+    currentRotation = currentRotation + (angleDeg - currentRotation) * ROTATION_LERP;
+
+    // Update DOM positions and rotation
+    arrowEl.style.left = pos.x + 'px';
+    arrowEl.style.top  = pos.y + 'px';
+    arrowEl.style.transform = `translate(-50%, -50%) rotate(${currentRotation}deg)`;
+
+    ringEl.style.left = pos.x + 'px';
+    ringEl.style.top  = pos.y + 'px';
+    // subtle scaling of ring based on movement speed
+    const vx = pos.x - lastPos.x;
+    const vy = pos.y - lastPos.y;
+    const speed = Math.hypot(vx, vy); // px/frame (approx)
+    const speedBoost = Math.min(1.6, 1 + speed * 0.045);
+    ringEl.style.transform = `translate(-50%, -50%) scale(${Math.max(0.98, Math.min(1.12, speedBoost))})`;
+
+    // toggle small "fast" class on arrow for bigger drop-shadow when moving faster
+    if(speed > 2.2) {
+      arrowEl.classList.add('fast');
+    } else {
+      arrowEl.classList.remove('fast');
+    }
+
+    // store last pos
+    lastPos.x = pos.x; lastPos.y = pos.y;
+
+    requestAnimationFrame(rafLoop);
+  }
+
+  // Start loop
+  requestAnimationFrame(rafLoop);
+
+  // Nice-to-have: let user press space to toggle native cursor visibility
+  // (space toggles cursor hidden state so they can keep system cursor visible if desired)
+  let cursorHidden = true; // we initially hide cursor via CSS
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') {
+      cursorHidden = !cursorHidden;
+      document.body.style.cursor = cursorHidden ? 'none' : 'default';
+      e.preventDefault();
+    }
+  });
+
+  // Initialize positions on load
+  (function init(){
+    // start arrow slightly offset from center for immediate rotation effect
+    pos.x = window.innerWidth * 0.45;
+    pos.y = window.innerHeight * 0.45;
+    arrowEl.style.left = pos.x + 'px';
+    arrowEl.style.top  = pos.y + 'px';
+    ringEl.style.left = pos.x + 'px';
+    ringEl.style.top  = pos.y + 'px';
+  })();
+
+})();
+</script>
+</body>
+</html>
