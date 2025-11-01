@@ -118,7 +118,7 @@ function updateProjectile() {
   if(projectile){
     projectile.x += projectile.vx;
     projectile.y += projectile.vy;
-    projectile.vy += 0.5; // gravity
+    projectile.vy += 0.1; // gravity
 
     targets.forEach(target => {
       const dx = projectile.x - target.x;
