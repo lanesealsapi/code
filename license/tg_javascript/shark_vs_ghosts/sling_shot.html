@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>3D Slingshot Game - Realistic Slingshot</title>
+<style>
+  body { margin: 0; overflow: hidden; background: #222; display: flex; justify-content: center; align-items: center; height: 100vh; }
+  canvas { background: #333; display: block; }
+  #score { position: absolute; top: 10px; left: 10px; color: #fff; font-family: sans-serif; font-size: 20px; }
+</style>
+</head>
+<body>
+<div id="score">Score: 0 | Streak: 0</div>
+<canvas id="gameCanvas"></canvas>
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let score = 0;
+let streak = 0;
+const scoreDiv = document.getElementById('score');
+
+const sling = {
+  x: canvas.width / 2,
+  y: canvas.height - 150,
+  radius: 15,
+  pullX: null,
+  pullY: null,
+  dragging: false
+};
+
+const projectileTrail = [];
+let projectile = null;
+
+const targets = [];
+const numTargets = 3;
+for(let i=0; i<numTargets; i++){
+  targets.push({
+    x: Math.random() * (canvas.width - 200) + 100,
+    y: Math.random() * (canvas.height / 2),
+    radius: 50,
+    dx: (Math.random()-0.5)*2,
+    dy: (Math.random()-0.5)*1
+  });
+}
+
+// --- Draw Slingshot with Brackets ---
+function drawSlingshot() {
+  const forkHeight = 80;
+  const forkWidth = 30;
+  const bandWidth = 4;
+
+  // Left fork
+  ctx.strokeStyle = '#654321';
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.moveTo(sling.x - forkWidth/2, sling.y);
+  ctx.lineTo(sling.x - forkWidth/2, sling.y - forkHeight);
+  ctx.stroke();
+
+  // Right fork
+  ctx.beginPath();
+  ctx.moveTo(sling.x + forkWidth/2, sling.y);
+  ctx.lineTo(sling.x + forkWidth/2, sling.y - forkHeight);
+  ctx.stroke();
+
+  // Rubber band
+  if(sling.dragging && sling.pullX !== null && sling.pullY !== null){
+    ctx.strokeStyle = '#ff4444';
+    ctx.lineWidth = bandWidth;
+    ctx.beginPath();
+    ctx.moveTo(sling.x - forkWidth/2, sling.y - forkHeight);
+    ctx.lineTo(sling.pullX, sling.pullY);
+    ctx.lineTo(sling.x + forkWidth/2, sling.y - forkHeight);
+    ctx.stroke();
+  }
+}
+
+// --- Draw Target ---
+function drawTarget(target) {
+  const colors = ['#ff0000','#ffffff','#ff0000','#ffffff','#ff0000'];
+  for(let i = 5; i > 0; i--){
+    ctx.beginPath();
+    ctx.arc(target.x, target.y, target.radius * i/5, 0, Math.PI*2);
+    ctx.fillStyle = colors[i-1];
+    ctx.fill();
+  }
+}
+
+// --- Draw Projectile ---
+function drawProjectile() {
+  if(projectile){
+    // Trail
+    projectileTrail.push({x: projectile.x, y: projectile.y});
+    if(projectileTrail.length > 15) projectileTrail.shift();
+
+    ctx.strokeStyle = '#0f0';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for(let i=0; i<projectileTrail.length-1; i++){
+      ctx.moveTo(projectileTrail[i].x, projectileTrail[i].y);
+      ctx.lineTo(projectileTrail[i+1].x, projectileTrail[i+1].y);
+    }
+    ctx.stroke();
+
+    // Projectile itself
+    ctx.beginPath();
+    ctx.arc(projectile.x, projectile.y, 10, 0, Math.PI*2);
+    ctx.fillStyle = '#0f0';
+    ctx.fill();
+  }
+}
+
+// --- Update Projectile ---
+function updateProjectile() {
+  if(projectile){
+    projectile.x += projectile.vx;
+    projectile.y += projectile.vy;
+    projectile.vy += 0.5; // gravity
+
+    targets.forEach(target => {
+      const dx = projectile.x - target.x;
+      const dy = projectile.y - target.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if(dist < target.radius){
+        const points = Math.max(1, Math.floor((target.radius - dist)/target.radius * 10));
+        score += points * (streak > 0 ? streak : 1);
+        streak = dist < 10 ? streak + 1 : 1;
+        scoreDiv.textContent = `Score: ${score} | Streak: ${streak}`;
+        projectile = null;
+        projectileTrail.length = 0;
+        target.x = Math.random() * (canvas.width - 200) + 100;
+        target.y = Math.random() * (canvas.height / 2);
+      }
+    });
+
+    if(projectile && (projectile.y > canvas.height || projectile.x < 0 || projectile.x > canvas.width)){
+      projectile = null;
+      projectileTrail.length = 0;
+      streak = 0;
+      scoreDiv.textContent = `Score: ${score} | Streak: ${streak}`;
+    }
+  }
+}
+
+// --- Update Targets ---
+function updateTargets() {
+  targets.forEach(t => {
+    t.x += t.dx;
+    t.y += t.dy;
+
+    if(t.x - t.radius < 0 || t.x + t.radius > canvas.width) t.dx *= -1;
+    if(t.y - t.radius < 0 || t.y + t.radius > canvas.height/2) t.dy *= -1;
+  });
+}
+
+// --- Main Loop ---
+function gameLoop() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  updateTargets();
+  targets.forEach(drawTarget);
+  drawSlingshot();
+  drawProjectile();
+  updateProjectile();
+  requestAnimationFrame(gameLoop);
+}
+
+// --- Mouse Controls ---
+canvas.addEventListener('mousedown', e => {
+  const dx = e.clientX - sling.x;
+  const dy = e.clientY - sling.y;
+  if(Math.sqrt(dx*dx + dy*dy) < sling.radius + 20){
+    sling.dragging = true;
+    sling.pullX = e.clientX;
+    sling.pullY = e.clientY;
+  }
+});
+
+canvas.addEventListener('mousemove', e => {
+  if(sling.dragging){
+    sling.pullX = e.clientX;
+    sling.pullY = e.clientY;
+  }
+});
+
+canvas.addEventListener('mouseup', e => {
+  if(sling.dragging){
+    const dx = sling.x - sling.pullX;
+    const dy = sling.y - sling.pullY;
+    projectile = {
+      x: sling.x,
+      y: sling.y - 50,
+      vx: dx / 10,
+      vy: dy / 10
+    };
+    sling.dragging = false;
+    sling.pullX = null;
+    sling.pullY = null;
+  }
+});
+
+gameLoop();
+</script>
+</body>
+</html>
