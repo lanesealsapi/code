@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Ball Instrument Terrain — standalone</title>
+<style>
+  html,body{height:100%;margin:0;background:#0b0f14;color:#e6eef8;font-family:Inter,system-ui,Arial}
+  .wrap{display:flex;flex-direction:column;height:100%}
+  header{display:flex;gap:12px;align-items:center;padding:12px;border-bottom:1px solid rgba(255,255,255,0.03)}
+  canvas{flex:1;display:block;width:100%;height:100%;background:linear-gradient(180deg,#07101b 0%, #0b1220 100%)}
+  button,select,label{background:#0f1720;color:#e6eef8;border:0;padding:8px 10px;border-radius:8px}
+  .controls{display:flex;gap:8px;align-items:center}
+  .small{font-size:12px;padding:6px 8px}
+  .muted{opacity:0.7;font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="controls">
+      <button id="playBtn">Start (200s)</button>
+      <button id="stopBtn" class="small">Stop</button>
+      <button id="regenBtn" class="small">Regenerate</button>
+      <button id="preBtn" class="small">Load Preprogrammed Song</button>
+      <label class="muted">Mode</label>
+      <select id="modeSel" title="Instrument distribution mode">
+        <option value="random">Random instruments</option>
+        <option value="seq5">5s sequence</option>
+      </select>
+      <label class="muted">BPM</label>
+      <select id="bpmSel">
+        <option>60</option>
+        <option selected>90</option>
+        <option>120</option>
+      </select>
+    </div>
+    <div style="margin-left:auto;text-align:right">
+      <div class="muted">Click canvas to drop a single extra ball</div>
+    </div>
+  </header>
+  <canvas id="c"></canvas>
+</div>
+<script>
+// Ball-Instruments-Canvas — Standalone single-file
+// Features:
+// - One main ball drops and bounces on randomly generated "instruments" (pegs)
+// - Play length fixed to 200 seconds per run
+// - Regenerate button randomizes the terrain (or loads single preprogrammed song)
+// - Mode: random instrument assignment or 5-second cyclic sequence
+// - Only uses WebAudio oscillators + short envelopes for "snappy, light" sounds
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H, DPR = window.devicePixelRatio || 1;
+function resize(){ W = canvas.width = Math.floor(innerWidth * DPR); H = canvas.height = Math.floor((innerHeight - document.querySelector('header').offsetHeight) * DPR); canvas.style.width = innerWidth + 'px'; canvas.style.height = (innerHeight - document.querySelector('header').offsetHeight) + 'px'; ctx.setTransform(DPR,0,0,DPR,0,0); }
+addEventListener('resize', resize); resize();
+
+// Audio
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+function ensureAudio(){ if(!audioCtx) audioCtx = new AudioCtx(); }
+
+// Instrument definitions (lightweight): oscillator types + quick envelope
+const INSTRUMENTS = [
+  {name:'sine-pluck', type:'sine', attack:0.001, decay:0.12, gain:0.18},
+  {name:'square-pop', type:'square', attack:0.001, decay:0.09, gain:0.2},
+  {name:'saw-harp', type:'sawtooth', attack:0.002, decay:0.16, gain:0.15},
+  {name:'tri-bell', type:'triangle', attack:0.001, decay:0.22, gain:0.12},
+  {name:'pulse-hit', type:'square', attack:0.0005, decay:0.05, gain:0.25}
+];
+
+function playNote(freq, instrIdx, when=0){ if(!audioCtx) return; const t = audioCtx.currentTime + when; const ins = INSTRUMENTS[instrIdx % INSTRUMENTS.length];
+  const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+  o.type = ins.type; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(ins.gain, t + ins.attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + ins.attack + ins.decay);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(t); o.stop(t + ins.attack + ins.decay + 0.02);
+}
+
+// Map vertical position to frequency (higher on canvas -> higher pitch)
+function yToFreq(y){ const minF = 110; const maxF = 1760; const norm = 1 - (y / H); return minF * Math.pow(maxF/minF, Math.min(Math.max(norm,0),1)); }
+
+// Terrain: pegs / instruments
+let pegs = []; // each: {x,y,r,instrIdx}
+function genTerrain(seed=null){ pegs = [];
+  const rng = seed ? mulberry32(seed) : Math.random;
+  const cols = 18; const pad = 40; const gap = (innerWidth - pad*2) / (cols-1);
+  for(let i=0;i<cols;i++){
+    const colx = pad + i*gap;
+    const rows = 3 + Math.floor(rng()*3);
+    for(let r=0;r<rows;r++){
+      const jitterX = (rng()-0.5) * gap*0.5;
+      const x = colx + jitterX;
+      const y = Math.floor(innerHeight*0.15 + r*(innerHeight*0.22) + (rng()-0.5)*50);
+      const rsize = 8 + rng()*10;
+      pegs.push({x,y,r:rsize, instrIdx: Math.floor(rng()*INSTRUMENTS.length)});
+    }
+  }
+}
+
+// Preprogrammed song (single preprogrammed terrain)
+function loadPreprogrammed(){ // simple melodic layout repeated across width
+  pegs = [];
+  const notes = [440,493.88,523.25,659.25,587.33,523.25]; // A, B, C, E, D, C
+  const cols = notes.length;
+  for(let i=0;i<cols;i++){
+    const x = (innerWidth/(cols+1))*(i+1);
+    for(let j=0;j<6;j++){
+      const y = innerHeight*0.3 + j*40 + (i%2? -10:10);
+      pegs.push({x:x + (j-2)*6, y, r:10, instrIdx: i % INSTRUMENTS.length, note: notes[i]});
+    }
+  }
+}
+
+// RNG helper
+function mulberry32(a) { return function(){ var t = a += 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; } }
+
+// Ball physics
+class Ball{
+  constructor(x,y){ this.x = x; this.y = y; this.vx = 0; this.vy = 0; this.r = 12; this.bounces = 0; this.alive=true; }
+  step(dt){ this.vy += 1600 * dt; // gravity
+    this.x += this.vx * dt; this.y += this.vy * dt;
+    // walls
+    if(this.x - this.r < 0){ this.x = this.r; this.vx *= -0.6; }
+    if(this.x + this.r > innerWidth){ this.x = innerWidth - this.r; this.vx *= -0.6; }
+    if(this.y - this.r < 0){ this.y = this.r; this.vy *= -0.6; }
+    if(this.y > innerHeight){ this.y = innerHeight + 200; this.alive=false; }
+    // peg collisions
+    for(const p of pegs){ const dx = this.x - p.x; const dy = this.y - p.y; const dist = Math.hypot(dx,dy); if(dist < this.r + p.r){ // simple collision response
+        const nx = dx/dist, ny = dy/dist; const relVel = this.vx*nx + this.vy*ny;
+        this.x += nx*(this.r + p.r - dist + 0.1); this.y += ny*(this.r + p.r - dist + 0.1);
+        // reflect velocity
+        this.vx = this.vx - 2*relVel*nx; this.vy = this.vy - 2*relVel*ny;
+        // add damping and bounce impulse
+        this.vx *= 0.9; this.vy *= 0.9; this.vy -= 60; // small pop
+        this.bounces++;
+        onPegHit(p);
+      }}
+  }
+  draw(ctx){ ctx.beginPath(); ctx.fillStyle = '#ffd580'; ctx.shadowColor = 'rgba(255,200,120,0.35)'; ctx.shadowBlur=15; ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0; }
+}
+
+let balls = [];
+function dropBall(x=null){ const bx = x === null ? innerWidth*0.25 + Math.random()*innerWidth*0.5 : x; const b = new Ball(bx, -30); b.vx = (Math.random()-0.5)*120; balls.push(b); }
+
+// On peg hit: play note
+let lastHitAt = 0; // throttle
+let playStartTime = 0; let playing=false; let mode='random'; let seqStartTime = 0; let seqInstrIndex = 0;
+function onPegHit(peg){ if(!audioCtx) return; const now = audioCtx.currentTime; if(now - lastHitAt < 0.01) return; lastHitAt = now;
+  // instrument assignment depends on mode
+  let instrIdx = peg.instrIdx;
+  if(mode === 'seq5'){
+    const elapsed = now - seqStartTime; const seqPhase = Math.floor(elapsed / 5); instrIdx = seqPhase % INSTRUMENTS.length;
+  }
+  // if peg has explicit note (preprogrammed) use it
+  const freq = peg.note ? peg.note : yToFreq(peg.y);
+  playNote(freq, instrIdx);
+}
+
+// Animation
+let last = performance.now();
+function frame(now){ const dt = Math.min((now - last)/1000, 0.033); last = now;
+  // update
+  for(const b of balls) b.step(dt);
+  balls = balls.filter(b=>b.alive && b.bounces < 1000);
+  // draw
+  ctx.clearRect(0,0,innerWidth,innerHeight);
+  // draw pegs
+  for(const p of pegs){ ctx.beginPath(); ctx.fillStyle = '#66d9ff'; ctx.globalAlpha = 0.95; ctx.arc(p.x, p.y, p.r,0,Math.PI*2); ctx.fill(); ctx.fillStyle='rgba(255,255,255,0.06)'; ctx.fillRect(p.x-p.r-2,p.y+p.r+2,p.r*2+4,4); ctx.globalAlpha=1; }
+  // draw connections for visibility (light)
+  ctx.beginPath(); for(let i=0;i<pegs.length-1;i++){ ctx.moveTo(pegs[i].x, pegs[i].y); ctx.lineTo(pegs[i+1].x, pegs[i+1].y); } ctx.strokeStyle='rgba(255,255,255,0.02)'; ctx.stroke();
+  for(const b of balls) b.draw(ctx);
+  // HUD: timer
+  if(playing && audioCtx){ const elapsed = audioCtx.currentTime - playStartTime; ctx.fillStyle='rgba(255,255,255,0.06)'; ctx.fillRect(12,12,220,20); ctx.fillStyle='#bfe6ff'; ctx.fillRect(12,12,Math.max(6,220*(elapsed/200)),20); ctx.fillStyle='#e6eef8'; ctx.font='12px sans-serif'; ctx.fillText(Math.floor(Math.max(0,200-elapsed)) + 's left', 14, 27);
+    if(elapsed >= 200){ stop(); }
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// Controls
+const playBtn = document.getElementById('playBtn'); const stopBtn = document.getElementById('stopBtn'); const regenBtn = document.getElementById('regenBtn'); const preBtn = document.getElementById('preBtn'); const modeSel = document.getElementById('modeSel'); const bpmSel = document.getElementById('bpmSel');
+playBtn.addEventListener('click', () => start()); stopBtn.addEventListener('click', () => stop()); regenBtn.addEventListener('click', () => { genTerrain(Math.floor(Math.random()*1e9)); }); preBtn.addEventListener('click', () => { loadPreprogrammed(); }); modeSel.addEventListener('change', ()=>{ mode = modeSel.value; if(audioCtx) seqStartTime = audioCtx.currentTime; });
+
+canvas.addEventListener('click', (e)=>{ const r = canvas.getBoundingClientRect(); const x = (e.clientX - r.left); dropBall(x); });
+
+function start(){ ensureAudio(); if(audioCtx.state === 'suspended') audioCtx.resume(); playStartTime = audioCtx.currentTime; seqStartTime = audioCtx.currentTime; playing = true; balls = []; dropBall(innerWidth*0.5); // start with one ball
+  // keep a gentle continuous motion by nudging ball occasionally
+  const bpm = parseInt(bpmSel.value,10) || 90; const interval = 60 / bpm; // drop/impulse rhythm
+  // schedule repeated impulses for the main ball
+  const mainImpulse = ()=>{ if(!playing) return; if(balls.length===0) dropBall(innerWidth*0.5); else { // gently kick the oldest ball
+      const b = balls[0]; b.vy -= 220; b.vx += (Math.random()-0.5)*60; }
+    setTimeout(mainImpulse, interval*1000);
+  };
+  mainImpulse();
+}
+
+function stop(){ if(audioCtx) { /* allow audio to continue until stopped */ }
+  playing = false; // stop impulses; do not close AudioContext so user can replay quickly
+}
+
+// Initial terrain
+genTerrain();
+
+// Small helper: seed from time
+function timeSeed(){ return Math.floor(performance.now()); }
+
+// expose for debugging (dev)
+window._pegs = pegs; window._gen = genTerrain; window._drop = dropBall;
+
+</script>
+</body>
+</html>
