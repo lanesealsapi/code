@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Neon Harmonica with Songs</title>
+<style>
+body {
+  background: #111;
+  color: #ff69b4;
+  font-family: monospace;
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+  margin: 0;
+}
+#sidebar {
+  width: 200px;
+  background: #111;
+  border-right: 2px solid #ff69b4;
+  padding: 20px;
+  box-shadow: 0 0 20px #ff69b4 inset;
+}
+#sidebar h2 {
+  text-align: center;
+  color: #00fff7;
+  margin-bottom: 10px;
+}
+.songBtn {
+  display: block;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 8px;
+  border-radius: 8px;
+  background: #111;
+  color: #ff69b4;
+  border: 2px solid #ff69b4;
+  cursor: pointer;
+  text-align: left;
+  box-shadow: 0 0 10px #ff69b4, 0 0 15px #00fff7;
+}
+.songBtn:hover { background: #222; }
+#main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+#noteDisplay {
+  font-size: 2em;
+  margin-bottom: 20px;
+  text-shadow: 0 0 10px #ff69b4, 0 0 20px #00fff7;
+}
+#harmonica {
+  display: flex;
+  gap: 10px;
+}
+.hole {
+  width: 60px;
+  height: 160px;
+  background: #111;
+  border: 2px solid #ff69b4;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  position: relative;
+  transition: background 0.2s;
+  box-shadow: 0 0 10px #ff69b4 inset, 0 0 15px #00fff7;
+}
+.hole:hover { background: #222; }
+.hole::after {
+  content: '';
+  position: absolute;
+  bottom: 5px;
+  width: 40px;
+  height: 12px;
+  background: #ff69b4;
+  border-radius: 6px;
+  box-shadow: 0 0 10px #ff69b4, 0 0 20px #00fff7;
+}
+button {
+  padding: 10px;
+  margin-top: 10px;
+  font-size: 1em;
+  background: #111;
+  color: #ff69b4;
+  border: 2px solid #ff69b4;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 0 10px #ff69b4, 0 0 15px #00fff7;
+}
+button:hover { background: #222; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h2>Songs</h2>
+  <button class="songBtn" data-song="risingSun">House of the Rising Sun</button>
+  <button class="songBtn" data-song="odeToJoy">Ode to Joy</button>
+  <button class="songBtn" data-song="twinkle">Twinkle Twinkle Little Star</button>
+  <button class="songBtn" data-song="maryHadALittleLamb">Mary Had a Little Lamb</button>
+  <button class="songBtn" data-song="rowYourBoat">Row Your Boat</button>
+</div>
+
+<div id="main">
+  <div id="noteDisplay">Hover a hole to play</div>
+  <div id="harmonica"></div>
+</div>
+
+<script>
+// Harmonicas notes
+const notes = [
+  { name: "C4", freq: 261.63 },
+  { name: "D4", freq: 293.66 },
+  { name: "E4", freq: 329.63 },
+  { name: "F4", freq: 349.23 },
+  { name: "G4", freq: 392.00 },
+  { name: "A4", freq: 440.00 },
+  { name: "B4", freq: 493.88 },
+  { name: "C5", freq: 523.25 }
+];
+
+const harmonica = document.getElementById('harmonica');
+const noteDisplay = document.getElementById('noteDisplay');
+let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+// Create holes
+notes.forEach(note => {
+  const hole = document.createElement('div');
+  hole.className = 'hole';
+  hole.dataset.freq = note.freq;
+  hole.dataset.name = note.name;
+  harmonica.appendChild(hole);
+});
+
+// Play function with rounding
+function playNote(freq, duration=0.5) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
+
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+  gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(1000, audioCtx.currentTime);
+
+  osc.connect(filter).connect(gain).connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + duration);
+}
+
+// Mouse bending
+document.querySelectorAll('.hole').forEach(hole => {
+  hole.addEventListener('mousemove', e => {
+    if (autoplaySong) return;
+    const rect = hole.getBoundingClientRect();
+    const pct = 1 - (e.clientY - rect.top) / rect.height;
+    const baseFreq = parseFloat(hole.dataset.freq);
+    const bend = (pct - 0.5) * 40;
+    const freq = baseFreq + bend;
+    noteDisplay.textContent = `Last Note: ${hole.dataset.name} (${freq.toFixed(1)} Hz)`;
+    playNote(freq, 0.2);
+  });
+});
+
+// Song definitions (using note indexes from harmonica array)
+const songs = {
+  risingSun: [4,2,1,3,4,5,4,2,1], // simplified House of the Rising Sun
+  odeToJoy: [0,0,1,2,2,1,0,3,4],
+  twinkle: [0,0,4,4,5,5,4,3,3,2,2,1,1,0],
+  maryHadALittleLamb: [2,1,0,1,2,2,2,1,1,1,2,4,4],
+  rowYourBoat: [0,0,0,1,2,2,1,2,3,3,2,1,0]
+};
+
+let autoplaySong = false;
+let songInterval;
+
+document.querySelectorAll('.songBtn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (songInterval) clearInterval(songInterval);
+    autoplaySong = true;
+    const song = songs[btn.dataset.song];
+    let i = 0;
+    songInterval = setInterval(() => {
+      if (i >= song.length) i = 0;
+      const noteIndex = song[i];
+      const hole = harmonica.children[noteIndex];
+      const freq = parseFloat(hole.dataset.freq);
+      const bend = (Math.random()-0.5)*20;
+      playNote(freq+bend, 0.3);
+      noteDisplay.textContent = `Playing: ${hole.dataset.name}`;
+      i++;
+    }, 400);
+  });
+});
+</script>
+
+</body>
+</html>
