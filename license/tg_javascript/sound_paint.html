@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voice Rainbow Paint</title>
+<style>
+  body, html {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #111;
+    cursor: crosshair;
+  }
+  canvas {
+    display: block;
+  }
+  #info {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    color: #fff;
+    font-family: sans-serif;
+    background: rgba(0,0,0,0.5);
+    padding: 5px 10px;
+    border-radius: 5px;
+  }
+</style>
+</head>
+<body>
+<div id="info">Speak to paint with your voice!</div>
+<canvas id="paint"></canvas>
+
+<script>
+const canvas = document.getElementById('paint');
+const ctx = canvas.getContext('2d');
+let width = canvas.width = window.innerWidth;
+let height = canvas.height = window.innerHeight;
+
+let painting = false;
+let brushSize = 5;
+let brushHue = 0;
+
+window.addEventListener('resize', () => {
+  width = canvas.width = window.innerWidth;
+  height = canvas.height = window.innerHeight;
+});
+
+// Mouse painting
+canvas.addEventListener('mousedown', () => painting = true);
+canvas.addEventListener('mouseup', () => {
+  painting = false;
+  ctx.beginPath();
+});
+canvas.addEventListener('mouseout', () => {
+  painting = false;
+  ctx.beginPath();
+});
+
+canvas.addEventListener('mousemove', e => {
+  if (!painting) return;
+  ctx.lineWidth = brushSize;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = `hsl(${brushHue}, 100%, 50%)`;
+  ctx.lineTo(e.clientX, e.clientY);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(e.clientX, e.clientY);
+});
+
+// Voice detection
+navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const source = audioCtx.createMediaStreamSource(stream);
+  const analyser = audioCtx.createAnalyser();
+  source.connect(analyser);
+  analyser.fftSize = 2048;
+  const buffer = new Float32Array(analyser.fftSize);
+
+  function autoCorrelate(buf, sampleRate) {
+    let SIZE = buf.length;
+    let rms = 0;
+    for (let i = 0; i < SIZE; i++) rms += buf[i]*buf[i];
+    rms = Math.sqrt(rms/SIZE);
+    if (rms < 0.01) return -1;
+
+    let r1=0, r2=SIZE-1, thres=0.2;
+    for (let i=0;i<SIZE/2;i++){if(Math.abs(buf[i])<thres){r1=i;break;}}
+    for (let i=1;i<SIZE/2;i++){if(Math.abs(buf[SIZE-i])<thres){r2=SIZE-i;break;}}
+    buf = buf.slice(r1,r2);
+    SIZE = buf.length;
+
+    let c = new Array(SIZE).fill(0);
+    for(let i=0;i<SIZE;i++){
+      for(let j=0;j<SIZE-i;j++){c[i]+=buf[j]*buf[j+i];}
+    }
+
+    let d=0; while(c[d]>c[d+1]) d++;
+    let maxval=-1, maxpos=-1;
+    for(let i=d;i<SIZE;i++){
+      if(c[i]>maxval){maxval=c[i]; maxpos=i;}
+    }
+    let T0 = maxpos;
+    return sampleRate/T0;
+  }
+
+  function updateBrush() {
+    analyser.getFloatTimeDomainData(buffer);
+    const pitch = autoCorrelate(buffer, audioCtx.sampleRate);
+
+    if (pitch !== -1) {
+      // Map pitch to hue (rainbow cycle)
+      brushHue = (Math.log2(pitch/50)*360) % 360;
+      if (brushHue < 0) brushHue += 360;
+      // Map volume to brush size
+      let sum = 0;
+      for (let i = 0; i < buffer.length; i++) sum += buffer[i]*buffer[i];
+      const rms = Math.sqrt(sum/buffer.length);
+      brushSize = 5 + rms*200*5;
+    }
+
+    requestAnimationFrame(updateBrush);
+  }
+
+  updateBrush();
+}).catch(err => {
+  console.error('Microphone access denied', err);
+  document.getElementById('info').innerText = 'Microphone access needed!';
+});
+</script>
+</body>
+</html>
