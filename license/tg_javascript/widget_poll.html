@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Echo Poll — Neon Liquid Poll Widget</title>
+<style>
+  :root{
+    --bg: #050414;
+    --card: rgba(255,255,255,0.02);
+    --glass: rgba(255,255,255,0.03);
+    --accent: #7f5cff;
+    --accent-2: #33d6ff;
+    --accent-3: #ffd36b;
+    --accent-4: #ff5c7a;
+    --radius: 14px;
+  }
+  *{box-sizing:border-box;font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial}
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--bg),#020117);color:#eaf0ff}
+  .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px}
+  .card{width:100%;max-width:960px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:var(--radius);padding:20px;border:1px solid rgba(255,255,255,0.04);box-shadow:0 8px 40px rgba(2,3,16,0.6)}
+
+  .head{display:flex;align-items:center;justify-content:space-between;gap:16px}
+  .title{font-size:20px;font-weight:700}
+  .muted{color:#aeb8ff;font-size:13px}
+
+  .poll{display:grid;grid-template-columns:1fr 300px;gap:18px;margin-top:16px;align-items:start}
+  .options{display:flex;flex-direction:column;gap:12px}
+
+  .option{background:var(--glass);padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,0.03);display:flex;align-items:center;gap:12px}
+  .label{flex:1}
+  .bar-wrap{flex-basis:220px;flex-shrink:0;height:36px;background:rgba(0,0,0,0.18);border-radius:10px;overflow:hidden;position:relative}
+  .liquid{position:absolute;left:0;top:0;bottom:0;width:0%;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;color:#051; font-weight:800}
+  .percent{width:44px;text-align:right;font-weight:700}
+
+  /* neon liquid gradients per type */
+  .g1{background:linear-gradient(90deg,var(--accent),#9b6bff)}
+  .g2{background:linear-gradient(90deg,var(--accent-2),#61f0ff)}
+  .g3{background:linear-gradient(90deg,var(--accent-3),#ffe294)}
+  .g4{background:linear-gradient(90deg,var(--accent-4),#ff8aa2)}
+
+  /* echo pulses */
+  .pulse{position:absolute;inset:0;border-radius:10px;pointer-events:none}
+  .pulse::after{content:'';position:absolute;left:50%;top:50%;width:8px;height:8px;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 18px 6px rgba(255,255,255,0.06);opacity:0}
+
+  .controls{display:flex;flex-direction:column;gap:10px}
+  .row{display:flex;gap:8px;align-items:center}
+  .btn{padding:10px 12px;border-radius:10px;border:none;background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#05030a;font-weight:800;cursor:pointer}
+  .ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:#cfd3ff;padding:10px 12px;border-radius:10px}
+  .small{font-size:13px;color:#aeb8ff}
+
+  .stats{background:linear-gradient(180deg, rgba(0,0,0,0.14), rgba(0,0,0,0.08));padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,0.02)}
+
+  @media (max-width:940px){.poll{grid-template-columns:1fr}.stats{order:3}}
+
+  /* small animations */
+  .liquid .bubbles{position:absolute;right:6px;bottom:50%;transform:translateY(50%);display:flex;gap:6px;align-items:center}
+  .bubble{width:8px;height:8px;border-radius:50%;opacity:0.9;filter:blur(0.2px)}
+
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="head">
+        <div>
+          <div class="title">Echo Poll — Which feature should we build next?</div>
+          <div class="muted">Votes animate with neon liquid — picks "echo" out visually.</div>
+        </div>
+        <div class="small muted">Auto-refreshing demo — no backend required</div>
+      </div>
+
+      <div class="poll">
+        <div class="options" id="options">
+          <!-- option rows inserted here -->
+        </div>
+
+        <div class="controls">
+          <div class="stats" id="stats">
+            <div style="font-weight:800">Live results</div>
+            <div id="totalVotes" class="muted" style="margin-top:8px">0 votes</div>
+            <div style="margin-top:10px" class="muted">Top echo:</div>
+            <div id="topEcho" style="font-weight:900;margin-top:6px">—</div>
+          </div>
+
+          <div style="margin-top:14px">
+            <div class="row"><input id="voterName" class="input" placeholder="Your name (optional)" style="flex:1;padding:10px;border-radius:10px;background:transparent;border:1px solid rgba(255,255,255,0.03);color:inherit" /><button id="voteBtn" class="btn">Vote</button></div>
+            <div class="muted small" style="margin-top:6px">Tip: click an option to select it. Use simulate to emulate live voters.</div>
+          </div>
+
+          <div style="margin-top:12px" class="row">
+            <button id="simBtn" class="ghost">Simulate</button>
+            <button id="resetBtn" class="ghost">Reset</button>
+            <div style="flex:1"></div>
+            <button id="exportBtn" class="ghost">Export</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+<script>
+// Echo Poll — standalone script
+const OPTIONS = [
+  {id:'a', label:'Realtime visualizer', colorClass:'g1'},
+  {id:'b', label:'Collaborative whiteboard', colorClass:'g2'},
+  {id:'c', label:'AI-assisted summaries', colorClass:'g3'},
+  {id:'d', label:'Custom themes & skins', colorClass:'g4'}
+];
+
+const state = { votes: {a:0,b:0,c:0,d:0}, selected: 'a', total:0 }; 
+const optionsEl = document.getElementById('options');
+const totalVotesEl = document.getElementById('totalVotes');
+const topEchoEl = document.getElementById('topEcho');
+
+function createOptionRow(opt){
+  const row = document.createElement('div'); row.className='option'; row.dataset.id = opt.id;
+  const label = document.createElement('div'); label.className='label'; label.textContent = opt.label;
+  const barWrap = document.createElement('div'); barWrap.className='bar-wrap';
+  const pulse = document.createElement('div'); pulse.className='pulse';
+  const liquid = document.createElement('div'); liquid.className='liquid ' + opt.colorClass; liquid.innerHTML = '<div class="bubbles"></div>';
+  const percent = document.createElement('div'); percent.className='percent'; percent.textContent='0%';
+  barWrap.appendChild(liquid); barWrap.appendChild(pulse);
+  row.appendChild(label); row.appendChild(barWrap); row.appendChild(percent);
+
+  // click selects
+  row.addEventListener('click', ()=>{
+    state.selected = opt.id;
+    document.querySelectorAll('.option').forEach(r=>r.style.outline='');
+    row.style.outline = '2px solid rgba(255,255,255,0.04)';
+  });
+  return row;
+}
+
+// render options
+OPTIONS.forEach(o=>optionsEl.appendChild(createOptionRow(o)));
+
+function updateVisuals(){
+  const total = Object.values(state.votes).reduce((s,v)=>s+v,0);
+  state.total = total;
+  totalVotesEl.textContent = total + (total===1? ' vote':' votes');
+  // compute percentages
+  let top = null; let topVal = -1;
+  OPTIONS.forEach(opt=>{
+    const v = state.votes[opt.id] || 0;
+    const pct = total === 0 ? 0 : Math.round((v/total)*100);
+    const row = document.querySelector(`.option[data-id='${opt.id}']`);
+    const liquid = row.querySelector('.liquid');
+    const percent = row.querySelector('.percent');
+    percent.textContent = pct + '%';
+    // animate width with transition
+    liquid.style.transition = 'width 700ms cubic-bezier(.2,.9,.2,1)';
+    liquid.style.width = pct + '%';
+    // add tiny echo pulse when value increased
+    if(v > (row.dataset._last || 0)){
+      echoPulse(row.querySelector('.pulse'));
+      // add bubbles
+      spawnBubbles(liquid);
+    }
+    row.dataset._last = v;
+    if(v > topVal){ topVal = v; top = opt; }
+  });
+  topEchoEl.textContent = top ? `${top.label} — ${topVal} votes` : '—';
+}
+
+function echoPulse(el){
+  if(!el) return;
+  el.style.opacity = 1;
+  el.innerHTML = '';
+  const p = document.createElement('div'); p.style.position='absolute'; p.style.left='50%'; p.style.top='50%'; p.style.transform='translate(-50%,-50%)';
+  p.style.width='12px'; p.style.height='12px'; p.style.borderRadius='50%'; p.style.boxShadow='0 0 18px 8px rgba(255,255,255,0.04)'; el.appendChild(p);
+  p.animate([
+    {transform:'translate(-50%,-50%) scale(0.6)', opacity:0.95},
+    {transform:'translate(-50%,-50%) scale(2.6)', opacity:0}
+  ],{duration:700,easing:'cubic-bezier(.2,.9,.2,1)'});
+  setTimeout(()=>el.innerHTML='',800);
+}
+
+function spawnBubbles(liquid){
+  const container = liquid.querySelector('.bubbles');
+  const count = 2 + Math.floor(Math.random()*4);
+  for(let i=0;i<count;i++){
+    const b = document.createElement('div'); b.className='bubble'; b.style.background = getComputedStyle(liquid).background; b.style.opacity=0.9; b.style.transform = `translateY(${10 + Math.random()*10}px)`; container.appendChild(b);
+    b.animate([
+      {transform:`translateY(${10 + Math.random()*10}px) scale(${0.6 + Math.random()*0.8})`, opacity:0.95},
+      {transform:`translateY(-8px) scale(1.2)`, opacity:0}
+    ],{duration:900 + Math.random()*600, easing:'cubic-bezier(.2,.9,.2,1)'});
+    setTimeout(()=>b.remove(),1200 + Math.random()*600);
+  }
+}
+
+// Voting
+document.getElementById('voteBtn').addEventListener('click', ()=>{ submitVote(state.selected); });
+
+function submitVote(id, count=1){
+  state.votes[id] = (state.votes[id]||0) + count;
+  updateVisuals();
+}
+
+// simulate button
+let simRunning = false; let simInterval=null;
+document.getElementById('simBtn').addEventListener('click', ()=>{
+  if(simRunning){ clearInterval(simInterval); simRunning=false; document.getElementById('simBtn').textContent='Simulate'; return; }
+  simRunning=true; document.getElementById('simBtn').textContent='Stop';
+  simInterval = setInterval(()=>{
+    // random voter selects random option, sometimes echo burst
+    const pick = OPTIONS[Math.floor(Math.random()*OPTIONS.length)].id;
+    const mult = Math.random() < 0.12 ? (2 + Math.floor(Math.random()*5)) : 1; // occasional multi votes
+    submitVote(pick, mult);
+  }, 700 + Math.random()*1200);
+});
+
+// reset / export
+document.getElementById('resetBtn').addEventListener('click', ()=>{ OPTIONS.forEach(o=>state.votes[o.id]=0); updateVisuals(); });
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  const data = {votes:state.votes, total: state.total, time: new Date().toISOString()};
+  const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download='echo-poll-results.json'; a.click(); URL.revokeObjectURL(url);
+});
+
+// option click to select already handled; but allow clicking on bar to also vote
+optionsEl.addEventListener('click', (e)=>{
+  const optRow = e.target.closest('.option');
+  if(!optRow) return;
+  const id = optRow.dataset.id;
+  // if click specifically on bar area, register a vote
+  if(e.target.closest('.bar-wrap') || e.target.classList.contains('percent')){ submitVote(id,1); }
+});
+
+// initial render
+updateVisuals();
+
+// build initial data and attach rows to DOM
+// also wire keyboard: numbers 1-4 vote
+window.addEventListener('keydown',(e)=>{
+  if(['1','2','3','4'].includes(e.key)){
+    const idx = parseInt(e.key,10)-1; submitVote(OPTIONS[idx].id);
+  }
+});
+
+// create option elements now that functions are defined
+// (we already appended earlier) - ensure first option selected
+setTimeout(()=>{
+  const first = document.querySelector('.option'); if(first) first.style.outline='2px solid rgba(255,255,255,0.04)';
+},60);
+
+// small auto-refresh to mimic 'live' feed — gentle reshuffle to keep UI lively
+setInterval(()=>{
+  // slight random jitter to animate when idle
+  const keys = Object.keys(state.votes);
+  if(Math.random() < 0.4 && state.total > 0){
+    const pick = keys[Math.floor(Math.random()*keys.length)];
+    // micro echo: small increment but also strong visual pulse (no large impact on total)
+    state.votes[pick] += 0; // keep values stable, but trigger update to show subtle pulses
+    const row = document.querySelector(`.option[data-id='${pick}']`);
+    echoPulse(row.querySelector('.pulse'));
+  }
+}, 2200);
+
+</script>
+</body>
+</html>
