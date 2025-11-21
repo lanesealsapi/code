@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Flowing Guitar Circle — Flowers & Song</title>
+<style>
+  :root{--bg:#071021;--panel:#0b1420;--accent:#7dd3fc;--muted:#94a3b8}
+  html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,var(--bg),#03111a);display:flex;align-items:center;justify-content:center;color:#e6f0fb}
+  .wrap{width:380px;max-width:94vw;padding:18px;background:linear-gradient(180deg,#071827,#04101a);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,0.6);text-align:center}
+  h1{font-size:16px;margin:0 0 8px;color:#dbeafe}
+  .controls{display:flex;gap:8px;align-items:center;justify-content:center;margin-bottom:12px}
+  select,button{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--accent);padding:6px 10px;border-radius:10px;cursor:pointer}
+  #circleBtn{width:170px;height:170px;border-radius:50%;background:linear-gradient(145deg,#0f2a3a,#04202b);border:4px solid rgba(125,211,252,0.12);display:grid;place-items:center;margin:10px auto;cursor:pointer;box-shadow:0 8px 30px rgba(2,6,23,0.6);transition:transform 120ms ease,box-shadow 120ms ease}
+  #circleBtn:active{transform:translateY(3px) scale(0.995);box-shadow:0 4px 18px rgba(2,6,23,0.5)}
+  #circleIcon{font-size:52px}
+  .flowers{position:absolute;left:0;right:0;top:0;bottom:0;pointer-events:none;overflow:visible;mix-blend-mode:screen}
+  .flower{position:absolute;font-size:28px;will-change:transform,opacity;pointer-events:none;filter:drop-shadow(0 4px 8px rgba(0,0,0,0.6));transform-origin:center}
+  .footer{font-size:13px;color:#9fb3d8;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <h1>Flowing Guitar Player</h1>
+  <div class="controls">
+    <select id="modeSelect" title="Cycle behavior">
+      <option value="cycle">Cycle Instruments</option>
+      <option value="random">Random Sounds</option>
+    </select>
+    <button id="muteBtn">Mute</button>
+  </div>
+
+  <div style="position:relative">
+    <div id="circleBtn" aria-label="Play guitar" role="button" tabindex="0">
+      <div id="circleIcon">🎸</div>
+      <div style="position:absolute;bottom:12px;font-size:12px;color:#9fb3d8">Tap to play the song</div>
+    </div>
+    <div class="flowers" id="flowers"></div>
+  </div>
+
+  <div class="footer">Notes flow in a short song. Play 4 notes in a row for a chord + flower burst.</div>
+</div>
+
+<script>
+/* Audio context singleton */
+let audioCtx = null;
+function ensureCtx(){ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); return audioCtx; }
+
+/* Instruments */
+const instruments = [
+  { id:'electric', osc:'square', filter:{type:'bandpass',freq:900,Q:2}, sustain:0.5, release:0.6 },
+  { id:'steel',    osc:'sawtooth', filter:{type:'highpass',freq:420,Q:1}, sustain:0.38, release:0.7 },
+  { id:'nylon',    osc:'triangle', filter:{type:'lowpass',freq:1200,Q:0.7}, sustain:0.33, release:0.9 },
+  { id:'harp',     osc:'triangle', filter:{type:'lowpass',freq:1800,Q:1}, sustain:0.28, release:1.0 }
+];
+
+let instrIndex = 0;
+let muted = false;
+const modeSelect = document.getElementById('modeSelect');
+const muteBtn = document.getElementById('muteBtn');
+muteBtn.addEventListener('click', ()=>{ muted = !muted; muteBtn.textContent = muted ? 'Unmute' : 'Mute'; });
+
+/* Musical data: a short "song" as sequences of scale degrees (relative semitones) */
+const scale = [0,2,4,5,7,9,11]; // major scale intervals
+const baseRoot = 82.4069 * 2; // E3-ish root for melody
+const songPatterns = [
+  [0,2,4,5],      // motif 1
+  [4,2,0,7],      // motif 2 (descend then go to 5th)
+  [5,7,9,11],     // motif 3 (ascend)
+  [7,5,4,2]       // motif 4 (resolve)
+];
+// Song will play motifs in order with some variation
+let songIndex = 0;
+
+/* Flow state */
+let consecutiveNotes = 0;
+let lastPlayWasChord = false;
+
+/* Flowers visuals */
+const flowersEl = document.getElementById('flowers');
+const flowerEmojis = ['🌸','🌺','🌼','🌷','💐','🌻'];
+function spawnFlower(x, y, size=30, delay=0){
+  const f = document.createElement('div');
+  f.className = 'flower';
+  f.textContent = flowerEmojis[Math.floor(Math.random()*flowerEmojis.length)];
+  f.style.fontSize = size + 'px';
+  f.style.left = x + 'px';
+  f.style.top = y + 'px';
+  f.style.opacity = '0';
+  flowersEl.appendChild(f);
+  requestAnimationFrame(()=> {
+    f.style.transition = 'transform 1.6s cubic-bezier(.2,.9,.2,1), opacity 1.6s';
+    const dx = (Math.random()-0.5) * 180;
+    const dy = -160 - Math.random()*80;
+    f.style.opacity = '1';
+    const rot = (Math.random()-0.5)*80;
+    const scale = 1 + Math.random()*0.6;
+    f.style.transform = `translate(${dx}px, ${dy}px) rotate(${rot}deg) scale(${scale})`;
+  });
+  setTimeout(()=> f.style.opacity='0', 1400 + delay);
+  setTimeout(()=> f.remove(), 2000 + delay);
+}
+
+/* Burst of many flowers */
+function flowerBurst(centerX, centerY, count=12){
+  for(let i=0;i<count;i++){
+    const s = 24 + Math.random()*36;
+    setTimeout(()=> spawnFlower(centerX + (Math.random()-0.5)*30, centerY + (Math.random()-0.5)*20, s), i * 40);
+  }
+}
+
+/* Note to frequency */
+function freqFromSemitone(base, semitone){
+  return base * Math.pow(2, semitone/12);
+}
+
+/* pick instrument by mode */
+function pickInstrument(){
+  const mode = modeSelect.value;
+  if(mode === 'random') return instruments[Math.floor(Math.random()*instruments.length)];
+  const inst = instruments[instrIndex % instruments.length]; instrIndex++; return inst;
+}
+
+/* Play single note voice */
+function playNote(freq, opts={}){
+  if(muted) return;
+  const ctx = ensureCtx();
+  const now = ctx.currentTime;
+  const instr = opts.instrument;
+  const velocity = opts.velocity ?? 0.9;
+
+  // two oscillators for body
+  const oscA = ctx.createOscillator();
+  const oscB = ctx.createOscillator();
+  oscA.type = instr.osc; oscB.type = instr.osc;
+  oscA.frequency.setValueAtTime(freq, now);
+  oscB.frequency.setValueAtTime(freq * (1 + (Math.random()-0.5)*0.0035), now);
+  oscB.detune.value = (Math.random()-0.5) * 6;
+
+  const filt = ctx.createBiquadFilter();
+  filt.type = instr.filter.type;
+  filt.frequency.setValueAtTime(instr.filter.freq * (1 + (Math.random()-0.02)), now);
+  filt.Q.setValueAtTime(instr.filter.Q, now);
+
+  const gain = ctx.createGain();
+
+  oscA.connect(filt); oscB.connect(filt); filt.connect(gain); gain.connect(ctx.destination);
+
+  // ADSR-ish
+  const attack = 0.006;
+  const decay = 0.12;
+  const sustain = instr.sustain;
+  const release = instr.release;
+
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(1.0 * velocity, now + attack);
+  gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, sustain * velocity), now + attack + decay);
+
+  oscA.start(now); oscB.start(now);
+  const stopAt = now + attack + decay + 0.02 + release;
+  gain.gain.exponentialRampToValueAtTime(0.0001, stopAt);
+  oscA.stop(stopAt + 0.02); oscB.stop(stopAt + 0.02);
+}
+
+/* Play chord (simultaneous notes) */
+function playChord(rootFreq, chordIntervals, options = {}){
+  if(muted) return;
+  const instr = options.instrument;
+  chordIntervals.forEach((iv, idx)=>{
+    const semitone = iv;
+    const f = freqFromSemitone(rootFreq, semitone);
+    // slightly stagger for a small arpeggio feel while still chord-like
+    setTimeout(()=> playNote(f, { instrument: instr, velocity: 0.95 }), idx * 30);
+  });
+}
+
+/* Flowing song engine: schedules a short sequence of notes when invoked */
+function playFlowingSequence(centerX, centerY){
+  const instr = pickInstrument();
+
+  // choose motif
+  const motif = songPatterns[songIndex % songPatterns.length].slice();
+  songIndex++;
+  // small variation: sometimes rotate motif or shift by scale step
+  if(Math.random() < 0.25) motif.reverse();
+  const scaleShift = (Math.random() < 0.4) ? 0 : 12; // octave shift occasionally
+  const root = baseRoot * (scaleShift ? 2 : 1);
+
+  // play notes sequentially with slight swing
+  const baseDelay = 0;
+  const swing = (i) => 120 + (i%2 ? 40 : 0); // ms per note
+  let t = 0;
+  for(let i=0;i<motif.length;i++){
+    const degree = motif[i];
+    // map degree into semitone within major scale
+    const semitone = scale[degree % scale.length] + Math.floor(degree / scale.length)*12;
+    const freq = freqFromSemitone(root, semitone);
+    const delayMs = t;
+    setTimeout(()=> {
+      // single note
+      playNote(freq, { instrument: instr, velocity: 0.92 });
+      // spawn a flower for each note
+      spawnFlower(centerX + (Math.random()-0.5)*40, centerY + (Math.random()-0.5)*24, 34 + Math.random()*22);
+      consecutiveNotes++;
+      lastPlayWasChord = false;
+      // if reached 4 consecutive single notes -> play chord + burst
+      if(consecutiveNotes >= 4){
+        consecutiveNotes = 0;
+        lastPlayWasChord = true;
+        // chord intervals (triad)
+        const chordIntervals = [0,4,7];
+        setTimeout(()=> {
+          playChord(root, chordIntervals, { instrument: instr });
+          flowerBurst(centerX, centerY, 18);
+        }, 160);
+      }
+    }, delayMs);
+    t += swing(i);
+  }
+}
+
+/* Helpers to compute center coords for flower origin */
+function getCircleCenter(){
+  const btn = document.getElementById('circleBtn');
+  const rect = btn.getBoundingClientRect();
+  const parentRect = document.getElementById('app').getBoundingClientRect();
+  const cx = rect.left + rect.width/2 - parentRect.left;
+  const cy = rect.top + rect.height/2 - parentRect.top;
+  return {x: cx, y: cy};
+}
+
+/* UI interactions */
+const circleBtn = document.getElementById('circleBtn');
+circleBtn.addEventListener('pointerdown', async (e)=> {
+  e.preventDefault();
+  const ctx = ensureCtx();
+  if(ctx.state === 'suspended') await ctx.resume();
+
+  // Play flowing sequence starting now
+  const {x,y} = getCircleCenter();
+  playFlowingSequence(x, y);
+  // visual feedback
+  const icon = document.getElementById('circleIcon');
+  icon.textContent = '🎶';
+  setTimeout(()=> icon.textContent = '🎸', 700);
+});
+
+/* Keyboard accessibility */
+circleBtn.addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter' || e.key === ' ') circleBtn.click();
+});
+
+/* Ensure audio resume on first interaction for iOS */
+document.addEventListener('pointerdown', ()=> { if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); }, {once:true});
+</script>
+</body>
+</html>
