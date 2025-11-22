@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Neon Particle Sankey — Fixed</title>
+<style>
+  :root{
+    --bg:#06060a;
+    --neon-1: #00fff0;
+    --neon-2: #ff00f6;
+    --neon-3: #ffd300;
+    --muted: rgba(255,255,255,0.12);
+  }
+  html,body{height:100%;margin:0;background:radial-gradient(1000px 600px at 10% 10%, rgba(0,255,240,0.03), transparent), radial-gradient(800px 500px at 95% 85%, rgba(255,0,246,0.03), transparent), var(--bg); color:#e6f7ff;font-family:Inter,Arial,Helvetica,sans-serif}
+  .wrap{display:flex;gap:18px;height:100vh;padding:28px;box-sizing:border-box;align-items:stretch;}
+  .sidebar{width:320px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:14px;padding:18px;backdrop-filter: blur(6px);box-shadow: 0 6px 30px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.02);display:flex;flex-direction:column;gap:12px;}
+  .nodes{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+  .node{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:10px;background:linear-gradient(90deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));border:1px solid rgba(255,255,255,0.02);box-shadow:0 6px 20px rgba(0,0,0,0.5)}
+  .swatch{width:12px;height:12px;border-radius:4px}
+  .muted{color:var(--muted);font-size:12px}
+  canvas{flex:1;border-radius:14px;background:linear-gradient(180deg, rgba(0,0,0,0.12), transparent);box-shadow: inset 0 0 120px rgba(0,0,0,0.6), 0 20px 60px rgba(0,0,0,0.6); display:block;}
+  .controls{display:flex;flex-direction:column;gap:10px;margin-top:auto}
+  .control-row{display:flex;gap:10px;align-items:center}
+  .label{font-size:12px;color:var(--muted);min-width:80px}
+  input[type=range]{flex:1}
+  .btn{padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0.01));cursor:pointer;font-size:13px;color:#e8f8ff}
+  @media (max-width:900px){ .wrap{flex-direction:column;padding:16px;} .sidebar{width:100%} canvas{height:52vh}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="sidebar">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <h1 style="margin:0;font-size:18px">Neon Particle Sankey</h1>
+        <div style="font-size:13px;color:var(--muted);max-width:220px">Streams of tiny particles move along curved flows between sources (left) and targets (right). Hover to disturb.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+        <div style="display:flex;gap:8px;align-items:center">
+          <div class="swatch" style="background:var(--neon-1)"></div><div style="font-size:12px;color:var(--muted)">A</div>
+          <div class="swatch" style="background:var(--neon-2);margin-left:8px"></div><div style="font-size:12px;color:var(--muted)">B</div>
+          <div class="swatch" style="background:var(--neon-3);margin-left:8px"></div><div style="font-size:12px;color:var(--muted)">C</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="nodes">
+      <div class="node"><div style="display:flex;gap:10px;align-items:center"><div class="swatch" style="background:var(--neon-1)"></div>A — Source</div><div class="muted">30%</div></div>
+      <div class="node"><div style="display:flex;gap:10px;align-items:center"><div class="swatch" style="background:var(--neon-2)"></div>B — Source</div><div class="muted">45%</div></div>
+      <div class="node"><div style="display:flex;gap:10px;align-items:center"><div class="swatch" style="background:var(--neon-3)"></div>C — Source</div><div class="muted">25%</div></div>
+    </div>
+
+    <div class="controls">
+      <div class="control-row"><div class="label">Particles</div><input id="count" type="range" min="200" max="2500" value="1100" /><div class="muted" id="countVal">1100</div></div>
+      <div class="control-row"><div class="label">Speed</div><input id="speed" type="range" min="0.2" max="3.0" step="0.1" value="1.0" /><div class="muted" id="speedVal">1.0x</div></div>
+      <div class="control-row"><div class="label">Flow Mix</div><input id="spread" type="range" min="0" max="1" step="0.01" value="0.28" /><div class="muted" id="spreadVal">0.28</div></div>
+      <div style="display:flex;gap:8px"><button class="btn" id="pauseBtn">Pause</button><button class="btn" id="resetBtn">Reset</button></div>
+    </div>
+  </div>
+
+  <canvas id="c"></canvas>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d', { alpha: true });
+
+  // UI
+  const countRange = document.getElementById('count');
+  const speedRange = document.getElementById('speed');
+  const spreadRange = document.getElementById('spread');
+  const countVal = document.getElementById('countVal');
+  const speedVal = document.getElementById('speedVal');
+  const spreadVal = document.getElementById('spreadVal');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const resetBtn = document.getElementById('resetBtn');
+
+  // colors & layout data
+  const colors = ['#00fff0','#ff00f6','#ffd300'];
+  const sources = [
+    { id:'A', yFactor: 0.22, color: colors[0], weight:0.30 },
+    { id:'B', yFactor: 0.5,  color: colors[1], weight:0.45 },
+    { id:'C', yFactor: 0.78, color: colors[2], weight:0.25 },
+  ];
+  const targets = [
+    { id:'X', yFactor: 0.18 },
+    { id:'Y', yFactor: 0.5 },
+    { id:'Z', yFactor: 0.82 },
+  ];
+
+  let flows = [];
+  function rebuildFlows(){
+    flows = [];
+    const spread = parseFloat(spreadRange.value);
+    for (let i=0;i<sources.length;i++){
+      for (let j=0;j<targets.length;j++){
+        const dy = Math.abs(sources[i].yFactor - targets[j].yFactor);
+        const prox = Math.exp(- (dy*dy) / (2 * (0.12 + spread*0.4) * (0.12 + spread*0.4)));
+        flows.push({ src:i, tgt:j, base: sources[i].weight * prox });
+      }
+    }
+    for (let i=0;i<sources.length;i++){
+      const subset = flows.filter(f => f.src===i);
+      const s = subset.reduce((a,b)=>a+b.base,0) || 1;
+      subset.forEach(f => f.weight = f.base * (sources[i].weight / s));
+    }
+  }
+
+  // particles
+  let particles = [];
+  function makeParticles(count){
+    particles = [];
+    for (let i=0;i<flows.length;i++){
+      const f = flows[i];
+      const n = Math.max(1, Math.round(count * f.weight));
+      for (let k=0;k<n;k++) particles.push(createParticle(f));
+    }
+    shuffle(particles);
+  }
+  function shuffle(arr){ for (let i=arr.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } }
+
+  function createParticle(flow){
+    return {
+      flow,
+      t: Math.random(),
+      speed: 0.002 + Math.random()*0.003,
+      jitter: (Math.random()-0.5)*0.15,
+      size: 0.8 + Math.random()*1.8,
+      burst: 0
+    };
+  }
+
+  // Reliable canvas sizing: use getBoundingClientRect immediately after layout
+  let DPR = Math.min(window.devicePixelRatio || 1, 2);
+  let CW = 800, CH = 400; // logical (CSS) sizes — used for geometry
+  function adaptCanvas(){
+    // ask for computed layout size
+    const rect = canvas.getBoundingClientRect();
+    // fallback to parent width/height if rect is zero
+    const parent = canvas.parentElement;
+    const fallbackW = parent.clientWidth - 20;
+    const fallbackH = parent.clientHeight - 20;
+    CW = Math.max( Math.round(rect.width || fallbackW), 200 );
+    CH = Math.max( Math.round(rect.height || fallbackH), 120 );
+
+    // set CSS size explicitly to ensure clientWidth/clientHeight are stable
+    canvas.style.width = CW + 'px';
+    canvas.style.height = CH + 'px';
+
+    // set backing store size for crisp drawing
+    canvas.width = Math.floor(CW * DPR);
+    canvas.height = Math.floor(CH * DPR);
+
+    // set transform so drawing uses CSS pixels
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+
+  // geometry helpers (use CW/CH instead of reading client sizes repeatedly)
+  function pathAt(flow, t){
+    const leftX = 100, rightX = CW - 100;
+    const y0 = CH * sources[flow.src].yFactor;
+    const y1 = CH * targets[flow.tgt].yFactor;
+    const cx1 = leftX + (rightX - leftX) * 0.35;
+    const cy1 = y0 + (y1 - y0) * 0.05 - 80 * (flow.src - 1);
+    const cx2 = leftX + (rightX - leftX) * 0.65;
+    const cy2 = y1 + (y0 - y1) * 0.05 + 80 * (flow.tgt - 1);
+    const x = cubic(leftX, cx1, cx2, rightX, t);
+    const y = cubic(y0, cy1, cy2, y1, t);
+    return { x, y };
+  }
+  function cubic(a,b,c,d,t){ const it = 1-t; return it*it*it*a + 3*it*it*t*b + 3*it*t*t*c + t*t*t*d; }
+
+  // drawing helpers
+  function drawGlow(x,y,r,color,alpha){
+    const g = ctx.createRadialGradient(x,y,0,x,y,r*1.2);
+    g.addColorStop(0, color);
+    g.addColorStop(1, color + '00');
+    ctx.beginPath();
+    ctx.fillStyle = g;
+    ctx.globalAlpha = alpha;
+    ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  function drawFlowRibbons(){
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    flows.forEach((f) => {
+      const color = sources[f.src].color;
+      const leftX = 100, rightX = CW - 100;
+      const y0 = CH * sources[f.src].yFactor;
+      const y1 = CH * targets[f.tgt].yFactor;
+      const cx1 = leftX + (rightX - leftX) * 0.35;
+      const cy1 = y0 + (y1 - y0) * 0.05 - 80 * (f.src - 1);
+      const cx2 = leftX + (rightX - leftX) * 0.65;
+      const cy2 = y1 + (y0 - y1) * 0.05 + 80 * (f.tgt - 1);
+
+      const grad = ctx.createLinearGradient(0,0,CW,0);
+      grad.addColorStop(0,color);
+      grad.addColorStop(1,'#00000000');
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 14 * f.weight * 3 + 6;
+      ctx.globalAlpha = 0.08 + f.weight*0.12;
+      ctx.beginPath();
+      ctx.moveTo(leftX,y0);
+      ctx.bezierCurveTo(cx1,cy1, cx2,cy2, rightX,y1);
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  function drawAnchors(){
+    ctx.save();
+    const leftX = 100, rightX = CW - 100;
+    sources.forEach((s,i)=>{
+      const y = CH * s.yFactor;
+      drawGlow(leftX, y, 18, s.color, 0.18);
+      ctx.beginPath(); ctx.fillStyle = '#fff'; ctx.arc(leftX, y, 3.8, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.font = '12px Inter, Arial'; ctx.fillText(s.id + ' (src)', leftX - 58, y + 5);
+    });
+    targets.forEach((t,i)=>{
+      const y = CH * t.yFactor;
+      drawGlow(rightX, y, 16, '#9ac9ff', 0.06 + 0.08*i);
+      ctx.beginPath(); ctx.fillStyle = '#fff'; ctx.arc(rightX, y, 3.4, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.font = '12px Inter, Arial'; ctx.fillText(t.id + ' (tgt)', rightX + 12, y + 5);
+    });
+    ctx.restore();
+  }
+
+  // state
+  let paused = false;
+  let bursts = [];
+  const mouse = { x:-9999, y:-9999, down:false };
+
+  // events
+  canvas.addEventListener('mousemove', e => {
+    const rect = canvas.getBoundingClientRect();
+    mouse.x = e.clientX - rect.left;
+    mouse.y = e.clientY - rect.top;
+  });
+  canvas.addEventListener('mouseleave', ()=>{ mouse.x=-9999; mouse.y=-9999; });
+  canvas.addEventListener('mousedown', () => {
+    mouse.down = true;
+    for (let i=0;i<particles.length;i++){
+      const p = particles[i];
+      const pos = pathAt(p.flow, p.t);
+      const dx = pos.x - mouse.x, dy = pos.y - mouse.y;
+      const d2 = dx*dx + dy*dy;
+      if (d2 < 12000){ p.t += 0.02*Math.random(); p.burst = 1.6; }
+    }
+    setTimeout(()=>mouse.down=false, 120);
+  });
+  canvas.addEventListener('click', e => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX-rect.left, my = e.clientY-rect.top;
+    spawnBurst(mx,my, 10 + Math.random()*40);
+  });
+
+  function spawnBurst(x,y,intensity){ bursts.push({x,y,intensity,age:0}); }
+
+  // UI bindings
+  countRange.addEventListener('input', () => { countVal.textContent = countRange.value; makeParticles(parseInt(countRange.value,10)); });
+  speedRange.addEventListener('input', () => { speedVal.textContent = parseFloat(speedRange.value).toFixed(1) + 'x'; });
+  spreadRange.addEventListener('input', () => { spreadVal.textContent = parseFloat(spreadRange.value).toFixed(2); rebuildFlows(); makeParticles(parseInt(countRange.value,10)); });
+  pauseBtn.addEventListener('click', ()=>{ paused = !paused; pauseBtn.textContent = paused ? 'Resume' : 'Pause'; });
+  resetBtn.addEventListener('click', ()=>{ rebuildFlows(); makeParticles(parseInt(countRange.value,10)); });
+
+  // animation loop
+  let last = performance.now();
+  function loop(now){
+    const dt = Math.min(32, now - last);
+    last = now;
+    if (!paused) update(dt/16.67);
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  function update(dt){
+    const speedMultiplier = parseFloat(speedRange.value);
+    const adj = dt * speedMultiplier;
+    for (let i=0;i<particles.length;i++){
+      const p = particles[i];
+      const baseSpeed = (0.0008 + p.speed) * (0.7 + Math.sin(performance.now()/3000 + i)*0.3);
+      p.t += baseSpeed * adj;
+      p.t += Math.sin((performance.now()*0.001 + i) * (0.5 + p.jitter)) * 0.0002 * p.jitter * adj;
+
+      if (mouse.x > -100){
+        const pos = pathAt(p.flow, clamp(p.t,0,1));
+        const dx = pos.x - mouse.x, dy = pos.y - mouse.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < 120){
+          const strength = (1 - dist/120) * 0.02;
+          p.t += strength * (dx / (dist+1)) * 0.5;
+          p.burst = Math.min(2.5, (p.burst || 0) + strength*6);
+        }
+      }
+
+      p.burst = Math.max(0, (p.burst || 0) - 0.02 * adj);
+      if (p.t > 1.2){ p.t = Math.random()*0.12 * -0.5; p.jitter = (Math.random()-0.5)*0.15; p.size = 0.8 + Math.random()*1.8; }
+    }
+
+    bursts.forEach(b => b.age += dt*0.03);
+    bursts = bursts.filter(b => b.age < 1.3);
+  }
+
+  function render(){
+    // clear
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    // fade background (trail effect)
+    ctx.fillStyle = 'rgba(6,6,10,0.12)';
+    ctx.fillRect(0,0,CW,CH);
+
+    // ribbons
+    drawFlowRibbons();
+
+    // particles
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (let i=0;i<particles.length;i++){
+      const p = particles[i];
+      const pos = pathAt(p.flow, clamp(p.t,0,1));
+      const baseColor = sources[p.flow.src].color;
+      const size = p.size * (1 + (p.burst || 0) * 0.8);
+      drawGlow(pos.x, pos.y, size*1.8, baseColor, 0.06 + (p.flow.weight||0.01)*0.3);
+      drawGlow(pos.x, pos.y, size*0.8, '#ffffff', 0.8);
+      ctx.beginPath(); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.arc(pos.x, pos.y, Math.max(0.2, size*0.4), 0, Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+
+    drawAnchors();
+
+    bursts.forEach(b => { const alpha = 1 - b.age/1.3; drawGlow(b.x, b.y, 40 + b.intensity*0.6*b.age, '#ffffff', 0.16 * alpha); });
+
+    // subtle vignette
+    ctx.save();
+    const g = ctx.createRadialGradient(CW/2, CH/2, Math.max(CW,CH)/4, CW/2, CH/2, Math.max(CW,CH)/1.2);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, 'rgba(0,0,0,0.45)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,CW,CH);
+    ctx.restore();
+  }
+
+  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+  // init everything
+  function init(){
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    // ensure canvas has a visible CSS size before using getBoundingClientRect
+    // small delay ensures CSS layout has been applied in some cases
+    requestAnimationFrame(() => {
+      adaptCanvas();
+      window.addEventListener('resize', () => { adaptCanvas(); }); // re-adapt on resize
+      rebuildFlows();
+      makeParticles(parseInt(countRange.value,10));
+      last = performance.now();
+      requestAnimationFrame(loop);
+    });
+  }
+
+  init();
+
+})();
+</script>
+</body>
+</html>
