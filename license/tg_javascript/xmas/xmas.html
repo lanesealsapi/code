@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Fun Christmas Tree — Lights & Dance</title>
+<style>
+  :root{
+    --bg:#0b1020;
+    --tree:#0b6b2f;
+    --tree-dark:#074d21;
+    --trunk:#5b3b20;
+    --accent: #ffd700;
+    --glow: 0 0 14px rgba(255,215,0,0.55);
+    --speed: 1; /* multiplier controlled by slider */
+  }
+
+  html,body{height:100%; margin:0; font-family:Inter,system-ui,Segoe UI,Arial; background:linear-gradient(180deg,var(--bg),#07101a 60%); color:#fff; display:grid; place-items:center;}
+  .stage{
+    width:min(920px,94vw);
+    display:grid;
+    grid-template-columns: 1fr 340px;
+    gap:24px;
+    align-items:center;
+  }
+  .panel{
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    padding:18px;
+    border-radius:14px;
+    box-shadow: 0 10px 30px rgba(2,6,23,0.6);
+    border:1px solid rgba(255,255,255,0.03);
+  }
+
+  /* tree area */
+  .tree-wrap{display:flex; align-items:center; justify-content:center; height:70vh; min-height:420px; position:relative;}
+  svg{width:100%; max-width:560px; height:auto; display:block; filter: drop-shadow(0 6px 16px rgba(0,0,0,0.6)); transition: transform 0.6s cubic-bezier(.15,.9,.3,1);}
+
+  /* sway animation - subtle by default */
+  .sway {
+    transform-origin: 50% 85%;
+    animation: sway 6s calc(var(--speed) * 1s) infinite ease-in-out;
+  }
+  @keyframes sway{
+    0%{ transform: rotate(-0.6deg); }
+    25%{ transform: rotate(0.9deg); }
+    50%{ transform: rotate(-0.4deg); }
+    75%{ transform: rotate(0.8deg); }
+    100%{ transform: rotate(-0.6deg); }
+  }
+
+  /* intense dance */
+  .dance {
+    animation: dance 0.9s calc(var(--speed) * 1s) infinite ease-in-out;
+  }
+  @keyframes dance{
+    0%{ transform: rotate(-6deg) translateY(0); }
+    25%{ transform: rotate(6deg) translateY(-6px) }
+    50%{ transform: rotate(-4deg) translateY(0) }
+    75%{ transform: rotate(5deg) translateY(-6px) }
+    100%{ transform: rotate(-6deg) translateY(0) }
+  }
+
+  /* ornaments / lights */
+  .light{
+    mix-blend-mode: screen;
+    transform-origin:center;
+    filter: drop-shadow(0 0 10px rgba(255,255,255,0.12));
+  }
+  .bulb{
+    transition: r 160ms ease, opacity 160ms ease;
+  }
+  /* base twinkle: keyed by CSS animation that adjusts opacity & scale */
+  @keyframes twinkle {
+    0%{ opacity:0.18; transform: scale(0.85) translateY(0); }
+    40%{ opacity:1; transform: scale(1.14) translateY(-3px) }
+    100%{ opacity:0.25; transform: scale(0.9) translateY(0) }
+  }
+  .twinkle{
+    animation: twinkle calc(2.8s * var(--speed)) infinite ease-in-out;
+    animation-fill-mode: both;
+  }
+
+  /* subtle glow for golden lights */
+  .halo{
+    opacity:0.35;
+    transition: opacity 160ms ease;
+    filter: blur(6px);
+  }
+
+  /* control UI */
+  .controls{display:flex; flex-direction:column; gap:12px;}
+  h1{margin:0 0 6px 0; font-size:20px; letter-spacing:0.6px;}
+  p.lead{margin:0 0 12px 0; color:#cde; font-size:13px;}
+  .row{display:flex; gap:10px; align-items:center;}
+  button{
+    background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.02));
+    color:#fff; border:1px solid rgba(255,255,255,0.06);
+    padding:8px 12px; border-radius:10px; cursor:pointer;
+  }
+  button.active{ box-shadow: var(--glow); transform: translateY(-2px) scale(1.02); border-color: rgba(255,255,255,0.16);}
+
+  input[type=range]{ width:100%; accent-color:gold; }
+
+  .footer{ margin-top:10px; font-size:12px; color:#9fb; }
+
+  /* disco color cycle - class applied to bulbs */
+  .disco{
+    animation: disco-colors calc(3.0s * var(--speed)) infinite linear;
+  }
+  @keyframes disco-colors{
+    0%{ filter: hue-rotate(0deg) saturate(1.05); }
+    25%{ filter: hue-rotate(80deg) saturate(1.2); }
+    50%{ filter: hue-rotate(160deg) saturate(1.1); }
+    75%{ filter: hue-rotate(260deg) saturate(1.25); }
+    100%{ filter: hue-rotate(360deg) saturate(1.05); }
+  }
+
+  /* glow intensity toggle */
+  .glow-on .halo{ opacity: 0.7; }
+
+  /* small responsive adjustments */
+  @media (max-width:900px){
+    .stage{ grid-template-columns: 1fr; }
+    .tree-wrap{ min-height:420px; }
+  }
+</style>
+</head>
+<body>
+<div class="stage" role="application" aria-label="Dancing Christmas tree with lights">
+  <!-- Tree Panel -->
+  <div class="panel tree-wrap" id="treePanel">
+    <!-- SVG Tree -->
+    <svg viewBox="0 0 600 780" xmlns="http://www.w3.org/2000/svg" id="treeSVG" aria-hidden="false" class="sway">
+      <!-- soft backdrop glow -->
+      <defs>
+        <radialGradient id="backGlow" cx="50%" cy="50%" r="60%">
+          <stop offset="0%" stop-color="#52ffb0" stop-opacity="0.08"/>
+          <stop offset="50%" stop-color="#52ffb0" stop-opacity="0.03"/>
+          <stop offset="100%" stop-color="#52ffb0" stop-opacity="0"/>
+        </radialGradient>
+        <filter id="soft">
+          <feGaussianBlur stdDeviation="14" result="b"/>
+          <feBlend in="SourceGraphic" in2="b"/>
+        </filter>
+      </defs>
+
+      <!-- background ground -->
+      <ellipse cx="300" cy="740" rx="210" ry="30" fill="rgba(0,0,0,0.4)"/>
+
+      <!-- glow behind tree -->
+      <ellipse cx="300" cy="360" rx="240" ry="220" fill="url(#backGlow)" />
+
+      <!-- tree layers -->
+      <g id="treeBody" transform="translate(0,10)">
+        <path d="M300 70 L110 300 L190 300 L60 520 L250 420 L180 620 L300 520 L420 620 L350 420 L540 520 L410 300 L490 300 Z"
+              fill="url(#treeGradient)" stroke="none" />
+      </g>
+
+      <!-- better tree shape with three stacked polygons for layered look -->
+      <g transform="translate(0,10)">
+        <polygon points="300,30 170,200 430,200" fill="var(--tree)" />
+        <polygon points="300,150 120,360 480,360" fill="var(--tree-dark)" />
+        <polygon points="300,300 80,560 520,560" fill="var(--tree)" />
+      </g>
+
+      <!-- trunk -->
+      <rect x="260" y="560" width="80" height="120" rx="12" ry="12" fill="var(--trunk)" />
+
+      <!-- star -->
+      <g transform="translate(300,18)">
+        <polygon id="star" points="-12,-10 0,-40 12,-10 -40,-10  -6,6  0,36 6,6 40,-10"
+                 fill="#ffd94d" stroke="#fff3b8" stroke-width="1.2"/>
+        <circle cx="0" cy="-4" r="8" fill="#fff" opacity="0.9" style="filter: drop-shadow(0 0 8px rgba(255,230,120,0.75));" />
+      </g>
+
+      <!-- ornaments / lights (a grid of bulbs along the tree) -->
+      <g id="lights" aria-hidden="true">
+        <!-- We'll generate many bulbs; some are larger ornaments (class 'ornament'), others are small lights (class 'bulb') -->
+        <!-- Row 1 -->
+        <circle class="light bulb twinkle" cx="300" cy="120" r="8" fill="#ff6b6b" />
+        <circle class="light bulb twinkle" cx="340" cy="140" r="6" fill="#ffd166" />
+        <circle class="light bulb twinkle" cx="260" cy="140" r="6" fill="#6bc8ff" />
+        <!-- Row 2 -->
+        <circle class="light bulb twinkle" cx="220" cy="200" r="7" fill="#9b5cff" />
+        <circle class="light bulb twinkle" cx="280" cy="190" r="9" fill="#ffd166" />
+        <circle class="light bulb twinkle" cx="340" cy="205" r="7" fill="#ff6b6b" />
+        <circle class="light bulb twinkle" cx="380" cy="225" r="6" fill="#5ef5a1" />
+
+        <!-- Row 3 -->
+        <circle class="light bulb twinkle" cx="180" cy="280" r="8" fill="#ffd166" />
+        <circle class="light bulb twinkle" cx="240" cy="260" r="7" fill="#ff9494" />
+        <circle class="light bulb twinkle" cx="300" cy="250" r="10" fill="#6bc8ff" />
+        <circle class="light bulb twinkle" cx="360" cy="268" r="7" fill="#9b5cff" />
+        <circle class="light bulb twinkle" cx="420" cy="290" r="6" fill="#ffd166" />
+
+        <!-- Row 4 large ornaments -->
+        <circle class="light ornament twinkle" cx="210" cy="360" r="12" fill="#ff6b6b" />
+        <circle class="light ornament twinkle" cx="300" cy="350" r="14" fill="#ffd166" />
+        <circle class="light ornament twinkle" cx="390" cy="370" r="12" fill="#6bc8ff" />
+
+        <!-- Row 5 -->
+        <circle class="light bulb twinkle" cx="150" cy="460" r="8" fill="#9b5cff" />
+        <circle class="light bulb twinkle" cx="210" cy="430" r="9" fill="#ffd166" />
+        <circle class="light bulb twinkle" cx="270" cy="420" r="7" fill="#ff6b6b" />
+        <circle class="light bulb twinkle" cx="330" cy="428" r="8" fill="#5ef5a1" />
+        <circle class="light bulb twinkle" cx="390" cy="444" r="7" fill="#6bc8ff" />
+        <circle class="light bulb twinkle" cx="450" cy="470" r="6" fill="#ffd166" />
+
+        <!-- small halo glows behind some bulbs -->
+        <g class="halo-group" aria-hidden="true">
+          <ellipse class="halo" cx="300" cy="350" rx="26" ry="12" fill="#ffd166" />
+          <ellipse class="halo" cx="210" cy="360" rx="18" ry="8" fill="#ff6b6b" />
+          <ellipse class="halo" cx="390" cy="370" rx="18" ry="8" fill="#6bc8ff" />
+        </g>
+      </g>
+
+      <!-- present boxes under tree -->
+      <g transform="translate(120,610)">
+        <rect x="40" y="28" width="80" height="48" rx="6" fill="#ff7ab6"/>
+        <rect x="36" y="44" width="88" height="8" rx="4" fill="#fff" opacity="0.18"/>
+        <rect x="220" y="20" width="120" height="60" rx="8" fill="#6e9cff"/>
+        <rect x="260" y="20" width="8" height="60" rx="4" fill="#fff" opacity="0.12"/>
+      </g>
+
+    </svg>
+  </div>
+
+  <!-- Controls Panel -->
+  <div class="panel controls" aria-label="Tree Controls">
+    <div>
+      <h1>Dancing Christmas Tree</h1>
+      <p class="lead">Click buttons to make the tree twinkle, dance, or go full disco. Use the tempo slider to control the speed.</p>
+    </div>
+
+    <div class="row">
+      <button id="btnTwinkle" class="active" title="Toggle twinkle">Twinkle</button>
+      <button id="btnDance" title="Dance mode — sway & fast blink">Dance</button>
+      <button id="btnDisco" title="Cycle colors">Disco</button>
+      <button id="btnGlow" class="" title="Toggle glow halos">Glow</button>
+    </div>
+
+    <div style="margin-top:6px;">
+      <label for="tempo">Tempo (speed): <strong id="tempoVal">1.0x</strong></label>
+      <input id="tempo" type="range" min="0.4" max="2.4" step="0.05" value="1">
+    </div>
+
+    <div style="margin-top:10px;" class="row">
+      <button id="btnJingle">Play Jingle</button>
+      <button id="btnStop">Stop Jingle</button>
+    </div>
+
+    <div class="footer">
+      Tip: click "Dance" then "Disco" for maximum holiday chaos. 🎶
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const root = document.documentElement;
+  const svg = document.getElementById('treeSVG');
+  const lights = Array.from(svg.querySelectorAll('#lights .light'));
+  const halos = Array.from(svg.querySelectorAll('.halo'));
+  const btnTwinkle = document.getElementById('btnTwinkle');
+  const btnDance = document.getElementById('btnDance');
+  const btnDisco = document.getElementById('btnDisco');
+  const btnGlow = document.getElementById('btnGlow');
+  const tempo = document.getElementById('tempo');
+  const tempoVal = document.getElementById('tempoVal');
+  const btnJingle = document.getElementById('btnJingle');
+  const btnStop = document.getElementById('btnStop');
+  const treePanel = document.getElementById('treePanel');
+
+  let twinkling = true;
+  let dancing = false;
+  let disco = false;
+  let glow = false;
+  let audioCtx = null;
+  let jingleOscs = [];
+
+  // helper: randomize animation delay & duration for each bulb for organic twinkle
+  function randomizeBulbs(){
+    lights.forEach((el,i)=>{
+      const base = (Math.random()*1.6 + 0.2); // duration multiplier
+      el.style.animationDuration = (2.2 * base * parseFloat(root.style.getPropertyValue('--speed') || 1)) + 's';
+      // random phase offset so they don't sync
+      el.style.animationDelay = (Math.random()*1.6 - 0.8) + 's';
+      // subtle size variation for ornaments
+      const r = el.getAttribute('r') || 6;
+      const scaled = r * (0.85 + Math.random()*0.35);
+      el.setAttribute('r', scaled);
+    });
+  }
+
+  // initial randomize
+  randomizeBulbs();
+
+  // twinkle toggle
+  btnTwinkle.addEventListener('click', ()=>{
+    twinkling = !twinkling;
+    btnTwinkle.classList.toggle('active', twinkling);
+    lights.forEach(l=>{
+      if(twinkling) l.classList.add('twinkle'); else l.classList.remove('twinkle');
+    });
+  });
+
+  // dance toggle: add/remove dance class that intensifies animation
+  btnDance.addEventListener('click', ()=>{
+    dancing = !dancing;
+    btnDance.classList.toggle('active', dancing);
+    if(dancing){
+      svg.classList.remove('sway');
+      svg.classList.add('dance');
+      // speed up bulbs modestly
+      lights.forEach(l=>{
+        const d = parseFloat(getComputedStyle(l).animationDuration || 2.4);
+        l.style.animationDuration = (Math.max(0.4, d*0.45)) + 's';
+      });
+    } else {
+      svg.classList.remove('dance');
+      svg.classList.add('sway');
+      randomizeBulbs();
+    }
+  });
+
+  // disco colors
+  btnDisco.addEventListener('click', ()=>{
+    disco = !disco;
+    btnDisco.classList.toggle('active', disco);
+    lights.forEach((l, i)=>{
+      if(disco){
+        l.classList.add('disco');
+      } else {
+        l.classList.remove('disco');
+        // restore original fill hues stored as dataset
+        if(l.dataset.orig) l.setAttribute('fill', l.dataset.orig);
+      }
+    });
+  });
+
+  // glow toggle
+  btnGlow.addEventListener('click', ()=>{
+    glow = !glow;
+    btnGlow.classList.toggle('active', glow);
+    if(glow) treePanel.classList.add('glow-on'); else treePanel.classList.remove('glow-on');
+  });
+
+  // tempo control
+  tempo.addEventListener('input', e=>{
+    const v = parseFloat(e.target.value);
+    tempoVal.textContent = v.toFixed(2) + 'x';
+    root.style.setProperty('--speed', v);
+    // tweak animations durations relative to tempo
+    lights.forEach(l=>{
+      // if currently in dance mode, keep shorter durations
+      if(dancing){
+        // reduce but respectful to tempo
+        l.style.animationDuration = (0.8 * (1.0 / v)) + 's';
+      } else {
+        // scale base durations by tempo
+        const cur = parseFloat(getComputedStyle(l).animationDuration) || 2.4;
+        const newD = Math.max(0.4, cur * (1.0 / v));
+        l.style.animationDuration = newD + 's';
+      }
+    });
+    // change sway/dance speed by altering their animation duration via CSS variable (already uses --speed)
+    svg.style.setProperty('--speed', v);
+  });
+
+  // store original fills so disco can remove effect cleanly
+  lights.forEach(l=>{
+    l.dataset.orig = l.getAttribute('fill');
+  });
+
+  // small "heartbeat" of star
+  const star = svg.getElementById ? svg.getElementById('star') : svg.querySelector('#star');
+  if(star){
+    star.animate([
+      { transform: 'scale(0.98)', opacity:0.92 },
+      { transform: 'scale(1.06)', opacity:1 },
+      { transform: 'scale(0.98)', opacity:0.92 }
+    ], { duration:1800, iterations: Infinity, easing:'ease-in-out' });
+  }
+
+  // Periodically jitter ornament sizes slightly to feel alive (non-blocking)
+  setInterval(()=> {
+    lights.forEach((l,i)=>{
+      if(!l.classList.contains('twinkle')) return;
+      const scale = 0.92 + Math.random()*0.18;
+      l.animate([
+        { transform: `scale(1)` },
+        { transform: `scale(${scale})` },
+        { transform: `scale(1)` }
+      ], { duration: 1200 + Math.random()*1200, iterations: 1, easing: 'ease-in-out' });
+    });
+  }, 1400);
+
+  // more organic random light pops (JS-driven) to complement CSS twinkle
+  function popRandomLight(){
+    if(!twinkling) return;
+    const idx = Math.floor(Math.random()*lights.length);
+    const el = lights[idx];
+    if(!el) return;
+    const o = el.getAttribute('opacity') || 1;
+    el.animate([
+      { transform: 'scale(0.9)', opacity: 0.2 },
+      { transform: 'scale(1.25)', opacity: 1 },
+      { transform: 'scale(0.95)', opacity: 0.35 }
+    ], { duration: 420 + Math.random()*560, easing: 'cubic-bezier(.2,.9,.3,1)' });
+  }
+  setInterval(popRandomLight, 420);
+
+  // simple WebAudio jingle (no external assets) - plays a little "ding-ding-ding" melody
+  function playJingle(){
+    try{
+      if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      // short melody: 4 notes repeated
+      const notes = [523.25, 659.25, 783.99, 1046.5]; // C5 E5 G5 C6
+      const now = audioCtx.currentTime;
+      const baseGain = audioCtx.createGain();
+      baseGain.gain.value = 0.08;
+      baseGain.connect(audioCtx.destination);
+
+      jingleOscs.forEach(o => o.osc.stop());
+      jingleOscs = [];
+
+      notes.forEach((freq, i) => {
+        const osc = audioCtx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        const g = audioCtx.createGain();
+        g.gain.value = 0;
+        osc.connect(g); g.connect(baseGain);
+        const t0 = now + i*0.28;
+        g.gain.setValueAtTime(0, t0);
+        g.gain.linearRampToValueAtTime(0.12, t0+0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0+0.26);
+        osc.start(t0);
+        osc.stop(t0 + 0.28);
+        jingleOscs.push({osc,g});
+      });
+
+      // add playful bass rhythm
+      const bass = audioCtx.createOscillator();
+      bass.type = 'triangle';
+      bass.frequency.value = 98;
+      const bg = audioCtx.createGain();
+      bg.gain.value = 0.0;
+      bass.connect(bg); bg.connect(baseGain);
+      const bOn = now + 0.0;
+      bg.gain.setValueAtTime(0.0, bOn);
+      bg.gain.linearRampToValueAtTime(0.04, bOn+0.01);
+      bg.gain.linearRampToValueAtTime(0.0, bOn+1.6);
+      bass.start(bOn);
+      bass.stop(bOn + 1.6);
+      jingleOscs.push({osc:bass,g:bg});
+
+    }catch(e){
+      console.warn('Audio start prevented:', e);
+    }
+  }
+
+  function stopJingle(){
+    if(!audioCtx) return;
+    jingleOscs.forEach(o=>{
+      try{ o.osc.stop(); }catch(e){}
+    });
+    jingleOscs = [];
+  }
+
+  btnJingle.addEventListener('click', ()=>{
+    playJingle();
+    btnJingle.classList.add('active');
+    setTimeout(()=> btnJingle.classList.remove('active'), 900);
+  });
+  btnStop.addEventListener('click', ()=>{
+    stopJingle();
+  });
+
+  // keyboard accessibility: space toggles twinkle, d toggles dance
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === ' '){ e.preventDefault(); btnTwinkle.click(); }
+    if(e.key.toLowerCase() === 'd'){ btnDance.click(); }
+    if(e.key.toLowerCase() === 'g'){ btnGlow.click(); }
+    if(e.key.toLowerCase() === 'c'){ btnDisco.click(); }
+    if(e.key.toLowerCase() === 'j'){ btnJingle.click(); }
+  });
+
+  // small entrance animation: grow tree from bottom
+  svg.style.transform = 'scale(0.96) translateY(14px)';
+  setTimeout(()=> svg.style.transform = '', 80);
+
+  // make sure CSS --speed initial value matches slider
+  root.style.setProperty('--speed', tempo.value);
+
+  // tidy: on page visibility change stop audio
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.hidden) stopJingle();
+  });
+
+})();
+</script>
+</body>
+</html>
