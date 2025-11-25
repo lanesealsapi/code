@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Lumin Wire Sculpture</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: black;
+    height: 100%;
+  }
+  canvas {
+    display: block;
+    cursor: crosshair;
+  }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let width = canvas.width = window.innerWidth;
+let height = canvas.height = window.innerHeight;
+
+window.addEventListener('resize', () => {
+  width = canvas.width = window.innerWidth;
+  height = canvas.height = window.innerHeight;
+});
+
+let wires = [];
+let currentWire = [];
+let flowOffset = 0;
+
+// User drawing
+canvas.addEventListener('mousedown', (e) => {
+  currentWire = [{x: e.clientX, y: e.clientY}];
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  if (currentWire.length) {
+    currentWire.push({x: e.clientX, y: e.clientY});
+  }
+});
+
+canvas.addEventListener('mouseup', () => {
+  if (currentWire.length > 1) wires.push(currentWire);
+  currentWire = [];
+});
+
+// Draw wire as flowing neon
+function drawWire(wire, offset) {
+  if (wire.length < 2) return;
+
+  for (let i = 0; i < wire.length - 1; i++) {
+    const p1 = wire[i];
+    const p2 = wire[i+1];
+
+    // Hue moves along the wire over time
+    const hue = (i*10 + offset*360) % 360;
+    ctx.strokeStyle = `hsl(${hue}, 100%, 50%)`;
+    ctx.lineWidth = 4;
+    ctx.shadowColor = 'white';
+    ctx.shadowBlur = 20;
+
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.stroke();
+  }
+}
+
+function animate() {
+  ctx.clearRect(0, 0, width, height);
+  
+  flowOffset += 0.005;
+
+  for (let wire of wires) {
+    drawWire(wire, flowOffset);
+  }
+
+  drawWire(currentWire, flowOffset); // live drawing
+
+  requestAnimationFrame(animate);
+}
+
+animate();
+</script>
+</body>
+</html>
