@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Magical Falling Words - Aligned</title>
+<style>
+  body { margin: 0; overflow: hidden; background: #000; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const weightedLetters = "EEEEEEEEAAAAAIIIIIOOOONNNNRRRRTTTTLLLLSSSSUUUUDDDDGGGBBCCMMPPFFYYWWKJVXZQ";
+
+// Base 20 words
+const words = ["HELLO","WORLD","MAGIC","CANVAS","CODE","LETTER","FALLING","GLOW","HTML","JAVASCRIPT",
+               "SPARKLE","BRIGHT","LIGHT","MYSTIC","FLOW","CREATE","DREAM","SHINE","GLOWING","FUN","ENERGY",
+               "AWESOME","RED","BLUE","GOLD"];
+
+class Letter {
+  constructor(char) {
+    this.char = char;
+    this.x = Math.random() * canvas.width;
+    this.y = -Math.random() * 300;
+    this.speed = 1 + Math.random() * 2;
+    this.targetX = null;
+    this.targetY = null;
+    this.lit = false;
+    this.formingWord = false;
+  }
+  update() {
+    if (this.formingWord && this.targetX !== null && this.targetY !== null) {
+      // Glide to target position, lock vertical alignment
+      this.x += (this.targetX - this.x) * 0.08;
+      this.y += (this.targetY - this.y) * 0.08;
+    } else {
+      // Normal falling
+      this.y += this.speed;
+    }
+
+    if (this.y > canvas.height) this.reset();
+  }
+  draw() {
+    ctx.fillStyle = this.lit ? '#0ff' : '#f0f';
+    ctx.font = "24px monospace";
+    ctx.fillText(this.char, this.x, this.y);
+  }
+  reset() {
+    this.x = Math.random() * canvas.width;
+    this.y = -Math.random() * 100;
+    this.targetX = null;
+    this.targetY = null;
+    this.lit = false;
+    this.formingWord = false;
+  }
+}
+
+let fallingLetters = [];
+const maxLetters = 240;
+
+// Spawn initial letters
+for (let i = 0; i < maxLetters; i++) {
+  const char = weightedLetters[Math.floor(Math.random() * weightedLetters.length)];
+  fallingLetters.push(new Letter(char));
+}
+
+// Form words
+function formWords() {
+  words.forEach(word => {
+    const startX = Math.random() * (canvas.width - word.length * 30);
+    const startY = Math.random() * (canvas.height / 2) + 50;
+
+    let usedLetters = [];
+
+    for (let i = 0; i < word.length; i++) {
+      let available = fallingLetters.find(l => l.char === word[i] && !l.formingWord && !usedLetters.includes(l));
+
+      // Spawn missing letter if needed
+      if (!available) {
+        available = new Letter(word[i]);
+        fallingLetters.push(available);
+      }
+
+      available.targetX = startX + i * 30;
+      available.targetY = startY;
+      available.lit = true;
+      available.formingWord = true;
+      usedLetters.push(available);
+
+      // Reset after short delay
+      setTimeout(() => {
+        available.lit = false;
+        available.targetX = null;
+        available.targetY = null;
+        available.formingWord = false;
+      }, 1500);
+    }
+  });
+}
+
+// Trigger word formation every 3 seconds
+setInterval(formWords, 3000);
+
+// Animation loop
+function animate() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  fallingLetters.forEach(letter => {
+    letter.update();
+    letter.draw();
+  });
+  requestAnimationFrame(animate);
+}
+
+// Start
+animate();
+
+// Responsive
+window.addEventListener('resize', () => {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+});
+</script>
+</body>
+</html>
