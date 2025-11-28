@@ -117,7 +117,7 @@
     const pts=[]; for(let i=0;i<n;i++){ const t = (i/n) * Math.PI*2; // parametric
       const x = 16*Math.pow(Math.sin(t),3);
       const y = 13*Math.cos(t) - 5*Math.cos(2*t) - 2*Math.cos(3*t) - Math.cos(4*t);
-      pts.push(p2(x,y)); }
+      pts.push(p2(x,-y)); }
     normalizePoints(pts); return pts;
   }
 
