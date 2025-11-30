@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Concentric Scale Rings — 3 Octave Musical Ring Pad (v1 + Particles Outside)</title>
+  <style>
+    html,body{height:100%;margin:0;background:#000;color:#eef0f2;font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial}
+    .wrap{height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;padding:20px;box-sizing:border-box}
+    canvas{background:#000;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.6)}
+    .hud{margin-top:14px;display:flex;gap:12px;align-items:center}
+    .note{font-weight:600;padding:8px 12px;border-radius:8px;background:rgba(255,255,255,0.04);backdrop-filter:blur(6px)}
+    .info{max-width:820px;text-align:center;margin-bottom:8px;color:#bfc3c8;font-size:13px}
+    .controls{display:flex;gap:10px;align-items:center}
+    label{font-size:13px;color:#c9cdd1}
+    input[type=range]{width:160px}
+    button{padding:8px 12px;border-radius:8px;border:none;background:#1f6feb;color:white;cursor:pointer}
+    .toggle{background:#2b2f36}
+    small{color:#99a0a6}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="info">Wand the mouse (or touch) across the concentric rings to play notes. Toggle the particle background — particles now live outside the last ring and light up in the color of the ring you activate. The last clicked ring stays visually highlighted.</div>
+    <canvas id="c" width="820" height="820"></canvas>
+    <div class="hud">
+      <div class="note" id="current">—</div>
+      <div class="controls">
+        <label>Base note:</label>
+        <select id="root">
+          <option value="48">C3</option>
+          <option value="50">D3</option>
+          <option value="55">G3</option>
+          <option value="57">A3</option>
+          <option value="60" selected> C4 (middle C)</option>
+          <option value="69">A4 (440Hz)</option>
+        </select>
+        <label>Wave:</label>
+        <select id="wave"><option>sine</option><option>triangle</option><option>square</option><option>sawtooth</option></select>
+        <label title="Short envelope">Env:</label>
+        <input id="attack" type="range" min="0" max="0.5" step="0.01" value="0.01">
+        <input id="release" type="range" min="0" max="1" step="0.01" value="0.15">
+        <button id="sustain">Sustain: Off</button>
+        <button id="toggleParticles" class="toggle">Particles: Off</button>
+      </div>
+    </div>
+    <small>Tip: resize the window to keep the canvas looking crisp. Works with mouse or touch.</small>
+  </div>
+
+<script>
+// Concentric Scale Rings — Version 1 baseline + particle field outside outer ring + persistent highlight
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const currentEl = document.getElementById('current');
+  const rootSelect = document.getElementById('root');
+  const waveSel = document.getElementById('wave');
+  const attackEl = document.getElementById('attack');
+  const releaseEl = document.getElementById('release');
+  const sustainBtn = document.getElementById('sustain');
+  const toggleParticlesBtn = document.getElementById('toggleParticles');
+
+  let audioCtx = null;
+  let masterGain = null;
+
+  const OCTAVES = 3;
+  const NOTES_PER_OCTAVE = 12;
+  const TOTAL = OCTAVES * NOTES_PER_OCTAVE; // 36
+
+  let rootMidi = parseInt(rootSelect.value, 10);
+
+  // particle background
+  let particlesOn = false;
+  const PARTICLE_COUNT = 780; // balanced for performance
+  const particles = [];
+
+  function resizeCanvas(){
+    const dpr = window.devicePixelRatio || 1;
+    const size = Math.min(window.innerWidth - 80, 820);
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    canvas.style.width = size + 'px';
+    canvas.style.height = size + 'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    // re-init particles if on so they follow new geometry
+    if(particlesOn) initParticles();
+  }
+  window.addEventListener('resize', resizeCanvas);
+
+  function midiToFreq(m){ return 440 * Math.pow(2, (m - 69)/12); }
+  const noteNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  function nameFromMidi(m){ return noteNames[(m%12+12)%12] + (Math.floor(m/12) - 1); }
+
+  function buildNotes(){
+    const arr = [];
+    for(let i=0;i<TOTAL;i++){
+      const midi = rootMidi + i;
+      arr.push({midi, freq: midiToFreq(midi), name: nameFromMidi(midi)});
+    }
+    return arr;
+  }
+  let notes = buildNotes();
+
+  function ringMetrics(){
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    const cx = w/2, cy = h/2;
+    const maxR = Math.min(w,h) * 0.45;
+    const ringWidth = maxR / TOTAL;
+    return {cx,cy,maxR,ringWidth};
+  }
+
+  // init particles outside the last ring (in the outer field)
+  function initParticles(){
+    particles.length = 0;
+    const {cx,cy,maxR,ringWidth} = ringMetrics();
+    const inner = maxR + ringWidth * 0.4; // start just outside outer ring
+    const outer = Math.min(canvas.clientWidth, canvas.clientHeight) * 0.55; // limit to canvas area
+    for(let i=0;i<PARTICLE_COUNT;i++){
+      const angle = Math.random() * Math.PI * 2;
+      // radius between inner..outer biased slightly outward
+      const t = Math.random();
+      const radius = inner + (outer - inner) * Math.pow(t, 0.9);
+      const x = cx + Math.cos(angle) * radius + (Math.random()-0.5)*6;
+      const y = cy + Math.sin(angle) * radius + (Math.random()-0.5)*6;
+      particles.push({
+        x, y,
+        baseAlpha: 0.04 + Math.random()*0.08,
+        alpha: 0.04 + Math.random()*0.08,
+        size: 0.8 + Math.random()*2.6,
+        hue: 220, // default cool hue
+        targetHue: 220,
+        glow: 0,
+        phase: Math.random()*Math.PI*2,
+        speed: 0.6 + Math.random()*0.9
+      });
+    }
+  }
+
+  // draw loop
+  function draw(ts){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    const {cx,cy,maxR,ringWidth} = ringMetrics();
+
+    // draw particle field (outside rings)
+    if(particlesOn){
+      // compute last active ring radius for persistent lighting
+      const lastRingR = (typeof lastIndex === 'number' && lastIndex >= 0) ? (maxR - lastIndex*ringWidth - ringWidth/2) : null;
+      for(let p of particles){
+        // shimmer alpha
+        const t = (ts/1000) * p.speed + p.phase;
+        p.alpha = p.baseAlpha * (0.55 + 0.45 * Math.sin(t));
+        // ease hue toward targetHue
+        p.hue += (p.targetHue - p.hue) * 0.08;
+        // decay glow slowly
+        p.glow += (0 - p.glow) * 0.04;
+
+        // if last ring exists, maintain a faint persistent glow for particles near that ring
+        if(lastRingR !== null){
+          const dx = p.x - cx, dy = p.y - cy;
+          const pr = Math.sqrt(dx*dx + dy*dy);
+          const dist = Math.abs(pr - lastRingR);
+          const influence = Math.max(0, 1 - (dist / (ringWidth * 3)));
+          if(influence > 0.02){
+            // pull hue slightly toward last ring hue and maintain glow
+            const hue = (lastIndex / TOTAL) * 300 + 20;
+            p.targetHue = hue + (Math.random()-0.5)*10;
+            p.glow = Math.max(p.glow, Math.min(1, influence * 0.7));
+            p.baseAlpha = Math.min(0.45, p.baseAlpha + influence * 0.06);
+          }
+        }
+
+        const grd = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, Math.max(8, p.size*6));
+        const colorStop = `hsla(${Math.round(p.hue)} ,85% ,60%, ${p.alpha * (0.9 + p.glow)})`;
+        grd.addColorStop(0, colorStop);
+        grd.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grd;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size*3, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+
+    // draw rings and keep last clicked ring highlighted
+    for(let i=0;i<TOTAL;i++){
+      const rMid = maxR - i*ringWidth - ringWidth/2;
+      const hue = (i / TOTAL) * 300 + 20;
+      const sat = 78;
+      let light = 45 - (i/TOTAL)*12;
+      if(i === lastIndex){
+        light += 18; // brighten last clicked ring
+      }
+      ctx.beginPath();
+      ctx.arc(cx,cy,rMid,0,Math.PI*2);
+      ctx.lineWidth = Math.max(6, ringWidth - 2);
+      ctx.strokeStyle = `hsl(${hue} ${sat}% ${light}%)`;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    }
+
+    requestAnimationFrame(draw);
+  }
+
+  resizeCanvas();
+  requestAnimationFrame(draw);
+
+  // audio play logic (per-note oscillators like v1)
+  let lastIndex = -1;
+  let activeOsc = null;
+  let activeGain = null;
+
+  function ensureAudio(){
+    if(!audioCtx){
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = 0.8;
+      masterGain.connect(audioCtx.destination);
+    }
+  }
+
+  function playIndex(i){
+    if(i<0 || i>=notes.length) return;
+    if(!audioCtx) ensureAudio();
+    const now = audioCtx.currentTime;
+
+    // stop previous quickly
+    if(activeOsc){
+      try{ activeOsc.stop(now + 0.02); }catch(e){}
+      activeOsc.disconnect();
+      activeGain.disconnect();
+      activeOsc = null; activeGain = null;
+    }
+
+    const wave = waveSel.value || 'sine';
+    const osc = audioCtx.createOscillator();
+    osc.type = wave;
+    osc.frequency.value = notes[i].freq;
+    const g = audioCtx.createGain();
+    const at = parseFloat(attackEl.value);
+    const rel = parseFloat(releaseEl.value);
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(1.0, now + Math.max(0.001, at));
+
+    osc.connect(g); g.connect(masterGain);
+    osc.start(now);
+    g.gain.linearRampToValueAtTime(0.0001, now + 0.02 + rel + 0.02);
+    osc.stop(now + 0.02 + rel + 0.03);
+
+    activeOsc = osc; activeGain = g; lastIndex = i;
+
+    // update HUD
+    currentEl.textContent = notes[i].name + ' (' + notes[i].midi + ')';
+
+    // make particles light up to this ring's hue
+    if(particlesOn){
+      const hue = (i / TOTAL) * 300 + 20;
+      highlightParticlesAroundRing(i, hue);
+    }
+  }
+
+  // change particles near ring to glow in hue
+  function highlightParticlesAroundRing(index, hue){
+    const {cx,cy,maxR,ringWidth} = ringMetrics();
+    const ringR = maxR - index*ringWidth - ringWidth/2;
+    for(let p of particles){
+      const dx = p.x - cx, dy = p.y - cy;
+      const pr = Math.sqrt(dx*dx + dy*dy);
+      const dist = Math.abs(pr - ringR);
+      const influence = Math.max(0, 1 - (dist / (ringWidth * 3)));
+      if(influence > 0.02){
+        p.targetHue = hue + (Math.random()-0.5)*12;
+        p.glow = Math.max(p.glow, Math.min(1, influence * 1.6));
+        p.baseAlpha = Math.min(0.45, p.baseAlpha + influence * 0.12);
+      }
+    }
+  }
+
+  function indexFromPos(x,y){
+    const {cx,cy,maxR,ringWidth} = ringMetrics();
+    const dx = x - cx, dy = y - cy;
+    const r = Math.sqrt(dx*dx + dy*dy);
+    if(r > maxR) return -1;
+    const idx = Math.floor((maxR - r) / ringWidth);
+    if(idx < 0 || idx >= TOTAL) return -1;
+    return idx;
+  }
+
+  function pointerMove(e){
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+    const idx = indexFromPos(x,y);
+    if(idx !== lastIndex){
+      playIndex(idx);
+    }
+  }
+
+  canvas.addEventListener('mousemove', pointerMove);
+  canvas.addEventListener('touchmove', pointerMove, {passive:false});
+
+  canvas.addEventListener('mouseleave', (e)=>{});
+  canvas.addEventListener('touchend', (e)=>{});
+  canvas.addEventListener('mouseup', (e)=>{});
+  canvas.addEventListener('mousedown', (e)=>{ ensureAudio(); });
+
+  sustainBtn.addEventListener('click', ()=>{ sustainBtn.textContent = 'Sustain: On'; /* placeholder to mimic v1 behaviour */ });
+
+  toggleParticlesBtn.addEventListener('click', ()=>{
+    particlesOn = !particlesOn;
+    toggleParticlesBtn.textContent = 'Particles: ' + (particlesOn? 'On':'Off');
+    if(particlesOn) initParticles();
+  });
+
+  rootSelect.addEventListener('change', ()=>{
+    rootMidi = parseInt(rootSelect.value,10);
+    notes = buildNotes();
+    currentEl.textContent = '—';
+  });
+
+  // keyboard accessibility
+  window.addEventListener('keydown', (e)=>{
+    if(e.key === 'ArrowRight'){ const ni = Math.min(TOTAL-1, (lastIndex<0?0:lastIndex+1)); playIndex(ni); }
+    if(e.key === 'ArrowLeft'){ const ni = Math.max(0, (lastIndex<0?0:lastIndex-1)); playIndex(ni); }
+    if(e.key === ' '){ /* noop */ }
+  });
+
+})();
+</script>
+</body>
+</html>
