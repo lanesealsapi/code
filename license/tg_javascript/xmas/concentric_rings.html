@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Concentric Scale Rings — 3 Octave Musical Ring Pad</title>
+  <style>
+    html,body{height:100%;margin:0;background:#0b0b0b;color:#eee;font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial}
+    .wrap{height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;padding:20px;box-sizing:border-box}
+    canvas{background:radial-gradient(circle at center, rgba(255,255,255,0.02), transparent 40%), #0b0b0b;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.6)}
+    .hud{margin-top:14px;display:flex;gap:12px;align-items:center}
+    .note{font-weight:600;padding:8px 12px;border-radius:8px;background:rgba(255,255,255,0.04);backdrop-filter:blur(6px)}
+    .info{max-width:720px;text-align:center;margin-bottom:8px;color:#bfc3c8;font-size:13px}
+    .controls{display:flex;gap:10px;align-items:center}
+    label{font-size:13px;color:#c9cdd1}
+    input[type=range]{width:160px}
+    button{padding:8px 12px;border-radius:8px;border:none;background:#1f6feb;color:white;cursor:pointer}
+    small{color:#99a0a6}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="info">Wand the mouse (or touch) across the concentric rings to play notes. 36 rings = 3 octaves (C3 → B5). Move quickly across rings to glide across the scale. Click to toggle sustain mode.</div>
+    <canvas id="c" width="820" height="820"></canvas>
+    <div class="hud">
+      <div class="note" id="current">—</div>
+      <div class="controls">
+        <label>Base note:</label>
+        <select id="root">
+          <option value="48">C3</option>
+          <option value="50">D3</option>
+          <option value="55">G3</option>
+          <option value="57">A3</option>
+          <option value="60" selected> C4 (middle C)</option>
+          <option value="69">A4 (440Hz)</option>
+        </select>
+        <label>Wave:</label>
+        <select id="wave"><option>sine</option><option>triangle</option><option>square</option><option>sawtooth</option></select>
+        <label title="Short envelope">Env:</label>
+        <input id="attack" type="range" min="0" max="0.5" step="0.01" value="0.01">
+        <input id="release" type="range" min="0" max="1" step="0.01" value="0.15">
+        <button id="sustain">Sustain: Off</button>
+      </div>
+    </div>
+    <small>Tip: resize the window to keep the canvas looking crisp. Works with mouse or touch.</small>
+  </div>
+
+<script>
+// Concentric Scale Rings — WebAudio + Canvas
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const currentEl = document.getElementById('current');
+  const rootSelect = document.getElementById('root');
+  const waveSel = document.getElementById('wave');
+  const attackEl = document.getElementById('attack');
+  const releaseEl = document.getElementById('release');
+  const sustainBtn = document.getElementById('sustain');
+
+  let audioCtx = null;
+  let masterGain = null;
+  let sustain = false;
+
+  const OCTAVES = 3;
+  const NOTES_PER_OCTAVE = 12;
+  const TOTAL = OCTAVES * NOTES_PER_OCTAVE; // 36
+
+  // default root midi note (C3 = 48) but user can pick
+  let rootMidi = parseInt(rootSelect.value, 10);
+
+  // visual parameters
+  function resizeCanvas(){
+    const dpr = window.devicePixelRatio || 1;
+    const size = Math.min(window.innerWidth - 80, 820);
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    canvas.style.width = size + 'px';
+    canvas.style.height = size + 'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    draw();
+  }
+  window.addEventListener('resize', resizeCanvas);
+
+  // note utilities
+  function midiToFreq(m){ return 440 * Math.pow(2, (m - 69)/12); }
+  const noteNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  function nameFromMidi(m){ return noteNames[(m%12+12)%12] + (Math.floor(m/12) - 1); }
+
+  // build notes array (outermost ring -> innermost or vice versa?)
+  // We'll draw largest ring outermost = low notes, inner rings higher notes
+  function buildNotes(){
+    const arr = [];
+    for(let i=0;i<TOTAL;i++){
+      const midi = rootMidi + i; // ascending
+      arr.push({midi, freq: midiToFreq(midi), name: nameFromMidi(midi)});
+    }
+    return arr;
+  }
+
+  let notes = buildNotes();
+
+  // ring geometry
+  function ringMetrics(){
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    const cx = w/2, cy = h/2;
+    const maxR = Math.min(w,h) * 0.45; // outermost
+    const ringWidth = maxR / TOTAL;
+    return {cx,cy,maxR,ringWidth};
+  }
+
+  // draw rings
+  function draw(highlightIndex = -1){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    const {cx,cy,maxR,ringWidth} = ringMetrics();
+    // background glow
+    const g = ctx.createRadialGradient(cx,cy,0,cx,cy,maxR*1.1);
+    g.addColorStop(0,'rgba(255,255,255,0.02)');
+    g.addColorStop(1,'rgba(0,0,0,0.0)');
+    ctx.fillStyle = g; ctx.fillRect(0,0,canvas.clientWidth,canvas.clientHeight);
+
+    for(let i=0;i<TOTAL;i++){
+      const rOuter = maxR - i*ringWidth;
+      const rInner = rOuter - ringWidth + 0.8; // small gap
+      // color across spectrum: map i to hue
+      const hue = (i / TOTAL) * 300 + 20; // 20..320
+      const sat = 80;
+      const light = (i===highlightIndex) ? 60 : 45 - (i/TOTAL)*12; // highlight brighter
+      ctx.beginPath();
+      ctx.arc(cx,cy,rOuter - ringWidth/2,0,Math.PI*2);
+      ctx.lineWidth = Math.max(6, ringWidth - 2);
+      ctx.strokeStyle = `hsl(${hue} ${sat}% ${light}%)`;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+
+      // subtle inner shadow when highlighted
+      if(i===highlightIndex){
+        ctx.beginPath();
+        ctx.arc(cx,cy,rOuter - ringWidth/2,0,Math.PI*2);
+        ctx.lineWidth = Math.max(2, ringWidth/4);
+        ctx.strokeStyle = `rgba(255,255,255,0.12)`;
+        ctx.stroke();
+      }
+    }
+  }
+
+  // audio play logic
+  let lastIndex = -1;
+  let activeOsc = null;
+  let activeGain = null;
+
+  function ensureAudio(){
+    if(!audioCtx){
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = 0.8;
+      masterGain.connect(audioCtx.destination);
+    }
+  }
+
+  function playIndex(i){
+    if(i<0 || i>=notes.length) return;
+    if(!audioCtx) ensureAudio();
+    const now = audioCtx.currentTime;
+
+    // if same index and sustain enabled, do nothing
+    if(i === lastIndex && sustain && activeOsc) return;
+
+    // stop previous note quickly if not sustaining
+    if(activeOsc && !sustain){
+      try{ activeOsc.stop(now + 0.02); }catch(e){}
+      activeOsc.disconnect();
+      activeGain.disconnect();
+      activeOsc = null; activeGain = null;
+    }
+
+    const wave = waveSel.value || 'sine';
+    const osc = audioCtx.createOscillator();
+    osc.type = wave;
+    osc.frequency.value = notes[i].freq;
+    const g = audioCtx.createGain();
+    const at = parseFloat(attackEl.value);
+    const rel = parseFloat(releaseEl.value);
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(1.0, now + Math.max(0.001, at));
+
+    osc.connect(g); g.connect(masterGain);
+    osc.start(now);
+    if(!sustain){
+      g.gain.linearRampToValueAtTime(0.0001, now + 0.02 + rel + 0.02);
+      osc.stop(now + 0.02 + rel + 0.03);
+    }
+
+    activeOsc = osc; activeGain = g; lastIndex = i;
+
+    // update HUD
+    currentEl.textContent = notes[i].name + ' (' + notes[i].midi + ')';
+
+    // redraw highlighted
+    draw(i);
+  }
+
+  function stopActive(){
+    if(activeOsc && !sustain){
+      const now = audioCtx.currentTime;
+      try{ activeGain.gain.cancelScheduledValues(now); activeGain.gain.setValueAtTime(activeGain.gain.value, now); activeGain.gain.linearRampToValueAtTime(0.0001, now + parseFloat(releaseEl.value)); activeOsc.stop(now + parseFloat(releaseEl.value) + 0.02);}catch(e){}
+      activeOsc = null; activeGain = null; lastIndex = -1;
+      currentEl.textContent = '—';
+      draw(-1);
+    }
+  }
+
+  // hit test mouse position -> index
+  function indexFromPos(x,y){
+    const {cx,cy,maxR,ringWidth} = ringMetrics();
+    const dx = x - cx, dy = y - cy;
+    const r = Math.sqrt(dx*dx + dy*dy);
+    if(r > maxR) return -1;
+    // outermost ring index 0
+    const idx = Math.floor((maxR - r) / ringWidth);
+    if(idx < 0 || idx >= TOTAL) return -1;
+    return idx;
+  }
+
+  // events
+  let isPointerDown = false;
+  function pointerMove(e){
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+    const idx = indexFromPos(x,y);
+    if(idx !== lastIndex){
+      playIndex(idx);
+    }
+  }
+
+  canvas.addEventListener('mousemove', pointerMove);
+  canvas.addEventListener('touchmove', pointerMove, {passive:false});
+
+  canvas.addEventListener('mouseleave', (e)=>{ if(!sustain) stopActive(); });
+  canvas.addEventListener('touchend', (e)=>{ if(!sustain) stopActive(); });
+  canvas.addEventListener('mouseup', (e)=>{ if(!sustain) stopActive(); });
+  canvas.addEventListener('mousedown', (e)=>{ ensureAudio(); isPointerDown=true; });
+
+  sustainBtn.addEventListener('click', ()=>{ sustain = !sustain; sustainBtn.textContent = 'Sustain: ' + (sustain? 'On':'Off'); if(!sustain) { stopActive(); } });
+
+  rootSelect.addEventListener('change', ()=>{
+    rootMidi = parseInt(rootSelect.value,10);
+    notes = buildNotes();
+    draw(-1);
+    currentEl.textContent = '—';
+  });
+
+  waveSel.addEventListener('change', ()=>{});
+
+  // initial draw
+  resizeCanvas();
+
+  // play a gentle scale on load to show range (muted until user interacts due to browser autoplay rules)
+  // We'll show a small animation that pulses the rings but not play sound until user interacts
+
+  // Accessibility: allow keyboard left/right to change note
+  window.addEventListener('keydown', (e)=>{
+    if(e.key === 'ArrowRight'){ const ni = Math.min(TOTAL-1, (lastIndex<0?0:lastIndex+1)); playIndex(ni); }
+    if(e.key === 'ArrowLeft'){ const ni = Math.max(0, (lastIndex<0?0:lastIndex-1)); playIndex(ni); }
+    if(e.key === ' '){ sustain = !sustain; sustainBtn.textContent = 'Sustain: ' + (sustain? 'On':'Off'); }
+  });
+
+})();
+</script>
+</body>
+</html>

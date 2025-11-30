@@ -196,7 +196,7 @@
       p.x += p.vx * (dt/16); p.y += p.vy * (dt/16);
 
       const sz = 1.6 + 1.4*Math.abs(Math.sin(i*0.1 + now*0.002));
-      ctx.beginPath(); ctx.fillStyle = 'rgba(122,211,255,0.95)'; ctx.moveTo(p.x+sz, p.y); ctx.arc(p.x, p.y, sz, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.fillStyle = 'rgba(245,40,145,0.95)'; ctx.moveTo(p.x+sz, p.y); ctx.arc(p.x, p.y, sz, 0, Math.PI*2); ctx.fill();
     }
 
     requestAnimationFrame(step);
