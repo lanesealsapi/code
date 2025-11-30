@@ -128,7 +128,7 @@
       const light = (i===highlightIndex) ? 60 : 45 - (i/TOTAL)*12; // highlight brighter
       ctx.beginPath();
       ctx.arc(cx,cy,rOuter - ringWidth/2,0,Math.PI*2);
-      ctx.lineWidth = Math.max(6, ringWidth - 2);
+      ctx.lineWidth = ringWidth + 0.3;
       ctx.strokeStyle = `hsl(${hue} ${sat}% ${light}%)`;
       ctx.lineCap = 'round';
       ctx.stroke();
