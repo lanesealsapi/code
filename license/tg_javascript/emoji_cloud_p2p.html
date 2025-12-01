@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Emoji Particle Clouds — Smooth, Less Bouncy</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  html,body { height:100%; margin:0; background:#000; overflow:hidden; }
+  canvas { display:block; }
+  #ui {
+    position:fixed; left:12px; top:12px; color:#fff;
+    font-family:system-ui,Segoe UI,Roboto,Arial; z-index:10; user-select:none;
+  }
+  #ui .controls { margin-top:6px; display:flex; gap:8px; align-items:center; }
+  button {
+    background:rgba(255,255,255,0.06); color:#fff;
+    border:1px solid rgba(255,255,255,0.06); padding:6px 10px; border-radius:6px; cursor:pointer;
+  }
+  input[type="checkbox"] { width:16px; height:16px; }
+  #hint { opacity:0.9; font-size:14px; margin-bottom:6px; }
+</style>
+</head>
+<body>
+<div id="ui">
+  <div id="hint">Emoji-only clouds — click canvas to change • Auto-cycle available</div>
+  <div class="controls">
+    <label><input id="auto" type="checkbox"> Auto-cycle</label>
+    <button id="next">Next</button>
+    <button id="add">Add Emoji</button>
+  </div>
+</div>
+
+<canvas id="c"></canvas>
+
+<script>
+/* ======== Config ======== */
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d', { alpha: true });
+let W = canvas.width = innerWidth;
+let H = canvas.height = innerHeight;
+const CENTER = () => ({ x: W/2, y: H/2 });
+
+const numParticles = 1820;          // total particles
+const emojiRenderSize = 480;      // offscreen draw size for emoji sampling
+const particleRadius = 2.6;       // draw size per particle
+const lerpSpeed = 0.12;           // how quickly particles move (smaller = slower)
+const jitterAmount = 1.48;        // tiny per-frame jitter (very small — keeps it alive)
+
+let particles = [];
+let shapes = [];    // each shape: array of {x,y,color}
+let shapeIndex = 0;
+let auto = false;
+const autoInterval = 3000;
+let lastAuto = 0;
+
+/* ===== Utilities ===== */
+const rand = (a=0,b=1) => Math.random()*(b-a)+a;
+const lerp = (a,b,t) => a + (b-a)*t;
+
+/* ===== Emoji -> point-cloud with color sampling =====
+   Returns exactly `numParticles` items: {x, y, color}
+   - emoji: single emoji string
+   - drawSize: offscreen canvas px size to render emoji (bigger -> more detail)
+   - scaleTo: how large the cloud appears on screen
+*/
+function emojiShapeColored(emoji, drawSize = emojiRenderSize, scaleTo = Math.min(W,H)*0.36) {
+  // offscreen canvas
+  const off = document.createElement('canvas');
+  off.width = drawSize;
+  off.height = drawSize;
+  const octx = off.getContext('2d', { willReadFrequently: true });
+  octx.clearRect(0,0,drawSize,drawSize);
+
+  // draw emoji centered in white (we care about RGB/alpha)
+  const fontSize = Math.floor(drawSize * 0.85);
+  octx.font = `${fontSize}px serif`;
+  octx.textAlign = 'center';
+  octx.textBaseline = 'middle';
+  octx.fillStyle = 'white';
+  octx.fillText(emoji, drawSize/2, drawSize/2);
+
+  // read pixels
+  const img = octx.getImageData(0,0,drawSize,drawSize);
+  const data = img.data;
+  const candidates = [];
+  // step through pixels (step > 1 improves perf; step=1 gives max detail)
+  const step = 2;
+  for (let y = 0; y < drawSize; y += step) {
+    for (let x = 0; x < drawSize; x += step) {
+      const idx = (y * drawSize + x) * 4;
+      const a = data[idx + 3];
+      if (a > 60) { // collect sufficiently opaque pixels
+        // normalize coords to centered [-0.5..0.5]
+        const nx = (x / drawSize) - 0.5;
+        const ny = (y / drawSize) - 0.5;
+        const r = data[idx], g = data[idx+1], b = data[idx+2];
+        candidates.push({ x: nx, y: ny, color: `rgb(${r},${g},${b})` });
+      }
+    }
+  }
+
+  // fallback to circle if emoji had no candidates
+  if (candidates.length === 0) {
+    const circle = [];
+    for (let i=0;i<numParticles;i++){
+      const t = i/numParticles * Math.PI*2;
+      circle.push({ x: Math.cos(t) * scaleTo*0.5, y: Math.sin(t) * scaleTo*0.5, color: 'white' });
+    }
+    return circle;
+  }
+
+  // sample evenly across candidates
+  const sampled = [];
+  const stepIndex = candidates.length / numParticles;
+  for (let i=0;i<numParticles;i++){
+    const idx = Math.floor((i * stepIndex) % candidates.length);
+    const p = candidates[idx];
+    // tiny jitter on sampling so points don't sit perfectly on a grid
+    const jitterX = (Math.random()-0.5) * (1/drawSize) * 3;
+    const jitterY = (Math.random()-0.5) * (1/drawSize) * 3;
+    sampled.push({
+      x: (p.x + jitterX) * scaleTo,
+      y: (p.y + jitterY) * scaleTo,
+      color: p.color
+    });
+  }
+  return sampled;
+}
+
+/* ===== Initialize default emoji shapes ===== */
+function buildDefaultShapes() {
+  shapes = [
+    emojiShapeColored('🌸', 520, Math.min(W,H)*0.36),
+    emojiShapeColored('🐶', 520, Math.min(W,H)*0.36),
+    emojiShapeColored('🌟', 520, Math.min(W,H)*0.36),
+    emojiShapeColored('🦋', 520, Math.min(W,H)*0.36)
+  ];
+}
+buildDefaultShapes();
+
+/* ===== Particle initialization =====
+   Particles hold current position and a target index mapping to the shape item
+*/
+for (let i=0;i<numParticles;i++){
+  particles.push({
+    x: W/2 + (Math.random()-0.5) * 30,
+    y: H/2 + (Math.random()-0.5) * 30,
+    targetX: W/2,
+    targetY: H/2,
+    color: 'white'
+  });
+}
+
+/* Map the currently selected shape to particle targets (and assign immediate color) */
+function updateTargetsFromShape(shape) {
+  const c = CENTER();
+  for (let i=0;i<numParticles;i++){
+    const s = shape[i % shape.length];
+    particles[i].targetX = c.x + s.x;
+    particles[i].targetY = c.y + s.y;
+    // set particle color to sampled emoji color (instant, not tweened)
+    particles[i].color = s.color;
+  }
+}
+
+/* start with first shape */
+updateTargetsFromShape(shapes[shapeIndex]);
+
+/* ===== Interaction wiring ===== */
+canvas.addEventListener('click', () => {
+  shapeIndex = (shapeIndex + 1) % shapes.length;
+  updateTargetsFromShape(shapes[shapeIndex]);
+});
+
+document.getElementById('auto').addEventListener('change', (e) => {
+  auto = e.target.checked;
+});
+
+document.getElementById('next').addEventListener('click', () => {
+  shapeIndex = (shapeIndex + 1) % shapes.length;
+  updateTargetsFromShape(shapes[shapeIndex]);
+});
+
+document.getElementById('add').addEventListener('click', () => {
+  const e = prompt('Enter an emoji (single character, e.g. 🎈 or 🐱):', '✨');
+  if (!e) return;
+  // create shape and append
+  const sh = emojiShapeColored(e, 520, Math.min(W,H)*0.36);
+  shapes.push(sh);
+  shapeIndex = shapes.length - 1;
+  updateTargetsFromShape(shapes[shapeIndex]);
+});
+
+/* ===== Animation (smooth, low-bounce) ===== */
+function animate(time) {
+  // auto-cycle
+  if (auto && time - lastAuto > autoInterval) {
+    lastAuto = time;
+    shapeIndex = (shapeIndex + 1) % shapes.length;
+    updateTargetsFromShape(shapes[shapeIndex]);
+  }
+
+  // faded background to create soft trails
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.fillRect(0,0,W,H);
+
+  // update & draw
+  for (let i=0;i<particles.length;i++){
+    const p = particles[i];
+    // simple lerp toward target (no per-particle velocity physics)
+    p.x += (p.targetX - p.x) * lerpSpeed + (Math.random()-0.5) * jitterAmount;
+    p.y += (p.targetY - p.y) * lerpSpeed + (Math.random()-0.5) * jitterAmount;
+
+    // draw with the sampled color
+    ctx.beginPath();
+    ctx.fillStyle = p.color || '#fff';
+    ctx.arc(p.x, p.y, particleRadius, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+/* ===== Resize handling ===== */
+window.addEventListener('resize', () => {
+  W = canvas.width = innerWidth;
+  H = canvas.height = innerHeight;
+  // rebuild default shapes so they scale nicely when resizing
+  buildDefaultShapes();
+  updateTargetsFromShape(shapes[shapeIndex]);
+});
+</script>
+</body>
+</html>
