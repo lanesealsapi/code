@@ -130,11 +130,11 @@ function emojiShapeColored(emoji, drawSize = emojiRenderSize, scaleTo = Math.min
 /* ===== Initialize default emoji shapes ===== */
 function buildDefaultShapes() {
   shapes = [
-    emojiShapeColored('🌸', 520, Math.min(W,H)*0.56),
-    emojiShapeColored('🐶', 520, Math.min(W,H)*0.56),
-    emojiShapeColored('🌟', 520, Math.min(W,H)*0.56),
+    emojiShapeColored('🧑', 520, Math.min(W,H)*0.56),
+    emojiShapeColored('❤️', 520, Math.min(W,H)*0.56),
+    emojiShapeColored('🎶', 520, Math.min(W,H)*0.56),
     emojiShapeColored('🦋', 520, Math.min(W,H)*0.56),
-    emojiShapeColored('🤨', 520, Math.min(W,H)*0.56)
+    emojiShapeColored('🎹', 520, Math.min(W,H)*0.56)
     
   ];
 }
@@ -216,8 +216,8 @@ function animate(time) {
     // draw with the sampled color
     ctx.beginPath();
     ctx.fillStyle = p.color || '#fff';
-    //ctx.arc(p.x, p.y, particleRadius, 0, Math.PI*2);
-    ctx.fillRect(p.x, p.y, particleRadius*3, particleRadius*3);
+    ctx.arc(p.x, p.y, particleRadius*2, 0, Math.PI*2);
+    //ctx.fillRect(p.x, p.y, particleRadius*3, particleRadius*3);
     ctx.fill();
   }
 
