@@ -43,7 +43,7 @@ const CENTER = () => ({ x: W/2, y: H/2 });
 const numParticles = 2420;          // total particles
 const emojiRenderSize = 480;      // offscreen draw size for emoji sampling
 const particleRadius = 2.6;       // draw size per particle
-const lerpSpeed = 0.03;           // how quickly particles move (smaller = slower)
+const lerpSpeed = 0.05;           // how quickly particles move (smaller = slower)
 const jitterAmount = 1.18;        // tiny per-frame jitter (very small — keeps it alive)
 
 let particles = [];
@@ -130,7 +130,7 @@ function emojiShapeColored(emoji, drawSize = emojiRenderSize, scaleTo = Math.min
 /* ===== Initialize default emoji shapes ===== */
 function buildDefaultShapes() {
   shapes = [
-    emojiShapeColored('🧑', 520, Math.min(W,H)*0.56),
+    emojiShapeColored('🎄‍️️', 520, Math.min(W,H)*0.56),
     emojiShapeColored('❤️', 520, Math.min(W,H)*0.56),
     emojiShapeColored('🎶', 520, Math.min(W,H)*0.56),
     emojiShapeColored('🦋', 520, Math.min(W,H)*0.56),
